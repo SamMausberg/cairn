@@ -13,9 +13,9 @@ import re
 from itertools import pairwise
 from typing import Any
 
-from ..compiler.atomics import NAMES as ATOMICS
-from ..compiler.cooperative import VOTES as COLLECTIVE_VOTES
-from ..compiler.lexing import lex
+from ..compiler.cooperative.cooperative import VOTES as COLLECTIVE_VOTES
+from ..compiler.primitives.atomics import NAMES as ATOMICS
+from ..compiler.syntax.lexing import lex
 
 CARDS = {
     "base": """CAIRN 1.1 is a checked systems language, not Rust or Python. Braces, semicolons, typed signatures, explicit return on every path; no tail expression. fn inc(x:u64)->u64 = add_wrap(x,1); is one return, not a closure. let is immutable, let mut mutable, parameters immutable; no shadowing, no implicit conversion; let x:u32 = 7; annotates.

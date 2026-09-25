@@ -13,8 +13,8 @@ from __future__ import annotations
 import difflib
 from typing import Any
 
-from ..compiler.builtins import TABLE as BUILTINS
 from ..compiler.cairnc import Diagnostic, Parser
+from ..compiler.primitives.builtins import TABLE as BUILTINS
 from .teaching import TOOL_CARDS, card_of
 
 HINTS = {

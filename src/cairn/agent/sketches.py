@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..compiler.cairnc import IDENT, RESERVED, Diagnostic, Parser, fail
-from ..compiler.lexing import TOKEN
+from ..compiler.syntax.lexing import TOKEN
 from ..verify.scalar_concrete import Concrete
 from ..verify.scalar_semantics import equivalent, outcome_key, prepared
 from ..verify.scalar_values import Unsupported

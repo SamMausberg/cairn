@@ -15,7 +15,7 @@ import pytest
 
 from cairn.cli import main
 from cairn.compiler.cairnc import Diagnostic, compile_source
-from cairn.compiler.header import binding
+from cairn.compiler.lower.header import binding
 from cairn.editor.document import Document
 from cairn.editor.workspace import rename, workspace
 from cairn.perf.plan_source import write_plan

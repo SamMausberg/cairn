@@ -8,51 +8,51 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 |---|---|
 | `compiler/cairnc.py` | the facade: parse through judge (`compile_program`), then the certificates and the emitter (`generate`) |
 | `compiler/compilations.py` | one compile per distinct source in a process: what the hosts, `cairn state`, `cairn mcp` and `cairn lsp` read, the key it is kept under, the copy each caller gets, and the bound on what is kept |
-| `compiler/lexing.py` | tokens and reserved words |
-| `compiler/tree.py` | the syntax tree, the scalar vocabulary, `Diagnostic` |
-| `compiler/syntax.py` | the parser's declarations and entry point, and source ranges |
-| `compiler/syntax_expressions.py`, `compiler/syntax_statements.py` | the parser's token cursor, types and expressions; its statements |
-| `compiler/modules.py` | linking the packaged `std` modules |
-| `compiler/expansion.py` | library recipes applied by `derive`, and static families |
-| `compiler/gradients.py` | reverse-mode differentiation applied by `derive grad`, generated as source |
-| `compiler/checking.py` | names, types, generic instances, the whole-program judge, the walk over bodies |
-| `compiler/scope.py` | what the checker knows inside one function and one region |
-| `compiler/statements.py` | statement rules: declarations, control flow, `match`, loops, `defer`, collectors |
-| `compiler/expressions.py` | expression rules: literals, names, indexing, fields, variants, closures, `try`, operators |
-| `compiler/calls.py` | calls, generic instances at the call, function values, arguments, record construction and declared extents |
-| `compiler/places.py` | places, ownership, leases, aliasing |
-| `compiler/concurrency.py` | tasks and tickets, lanes and regions, atomics and mutexes, placement |
-| `compiler/fusion.py` | which adjacent regions a plan's `fuse` may run as one, and the scratch they need not keep |
-| `compiler/chunks.py` | which arrays a plan's `vector` moves a chunk at a time in a device region, and that lowering |
-| `compiler/staging.py` | which arrays a plan's `stage` loads into a device block's shared tile, and that lowering |
-| `compiler/cooperative.py` | cooperative regions (`blocks ... threads ...`): their shape, shared arrays, barriers and warp operations, who reaches a statement together, and their lowering |
-| `compiler/finish.py` | a cooperative region's finish, `then threads t in T { }`: its rule, and its lowering as the last block of one launch |
-| `compiler/phases.py` | the phase rule: between two barriers no two threads of a block touch one shared element where either writes |
-| `compiler/written.py` | the rule that lets a shared array go unzeroed: every element a thread reads was written first |
-| `compiler/block_run.py` | a cooperative body run for every thread of one block together, recording each phase's accesses for the phase rule and the census |
-| `compiler/footprints.py` | index polynomials, and the rule that each element of an array from outside a cooperative region has one writer |
-| `compiler/pipelines.py` | pipeline stages in a cooperative region: their declaration, the states fill, wait and release move them through, their lowering |
-| `compiler/tensor.py` | the tensor-core multiply `mma_unordered`: its rule, its numerical contract and its lowering |
-| `compiler/fragments.py` | tensor-core fragments: their types, the warp operations on them, the layouts each family reads, their lowering |
-| `compiler/layouts.py` | `layout` declarations: their evaluation and rules, their receipt, and `L.at(...)` in code with its lowering |
-| `compiler/layout_algebra.py` | storage layouts and spreads as values: offsets, owners, coverage, distinct offsets, runs, bank conflicts, conversions |
-| `compiler/rings.py` | I/O rings: their declaration, the operations that move owners in and out, their lowering |
-| `compiler/implementations.py` | alternative implementations of a function: their declaration, condition, contract, selection by a plan and the dispatch that lowers it |
-| `compiler/effects.py` | the effect vocabulary, the fixed point, the operand-order audit |
-| `compiler/refusals.py` | every independent refusal of one check: what a failed check takes back, what can still be judged after a refusal, and the record that carries them |
-| `compiler/traits.py` | who implements what, what a bound promises, the one place an instance is made |
-| `compiler/constants.py` | constant folding |
-| `compiler/facts.py` | what the checker established about `usize` values, which lowering uses to drop a guard |
-| `compiler/builtins.py` | every primitive's rule, beside its lowering |
-| `compiler/wide.py` | wide loads and stores: `load_wide[K]` and `store_wide`, their cache hints, the part each reaches, their lowering |
-| `compiler/atomics.py` | atomic updates of one element: their rule, the class they form beside plain accesses, their numerical contract, their lowering |
-| `compiler/machine.py` | the machine: `mmio_read`, `mmio_write`, `asm` and typed assembly, their rules and target requirements beside their lowering |
-| `compiler/launches.py` | an `extern` CUDA kernel's `launch(threads, block)`: its rule beside its lowering |
-| `compiler/printing.py` | `print`, `println`, `eprint`, `eprintln` and `format`: what each argument writes, and their lowering |
-| `compiler/codegen.py` | lowering the typed tree; nothing else produces C++ |
-| `compiler/region_lowering.py` | the lowering of `parallel`, `reduce`, `scan` and `compact` on host or device lanes, and of a fused chain as one region |
-| `compiler/execution.py` | which runtime operation each piece of device work lowers to, on the calling thread's execution context |
-| `compiler/header.py` | the C header of a library build: its declarations, the layouts it states, what cannot cross |
+| `compiler/syntax/lexing.py` | tokens and reserved words |
+| `compiler/syntax/tree.py` | the syntax tree, the scalar vocabulary, `Diagnostic` |
+| `compiler/syntax/parser.py` | the parser's declarations and entry point, and source ranges |
+| `compiler/syntax/expressions.py`, `compiler/syntax/statements.py` | the parser's token cursor, types and expressions; its statements |
+| `compiler/syntax/modules.py` | linking the packaged `std` modules |
+| `compiler/derive/expansion.py` | library recipes applied by `derive`, and static families |
+| `compiler/derive/gradients.py` | reverse-mode differentiation applied by `derive grad`, generated as source |
+| `compiler/check/checking.py` | names, types, generic instances, the whole-program judge, the walk over bodies |
+| `compiler/check/scope.py` | what the checker knows inside one function and one region |
+| `compiler/check/statements.py` | statement rules: declarations, control flow, `match`, loops, `defer`, collectors |
+| `compiler/check/expressions.py` | expression rules: literals, names, indexing, fields, variants, closures, `try`, operators |
+| `compiler/check/calls.py` | calls, generic instances at the call, function values, arguments, record construction and declared extents |
+| `compiler/check/places.py` | places, ownership, leases, aliasing |
+| `compiler/check/concurrency.py` | tasks and tickets, lanes and regions, atomics and mutexes, placement |
+| `compiler/check/effects.py` | the effect vocabulary, the fixed point, the operand-order audit |
+| `compiler/check/refusals.py` | every independent refusal of one check: what a failed check takes back, what can still be judged after a refusal, and the record that carries them |
+| `compiler/check/traits.py` | who implements what, what a bound promises, the one place an instance is made |
+| `compiler/check/constants.py` | constant folding |
+| `compiler/check/facts.py` | what the checker established about `usize` values, which lowering uses to drop a guard |
+| `compiler/primitives/builtins.py` | every primitive's rule, beside its lowering |
+| `compiler/primitives/printing.py` | `print`, `println`, `eprint`, `eprintln` and `format`: what each argument writes, and their lowering |
+| `compiler/primitives/wide.py` | wide loads and stores: `load_wide[K]` and `store_wide`, their cache hints, the part each reaches, their lowering |
+| `compiler/primitives/atomics.py` | atomic updates of one element: their rule, the class they form beside plain accesses, their numerical contract, their lowering |
+| `compiler/primitives/machine.py` | the machine: `mmio_read`, `mmio_write`, `asm` and typed assembly, their rules and target requirements beside their lowering |
+| `compiler/primitives/rings.py` | I/O rings: their declaration, the operations that move owners in and out, their lowering |
+| `compiler/plans/implementations.py` | alternative implementations of a function: their declaration, condition, contract, selection by a plan and the dispatch that lowers it |
+| `compiler/plans/fusion.py` | which adjacent regions a plan's `fuse` may run as one, and the scratch they need not keep |
+| `compiler/plans/chunks.py` | which arrays a plan's `vector` moves a chunk at a time in a device region, and that lowering |
+| `compiler/plans/staging.py` | which arrays a plan's `stage` loads into a device block's shared tile, and that lowering |
+| `compiler/cooperative/cooperative.py` | cooperative regions (`blocks ... threads ...`): their shape, shared arrays, barriers and warp operations, who reaches a statement together, and their lowering |
+| `compiler/cooperative/finish.py` | a cooperative region's finish, `then threads t in T { }`: its rule, and its lowering as the last block of one launch |
+| `compiler/cooperative/phases.py` | the phase rule: between two barriers no two threads of a block touch one shared element where either writes |
+| `compiler/cooperative/written.py` | the rule that lets a shared array go unzeroed: every element a thread reads was written first |
+| `compiler/cooperative/block_run.py` | a cooperative body run for every thread of one block together, recording each phase's accesses for the phase rule and the census |
+| `compiler/cooperative/footprints.py` | index polynomials, and the rule that each element of an array from outside a cooperative region has one writer |
+| `compiler/cooperative/pipelines.py` | pipeline stages in a cooperative region: their declaration, the states fill, wait and release move them through, their lowering |
+| `compiler/device/tensor.py` | the tensor-core multiply `mma_unordered`: its rule, its numerical contract and its lowering |
+| `compiler/device/fragments.py` | tensor-core fragments: their types, the warp operations on them, the layouts each family reads, their lowering |
+| `compiler/device/layouts.py` | `layout` declarations: their evaluation and rules, their receipt, and `L.at(...)` in code with its lowering |
+| `compiler/device/layout_algebra.py` | storage layouts and spreads as values: offsets, owners, coverage, distinct offsets, runs, bank conflicts, conversions |
+| `compiler/device/launches.py` | an `extern` CUDA kernel's `launch(threads, block)`: its rule beside its lowering |
+| `compiler/lower/codegen.py` | lowering the typed tree; nothing else produces C++ |
+| `compiler/lower/region_lowering.py` | the lowering of `parallel`, `reduce`, `scan` and `compact` on host or device lanes, and of a fused chain as one region |
+| `compiler/lower/execution.py` | which runtime operation each piece of device work lowers to, on the calling thread's execution context |
+| `compiler/lower/header.py` | the C header of a library build: its declarations, the layouts it states, what cannot cross |
 | `runtime/*.hpp` | guards, owners, threads, rings, storage floats, wide accesses and atomic updates, the tensor-core multiply, device calls, execution contexts, the emulated device machine |
 | `projects/project.py` | manifests, vendored dependencies, the line-to-file map |
 | `projects/toolchain.py` | every native flag, and the closed table of system libraries |
@@ -138,7 +138,7 @@ Count whole compiler dependencies in density measurements, not a facade alone.
 
 Work on a branch, one focused change at a time. Run the fast suite before and after you touch code, and both native compilers with the relevant sanitizers when you touch the runtime or the lowering. Never run code on the GPU outside `make gpu`, never set `CAIRN_GPU_TESTS` yourself, and never start `make gpu` while another agent may: repeated device runs have crashed the host. Several agents on one machine share its cores, so give pytest at most four workers each.
 
-Source belongs in `src/cairn`, tests in the `tests` folder of their subject, real programs in `examples` (each listed in `examples/README.md`), measurements in `bench` (a README in each folder says what runs and what it needs), checks and generators in `tools`, records in `evidence`, and generated results under `results/`, which is not tracked. Do not reimplement a compiler rule in a script. `implementation_hash()` in `src/cairn/verify/scalar_semantics.py` lists the files a semantic receipt is pinned to; add a new parser, checker or emitter file to that list. Prefer removing repeated boilerplate to adding opaque punctuation, and do not shrink a source-token measurement by excluding semantics the program imports.
+Source belongs in `src/cairn`, tests in the `tests` folder of their subject, real programs in `examples` (each listed in `examples/README.md`), measurements in `bench` (a README in each folder says what runs and what it needs), checks and generators in `tools`, records in `evidence`, and generated results under `results/`, which is not tracked. Do not reimplement a compiler rule in a script. `implementation_hash()` in `src/cairn/verify/scalar_semantics.py` pins a semantic receipt to every `*.py` under `compiler/` and the SMT path, so a new compiler module is covered without being listed. Prefer removing repeated boilerplate to adding opaque punctuation, and do not shrink a source-token measurement by excluding semantics the program imports.
 
 Every change reaches `main` through a pull request. Put one focused change on its own branch, push it, open the pull request with `gh pr create`, and turn on auto-merge with `gh pr merge --auto --squash`. It merges when CI passes, with no human approval required, so an agent merges its own work; it lands as one commit whose subject is the pull request's title, so the title is one plain sentence saying what is now true. A red check blocks the merge: fix the branch, never the check. Keep a pull request small enough to review in one sitting, and split a larger change into several. Nothing is pushed to `main` directly.
 

@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from ..compiler.cairnc import compile_program, compile_source, write_program
-from ..compiler.tree import CPP, FLOAT, Type, is_view
+from ..compiler.syntax.tree import CPP, FLOAT, Type, is_view
 from ..projects.toolchain import bounded, find, flags, until
 
 DRIVER = """

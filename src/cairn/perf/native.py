@@ -130,7 +130,7 @@ def loops(source: str, cxx: str = "clang++", arch: str | None = None, cpu: str =
     if not mca() or Path(cxx).name.split("-")[0] != "clang++":
         return {"status": "not-run", "reason": "llvm-mca and clang++ are both needed to read a loop's cycles."}
     from ..compiler.cairnc import compile_program
-    from ..compiler.codegen import demangled, mangle
+    from ..compiler.lower.codegen import demangled, mangle
 
     p, _, _ = compile_program(source)
     names = {mangle(f.name): f.name for f in p.functions}

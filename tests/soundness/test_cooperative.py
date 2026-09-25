@@ -16,7 +16,7 @@ import pytest
 
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import RUNTIME_FILES, compile_source
-from cairn.compiler.cooperative import participation
+from cairn.compiler.cooperative.cooperative import participation
 from cairn.projects.toolchain import command
 from emitted import device_build, refused, watched
 
@@ -169,9 +169,9 @@ def test_the_canonical_projection_compiles_to_the_same_code():
 
 def test_a_rule_learns_who_reaches_a_statement_together():
     """participation(c, node): the block, each warp, or single threads; None outside a region."""
-    from cairn.compiler import cooperative
-    from cairn.compiler.checking import Checker
-    from cairn.compiler.syntax import Parser
+    from cairn.compiler.check.checking import Checker
+    from cairn.compiler.cooperative import cooperative
+    from cairn.compiler.syntax.parser import Parser
 
     seen: dict[str, str | None] = {}
     original = cooperative.s_barrier

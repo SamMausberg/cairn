@@ -1,4 +1,4 @@
-"""Wide loads and stores, `load_wide[K](x, i)` and `store_wide(x, i, v)` (compiler/wide.py): K adjacent elements in one
+"""Wide loads and stores, `load_wide[K](x, i)` and `store_wide(x, i, v)` (compiler/primitives/wide.py): K adjacent elements in one
 access, with a cache hint the device reads and the host ignores.
 
 Every rule has a rejection naming its code. The accesses run natively in host code, in a host `parallel` region and

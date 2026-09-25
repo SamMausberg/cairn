@@ -42,7 +42,7 @@ inline void use_stream(void* stream) noexcept {
 
 // A run of synchronous device work that waits once, when the outermost run ends, instead of after each operation.
 // The lowering holds a function's body in one when its row shows that nothing in it reads device memory on the
-// host, waits on the host or allocates (compiler/execution.py): by the time the run ends the host sees every
+// host, waits on the host or allocates (compiler/lower/execution.py): by the time the run ends the host sees every
 // result, and a guard that fired in a lane has aborted the process, as when each operation waited.
 class Held final {
 public:
@@ -106,7 +106,7 @@ inline void run(Context& ctx, std::size_t n, F body, unsigned block = reuse::BLO
   reuse::synchronous(ctx, [&](typename Machine::Stream s) { ctx.api().template lanes<U>(n, body, s, block, per_lane); });
 }
 
-// `plan f { vector W; }` (compiler/chunks.py): a lane runs W adjacent indices over one W-wide chunk of each array
+// `plan f { vector W; }` (compiler/plans/chunks.py): a lane runs W adjacent indices over one W-wide chunk of each array
 // it touches only at [i], a single aligned load before its body and a single store after, where the scalar lanes
 // made W of each. One check at launch decides the whole region: every chunked pointer on its chunk's width, or the
 // scalar lanes run instead. The last indices past a whole chunk run one at a time, so every index runs once.
@@ -131,7 +131,7 @@ inline void run_vector(Context& ctx, std::size_t n, bool whole, F scalar, G chun
   });
 }
 
-// `plan f { stage R; }` (compiler/staging.py): a block runs its indices tile by tile, the same for every thread, so
+// `plan f { stage R; }` (compiler/plans/staging.py): a block runs its indices tile by tile, the same for every thread, so
 // the barriers are reached by all of them. Each tile covers blockDim.x indices from `base`; `load` fills the block's
 // shared memory with every staged array's elements from base - R to base + blockDim.x + R that lie inside it, and
 // `body` runs at the thread's index reading them there. Every index runs once, after its tile is loaded.

@@ -15,8 +15,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from ..compiler.syntax import Parser
-from ..compiler.tree import Function, fail
+from ..compiler.syntax.parser import Parser
+from ..compiler.syntax.tree import Function, fail
 from ..projects.build import build
 from ..projects.project import Project
 from .testing import limited

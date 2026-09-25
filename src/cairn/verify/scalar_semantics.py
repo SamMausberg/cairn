@@ -60,7 +60,7 @@ from pathlib import Path
 from typing import Any
 
 from ..compiler.cairnc import Diagnostic, Parser
-from ..compiler.tree import BOOL, SIGNED, USIZE, VOID, WIDTH, is_view
+from ..compiler.syntax.tree import BOOL, SIGNED, USIZE, VOID, WIDTH, is_view
 from .scalar_concrete import Concrete
 from .scalar_symbolic import Formula, Symbolic
 from .scalar_values import (
@@ -103,69 +103,20 @@ def outcome_key(outcome):
     return (outcome["defined"], outcome.get("return") if outcome["defined"] else None)
 
 
+SEMANTIC = ("verify/scalar_semantics.py", "verify/scalar_values.py", "verify/scalar_symbolic.py",
+            "verify/scalar_concrete.py", "verify/smt_bridge.py", "verify/elision.py", "version.py")  # fmt: skip
+
+
+def implementation_files() -> list[Path]:
+    """Every file a semantic receipt is pinned to, in sorted relative-path order: each `*.py` under compiler/, found
+    rather than listed so a new module is covered without anyone adding it, and SEMANTIC."""
+    package = Path(__file__).parents[1]
+    files = [*(package / "compiler").rglob("*.py"), *(package / name for name in SEMANTIC)]
+    return sorted(files, key=lambda f: f.relative_to(package).as_posix())
+
+
 def implementation_hash():
-    parent = Path(__file__).parents[1]
-    return hashlib.sha256(
-        b"".join(
-            (parent / n).read_bytes()
-            for n in [
-                "verify/scalar_semantics.py",
-                "verify/scalar_values.py",
-                "verify/scalar_symbolic.py",
-                "verify/scalar_concrete.py",
-                "verify/smt_bridge.py",
-                "verify/elision.py",
-                "compiler/cairnc.py",
-                "compiler/compilations.py",
-                "compiler/lexing.py",
-                "compiler/tree.py",
-                "compiler/syntax.py",
-                "compiler/syntax_expressions.py",
-                "compiler/syntax_statements.py",
-                "compiler/scope.py",
-                "compiler/facts.py",
-                "compiler/checking.py",
-                "compiler/refusals.py",
-                "compiler/statements.py",
-                "compiler/expressions.py",
-                "compiler/calls.py",
-                "compiler/places.py",
-                "compiler/concurrency.py",
-                "compiler/fusion.py",
-                "compiler/chunks.py",
-                "compiler/staging.py",
-                "compiler/cooperative.py",
-                "compiler/finish.py",
-                "compiler/phases.py",
-                "compiler/written.py",
-                "compiler/block_run.py",
-                "compiler/footprints.py",
-                "compiler/pipelines.py",
-                "compiler/tensor.py",
-                "compiler/layouts.py",
-                "compiler/layout_algebra.py",
-                "compiler/fragments.py",
-                "compiler/rings.py",
-                "compiler/implementations.py",
-                "compiler/effects.py",
-                "compiler/traits.py",
-                "compiler/constants.py",
-                "compiler/builtins.py",
-                "compiler/wide.py",
-                "compiler/atomics.py",
-                "compiler/machine.py",
-                "compiler/launches.py",
-                "compiler/printing.py",
-                "compiler/expansion.py",
-                "compiler/gradients.py",
-                "compiler/codegen.py",
-                "compiler/region_lowering.py",
-                "compiler/execution.py",
-                "compiler/modules.py",
-                "version.py",
-            ]
-        )
-    ).hexdigest()
+    return hashlib.sha256(b"".join(f.read_bytes() for f in implementation_files())).hexdigest()
 
 
 def equivalent(reference: str, candidate: str, symbol: str, *, assume: str = "true",

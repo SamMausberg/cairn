@@ -1,4 +1,4 @@
-// Tensor-core fragments (compiler/fragments.py): one warp's operand A, operand B or accumulator for one matrix
+// Tensor-core fragments (compiler/device/fragments.py): one warp's operand A, operand B or accumulator for one matrix
 // instruction shape, and what a warp does with them: fill, load through a layout, multiply-accumulate, store
 // through a layout. docs/numerics.md#tensor-core-fragments states the rules.
 //
@@ -211,7 +211,7 @@ template<class At> __device__ void store(const Mma<Role::acc, float, 16, 8, 16>&
 #endif
 
 // ---------------------------------------------------------------------------------------------------------------
-// What compiler/fragments.py emits: one spelling of each fragment and each operation for the host and the device.
+// What compiler/device/fragments.py emits: one spelling of each fragment and each operation for the host and the device.
 
 #if defined(__CUDA_ARCH__)
 template<Role R, class T, int M, int N, int K> using WmmaFragment = Wmma<R, T, M, N, K>;

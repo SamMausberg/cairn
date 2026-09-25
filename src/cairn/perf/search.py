@@ -55,8 +55,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..compiler.cairnc import Diagnostic, compile_program, joined
-from ..compiler.codegen import Emitter
-from ..compiler.concurrency import PLAN_ITEMS
+from ..compiler.check.concurrency import PLAN_ITEMS
+from ..compiler.lower.codegen import Emitter
 from ..verify.emission import canonical, definitions
 from . import model
 from .counts import Cost
@@ -135,7 +135,7 @@ class Spent:
 def radii(program: Any, name: str) -> tuple[int, ...]:
     """The stage radii worth trying for `name`: the least that tiles one array its device regions read at an
     offset, and the least that tiles every such array. A wider radius only loads more of the same halo."""
-    from ..compiler.staging import stageable
+    from ..compiler.plans.staging import stageable
     from .regions import walked
 
     f = next(f for f in program.functions if f.name == name and not f.bindings)

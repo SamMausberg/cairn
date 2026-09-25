@@ -11,9 +11,9 @@ import signal
 import pytest
 
 from cairn.agent.projection import canonical_source
-from cairn.compiler import layout_algebra as A
-from cairn.compiler import layouts as L
 from cairn.compiler.cairnc import compile_program, compile_source
+from cairn.compiler.device import layout_algebra as A
+from cairn.compiler.device import layouts as L
 from emitted import contract, device_build, on_device, refused, run, sanitized, watched
 
 TILES = {"rows": "rows(32, 32)", "padded": "pad(rows(32, 32), 1)", "swizzled": "swizzle(rows(32, 32), 5, 0, 5)"}
@@ -288,9 +288,9 @@ def test_a_vector_plan_and_a_stage_plan_ask_the_layout_what_they_used_to_compute
 
 
 def test_a_rule_that_runs_the_body_with_numbers_gets_the_layout_s_answer():
-    """`layouts.apply` is what compiler/block_run.py asks of `L.at(...)` and `D.row(t, v)` when it runs a cooperative
+    """`layouts.apply` is what compiler/cooperative/block_run.py asks of `L.at(...)` and `D.row(t, v)` when it runs a cooperative
     body thread by thread: the offset or coordinate, IndexError where the program traps, None for a symbol."""
-    from cairn.compiler.tree import Expr
+    from cairn.compiler.syntax.tree import Expr
 
     source = transpose(TILES["swizzled"])
     _, checker, _ = compile_program(source)

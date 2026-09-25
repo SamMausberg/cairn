@@ -1,4 +1,4 @@
-"""Warp votes and `shuffle_up` (compiler/cooperative.py): `warp_ballot(c)`, `warp_any(c)`, `warp_all(c)`,
+"""Warp votes and `shuffle_up` (compiler/cooperative/cooperative.py): `warp_ballot(c)`, `warp_any(c)`, `warp_all(c)`,
 `warp_match(v)` and `shuffle_up(v, delta)`, each one instruction for the whole warp.
 
 Each needs every thread of its warp (E-COOP-WARP) and refuses a wrong argument with its code. On host threads under

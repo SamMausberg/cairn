@@ -18,8 +18,8 @@ import random
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..compiler.concurrency import walk as statements
-from ..compiler.tree import BITS, FLOAT, SIGNED, Expr, Function, Program, is_view
+from ..compiler.check.concurrency import walk as statements
+from ..compiler.syntax.tree import BITS, FLOAT, SIGNED, Expr, Function, Program, is_view
 
 CUTOFF = 16384  # runtime/cairn_parallel.hpp lanes::CUTOFF: below it a host region is the plain loop
 GRAIN = 8192  # lanes::GRAIN: indices a lane is engaged for

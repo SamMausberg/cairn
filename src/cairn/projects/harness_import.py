@@ -16,7 +16,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from ..compiler.lexing import RESERVED
+from ..compiler.syntax.lexing import RESERVED
 from .harness_mapping import DTYPES, LACKING, SPELLED
 from .new import guide
 from .project import ProjectError

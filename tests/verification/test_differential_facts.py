@@ -1,4 +1,4 @@
-"""`compiler/facts.py` and `proofs/Cairn/Facts.lean` must decide the same guard sites alike.
+"""`compiler/check/facts.py` and `proofs/Cairn/Facts.lean` must decide the same guard sites alike.
 
 The Lean side is proved sound: a discharged index is in bounds, a discharged `+` or `-` cannot trap, a value
 discharged below a constant is at most it. This comparison is what ties that proof to the Python that lowering runs.

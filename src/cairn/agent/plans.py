@@ -24,7 +24,7 @@ from typing import Any
 
 from ..compiler import compilations
 from ..compiler.cairnc import fail
-from ..compiler.concurrency import PLAN_ITEMS, POWERS
+from ..compiler.check.concurrency import PLAN_ITEMS, POWERS
 from ..perf.plan_source import Placement, text, written
 from ..perf.tune import now, regions
 from ..projects.project import Project

@@ -7,9 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from cairn.compiler import cairnc, compilations, modules
+from cairn.compiler import cairnc, compilations
 from cairn.compiler.cairnc import Diagnostic, compile_program, compile_source
 from cairn.compiler.compilations import Cache, Compilation
+from cairn.compiler.syntax import modules
 from cairn.projects.project import load_project
 from sources import cairn_sources
 

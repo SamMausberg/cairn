@@ -1,6 +1,6 @@
 """What a foreign implementation has: vendored C++ or CUDA standing for a CAIRN reference, with exactly its evidence.
 
-A foreign implementation is an implementation (compiler/implementations.py) whose body calls an extern that a
+A foreign implementation is an implementation (compiler/plans/implementations.py) whose body calls an extern that a
 `[foreign]` source of the manifest defines (projects/foreign.py):
 
     fn histogram_interleaved(n:usize, out:rw<u64>[256], x:ro<u32>[n]) implements histogram_u32 {

@@ -14,11 +14,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..compiler.cairnc import RUNTIME_FILES, Parser, generate, joined, units, write_program
-from ..compiler.codegen import mangle
-from ..compiler.header import header as c_header
-from ..compiler.implementations import targeted
-from ..compiler.machine import unbuildable
-from ..compiler.tree import Diagnostic
+from ..compiler.lower.codegen import mangle
+from ..compiler.lower.header import header as c_header
+from ..compiler.plans.implementations import targeted
+from ..compiler.primitives.machine import unbuildable
+from ..compiler.syntax.tree import Diagnostic
 from . import emulation, foreign
 from .project import Project, ProjectError
 from .target import resolve

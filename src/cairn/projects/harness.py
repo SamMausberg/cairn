@@ -18,8 +18,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from ..compiler.codegen import mangle
-from ..compiler.header import Header
+from ..compiler.lower.codegen import mangle
+from ..compiler.lower.header import Header
 from ..version import VERSION
 from . import export
 from .harness_mapping import Mapping, load

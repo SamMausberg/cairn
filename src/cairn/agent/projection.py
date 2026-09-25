@@ -10,12 +10,12 @@ from dataclasses import asdict, replace
 from typing import Any
 
 from ..compiler.cairnc import Expr, Function, Parser, Program, Stmt, Type, fail
-from ..compiler.concurrency import PLAN_ITEMS
-from ..compiler.expansion import declared, derive
-from ..compiler.lexing import lex
-from ..compiler.modules import link
-from ..compiler.syntax import ARM_STATEMENTS
-from ..compiler.tree import local
+from ..compiler.check.concurrency import PLAN_ITEMS
+from ..compiler.derive.expansion import declared, derive
+from ..compiler.syntax.lexing import lex
+from ..compiler.syntax.modules import link
+from ..compiler.syntax.parser import ARM_STATEMENTS
+from ..compiler.syntax.tree import local
 
 
 def generics(params: list[tuple[str, str]]) -> str:
@@ -164,7 +164,7 @@ def format_block(ss: list[Stmt], indent: int = 0) -> str:
             names, count = [n.val for n in s.other_names], int(s.op)
             line = (f"blocks {', '.join(names[:count])} in {', '.join(es[:count])} threads "
                     f"{', '.join(names[count:])} in {', '.join(es[count:])} {nested(s.body)}")  # fmt: skip
-            for done in s.other:  # the region's finish (compiler/finish.py)
+            for done in s.other:  # the region's finish (compiler/cooperative/finish.py)
                 line += (f" then threads {', '.join(n.val for n in done.other_names)} in "
                          f"{', '.join(format_expr(e) for e in done.exprs)} {nested(done.body)}")  # fmt: skip
         elif s.tag == "shared":

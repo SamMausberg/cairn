@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from cairn.cli import main
-from cairn.compiler.tree import Diagnostic
+from cairn.compiler.syntax.tree import Diagnostic
 from cairn.projects import harness
 from cairn.projects.harness_import import create
 from cairn.projects.harness_sources import Library, binding

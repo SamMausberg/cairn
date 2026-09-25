@@ -12,8 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from ..compiler.builtins import WRAPPING
-from ..compiler.tree import NUMERIC, Expr
+from ..compiler.primitives.builtins import WRAPPING
+from ..compiler.syntax.tree import NUMERIC, Expr
 
 
 class Poly:

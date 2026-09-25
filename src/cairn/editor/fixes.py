@@ -11,9 +11,9 @@ from __future__ import annotations
 import re
 
 from ..agent.projection import local
-from ..compiler.modules import library_path, link
-from ..compiler.syntax import IDENT, Parser, Program
-from ..compiler.tree import Diagnostic
+from ..compiler.syntax.modules import library_path, link
+from ..compiler.syntax.parser import IDENT, Parser, Program
+from ..compiler.syntax.tree import Diagnostic
 from .document import Document, declarations, flatten
 
 UNKNOWN_TYPE = re.compile(r"Unknown type ([a-z_]\w*)\.")

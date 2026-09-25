@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..compiler.cairnc import SIGNED, WIDTH, Type, compile_program
-from ..compiler.tree import FLOAT, NUMERIC, USIZE, VOID, is_view
+from ..compiler.syntax.tree import FLOAT, NUMERIC, USIZE, VOID, is_view
 
 PROFILE = "cairn-value-bv-fp-array/3"
 MAX_PATHS = 256

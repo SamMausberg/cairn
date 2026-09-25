@@ -1,5 +1,5 @@
 """Tensor-core fragments: `WmmaA`, `WmmaB`, `WmmaAcc`, `MmaA`, `MmaB`, `MmaAcc`, `mma_load`, `mma_store` and
-`mma_unordered(acc, a, b)` (compiler/fragments.py, runtime/cairn_fragment.hpp).
+`mma_unordered(acc, a, b)` (compiler/device/fragments.py, runtime/cairn_fragment.hpp).
 
 On the host every thread of a warp holds each fragment whole and stores only the elements its lane holds on the
 device; tests/runtime/fragment_runtime.cpp runs a warp as 32 real threads under the thread sanitizer and holds every
@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from cairn.compiler import layout_algebra as A
-from cairn.compiler import layouts as L
 from cairn.compiler.cairnc import compile_program, compile_source
+from cairn.compiler.device import layout_algebra as A
+from cairn.compiler.device import layouts as L
 from emitted import NVCC_HOST, device_build, refused, run, sanitized
 
 ROOT = Path(__file__).resolve().parents[2]

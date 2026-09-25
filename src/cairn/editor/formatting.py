@@ -15,9 +15,9 @@ from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
 
-from ..compiler.lexing import IDENT, RESERVED, TOKEN, lex
-from ..compiler.syntax import PREC
-from ..compiler.tree import Diagnostic
+from ..compiler.syntax.lexing import IDENT, RESERVED, TOKEN, lex
+from ..compiler.syntax.parser import PREC
+from ..compiler.syntax.tree import Diagnostic
 
 WIDTH = 100
 STEP = "  "

@@ -29,7 +29,7 @@ from typing import Any
 
 from ..compiler import compilations
 from ..compiler.cairnc import Diagnostic, Parser, fail
-from ..compiler.lexing import lex
+from ..compiler.syntax.lexing import lex
 from ..projects.target import DeviceTarget
 from ..verify import agreement
 from ..verify.validation import EMULATED, FINITE, Policy, failure, held, refusal, validate

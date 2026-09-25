@@ -14,10 +14,10 @@ from pathlib import Path
 
 import pytest
 
-from cairn.compiler.builtins import TABLE
-from cairn.compiler.effects import EFFECTS
-from cairn.compiler.lexing import RESERVED
-from cairn.compiler.tree import PLACES
+from cairn.compiler.check.effects import EFFECTS
+from cairn.compiler.primitives.builtins import TABLE
+from cairn.compiler.syntax.lexing import RESERVED
+from cairn.compiler.syntax.tree import PLACES
 from cairn.editor import grammar
 from sources import cairn_sources
 
@@ -125,7 +125,7 @@ def test_every_reserved_word_has_exactly_one_class():
 
 def test_every_word_the_parser_reads_in_one_position_is_highlighted_there():
     """A word the parser compares a token against, and the lexer does not reserve, is contextual and needs a rule."""
-    compiler = sorted((ROOT / "src" / "cairn" / "compiler").glob("*.py"))
+    compiler = sorted((ROOT / "src" / "cairn" / "compiler").rglob("*.py"))
     parser = "\n".join(p.read_text(encoding="utf-8") for p in compiler)
     compared = set(re.findall(r'(?:\.s == |eat\(|need\(|ahead\(\d\) == )"([a-z_]+)"', parser))
     compared |= {

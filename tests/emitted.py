@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from cairn.compiler.cairnc import RUNTIME_FILES, Diagnostic, compile_source
-from cairn.compiler.codegen import mangle
+from cairn.compiler.lower.codegen import mangle
 from cairn.projects.build import build as build_project
 from cairn.projects.project import load_project
 from cairn.projects.target import parse

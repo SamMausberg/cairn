@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from cairn.compiler.cairnc import compile_source
-from cairn.compiler.header import header
+from cairn.compiler.lower.header import header
 from emitted import device_build, sanitized
 
 ROOT = Path(__file__).resolve().parents[2]

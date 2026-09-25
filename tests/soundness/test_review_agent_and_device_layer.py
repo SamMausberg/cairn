@@ -80,7 +80,7 @@ def test_the_conversion_a_type_mismatch_suggests_is_stated_as_it_behaves(want, g
 
 
 def test_the_parallel_card_names_everything_that_keeps_a_function_waiting():
-    """compiler/execution.py waits after each operation when a row holds an atomic, a lock, a call through a function
+    """compiler/lower/execution.py waits after each operation when a row holds an atomic, a lock, a call through a function
     value, a machine register or host assembly, and gives no cq_NAME entry. The card listed only transfers, device
     allocation, tickets, I/O, foreign calls and @unified views, so an agent could expect an enqueued entry for a
     function that takes a lock."""
@@ -140,7 +140,7 @@ def test_a_host_atomic_update_in_a_selected_implementation_keeps_every_wait(name
     something another host thread sees. The rule that lets a device lane's atomic update wait once walked only the
     bodies a call names, never the implementation a plan runs in the reference's place, so `twice` was held to one
     wait while each `bump_counted` bumped `hits` before its region had run."""
-    from cairn.compiler import execution
+    from cairn.compiler.lower import execution
 
     _, checker, _ = compile_program(COUNTED)
     assert "atomic" in checker.rows[name]

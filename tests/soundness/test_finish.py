@@ -1,4 +1,4 @@
-"""A cooperative region's finish, `blocks ... { } then threads t in T { }` (compiler/finish.py): one block that runs
+"""A cooperative region's finish, `blocks ... { } then threads t in T { }` (compiler/cooperative/finish.py): one block that runs
 once, after every block of the region, and sees everything they wrote.
 
 Every rule has a rejection naming its code. A one-pass reduction runs on host threads under both compilers, for grids

@@ -11,7 +11,7 @@ import operator
 from typing import Any
 
 from ..compiler.cairnc import SIGNED, WIDTH, Expr, Function, Type
-from ..compiler.tree import FLOAT, NUMERIC, VOID, is_view
+from ..compiler.syntax.tree import FLOAT, NUMERIC, VOID, is_view
 from .scalar_values import (
     MAX_REPLAY,
     MAX_UNROLL,

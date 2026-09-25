@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from cairn.cli import main
-from cairn.compiler.header import header
+from cairn.compiler.lower.header import header
 from cairn.projects.build import build
 from cairn.projects.project import ProjectError, load_project
 from emitted import SANITIZED, WARNINGS
@@ -265,7 +265,7 @@ def test_python_calls_the_library_through_its_generated_ctypes_binding(tmp_path,
 
 
 def test_the_binding_refuses_what_ctypes_would_not_pass_exactly_and_asserts_the_rest_at_import(tmp_path):
-    text = __import__("cairn.compiler.header", fromlist=["binding"]).binding(LAYOUTS, "layouts")
+    text = __import__("cairn.compiler.lower.header", fromlist=["binding"]).binding(LAYOUTS, "layouts")
     assert "# ct_Slot is not bound: ctypes cannot state an align(n) record." in text
     unbound = text[text.index("# Not bound") :]
     assert "cf_wire: ctypes may pass a packed record by value otherwise than C does" in unbound

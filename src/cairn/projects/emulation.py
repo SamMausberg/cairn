@@ -20,10 +20,10 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-from ..compiler.implementations import targeted
-from ..compiler.machine import unbuildable
-from ..compiler.syntax import Parser
-from ..compiler.tree import Diagnostic
+from ..compiler.plans.implementations import targeted
+from ..compiler.primitives.machine import unbuildable
+from ..compiler.syntax.parser import Parser
+from ..compiler.syntax.tree import Diagnostic
 from .target import FEATURES, DeviceTarget
 from .toolchain import host_family
 

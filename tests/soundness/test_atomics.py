@@ -1,4 +1,4 @@
-"""Atomic updates of one element, `atomic_add_wrap(x[i], v)` and its kin (compiler/atomics.py): from host code, host
+"""Atomic updates of one element, `atomic_add_wrap(x[i], v)` and its kin (compiler/primitives/atomics.py): from host code, host
 and device lanes, and cooperative threads, relaxed, each returning the element's old value.
 
 Every rule has a rejection naming its code. The updates run on host lanes and host threads under both compilers,

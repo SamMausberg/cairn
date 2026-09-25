@@ -29,9 +29,9 @@ from urllib.parse import unquote, urlparse
 
 from ..agent.projection import local
 from ..compiler import compilations
-from ..compiler.builtins import TABLE
 from ..compiler.cairnc import Diagnostic
-from ..compiler.syntax import IDENT, RESERVED
+from ..compiler.primitives.builtins import TABLE
+from ..compiler.syntax.parser import IDENT, RESERVED
 from ..projects.project import Project, ProjectError, contained_file, load_project
 from .document import Document, Item, binders, declarations, dotted, enclosing, flatten, line_starts, word_at
 from .edits import occurrences as local_occurrences

@@ -310,7 +310,7 @@ class Harness:
             reached.add(name)
             todo.extend(receipt["functions"][name]["calls"])
         counts = dict.fromkeys(SITE_PATTERNS, 0)
-        for name in reached:  # A site the checker discharged is not in the emitted code (compiler/facts.py).
+        for name in reached:  # A site the checker discharged is not in the emitted code (compiler/check/facts.py).
             row = receipt["functions"][name]
             for key, many in row["syntactic_check_sites"].items():
                 if key in RECEIPT_BOUNDARY:

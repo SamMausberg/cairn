@@ -19,7 +19,7 @@ from typing import Any
 
 from ..compiler import compilations
 from ..compiler.cairnc import Diagnostic, Parser, fail
-from ..compiler.effects import EFFECT_FAMILIES, EFFECTS
+from ..compiler.check.effects import EFFECT_FAMILIES, EFFECTS
 from ..projects.project import Project, load_project
 from .agent_tools import digest, implementation, load_json_strict, stable_json
 from .projection import declarations, related, signature

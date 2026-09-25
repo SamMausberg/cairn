@@ -1,4 +1,4 @@
-// Cooperative regions (compiler/cooperative.py): `blocks b in G threads t in T { }` runs G blocks of T threads, the
+// Cooperative regions (compiler/cooperative/cooperative.py): `blocks b in G threads t in T { }` runs G blocks of T threads, the
 // threads of a block sharing BYTES of zeroed memory and meeting at its barriers. The compiler writes the region's
 // body once, as a lambda taking the block's context, its block number and its thread number; the context is what
 // differs between the host and the device.
@@ -16,7 +16,7 @@
 // that stream has run the region, as a `parallel` region does, and nothing waits for the rest of the device.
 //
 // A region with a finish runs it once, after every block: on the host as one more team, on the device in the block that
-// finishes last, still one launch (compiler/finish.py). The device counts its finished blocks in a word of a table in
+// finishes last, still one launch (compiler/cooperative/finish.py). The device counts its finished blocks in a word of a table in
 // the module's own global memory, so a call allocates nothing for it (Finishes, below).
 #pragma once
 #include <atomic>
@@ -45,7 +45,7 @@ template<class T> CR_HD inline T unbits(std::uint64_t b) noexcept {
   return v;
 }
 
-// Pipeline stages (compiler/pipelines.py): D stages of S elements in the block's shared memory, filled in ring order
+// Pipeline stages (compiler/cooperative/pipelines.py): D stages of S elements in the block's shared memory, filled in ring order
 // and read in the same order. The checker has shown every fill lands in a stage nobody still reads and every read
 // follows its stage's wait, so the stage an operation means is the count of fills, or of waits, modulo D. Each thread
 // keeps both counts, and since every thread reaches every operation, they agree.
@@ -314,7 +314,7 @@ inline void run(std::size_t grid, F body) noexcept {
   for(pthread_t id : threads) pthread_join(id, nullptr);
 }
 
-// A region with a finish (compiler/finish.py): every block, then, once every block's threads have been joined, one
+// A region with a finish (compiler/cooperative/finish.py): every block, then, once every block's threads have been joined, one
 // team of the same threads runs the finish, as block 0 of a grid of one. It runs when the grid is empty too.
 template<unsigned THREADS, std::size_t BYTES, std::size_t ZERO = BYTES, std::size_t FINISH = BYTES, class F, class G>
 inline void run_then(std::size_t grid, F body, G finish) noexcept {

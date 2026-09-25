@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
-from ..compiler.builtins import TABLE
-from ..compiler.syntax import IDENT, RESERVED
+from ..compiler.primitives.builtins import TABLE
+from ..compiler.syntax.parser import IDENT, RESERVED
 from .document import DECLARATIONS, Document, Item, binders, declarations, enclosing, flatten, word_at
 from .formatting import format_source
 from .names import TYPES

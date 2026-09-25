@@ -1,4 +1,4 @@
-// The tensor-core multiply (compiler/tensor.py). mma_unordered(m, n, k, c, a, b) adds the product of the row-major
+// The tensor-core multiply (compiler/device/tensor.py). mma_unordered(m, n, k, c, a, b) adds the product of the row-major
 // m x k matrix a and the row-major k x n matrix b, both of one storage float, into the row-major m x n f32 matrix c.
 // docs/numerics.md#the-tensor-core-multiply states its contract: each product a[i][p] * b[p][j] exact wherever f32
 // holds it, each output the f32 sum of its k products and its old value, added in an order and grouping the

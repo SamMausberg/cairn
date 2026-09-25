@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..agent.projection import local, signature
-from ..compiler.modules import library_path
+from ..compiler.syntax.modules import library_path
 from .document import Document, declarations, dotted, flatten, word_at
 from .names import callee, declared, qualified, template
 

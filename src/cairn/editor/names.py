@@ -7,9 +7,9 @@ import re
 from typing import Any
 
 from ..agent.projection import local, signature
-from ..compiler.modules import STD
-from ..compiler.syntax import INTRINSIC_TYPES, SCALAR, Function, Program
-from ..compiler.tree import STORAGE
+from ..compiler.syntax.modules import STD
+from ..compiler.syntax.parser import INTRINSIC_TYPES, SCALAR, Function, Program
+from ..compiler.syntax.tree import STORAGE
 from .document import Document, binders, enclosing
 
 ITEM = {  # LSP CompletionItemKind, by what the name is

@@ -2,7 +2,7 @@
 
 A manifest's `[foreign]` table maps a vendored source to the symbols it defines, and an `extern` of the project gives
 each symbol its CAIRN signature and effects: `extern "sym" fn f(...) effects(...);` for a C function, and, with
-`launch(threads, block)`, a `__global__` kernel that host code launches (compiler/launches.py).
+`launch(threads, block)`, a `__global__` kernel that host code launches (compiler/device/launches.py).
 
     [foreign]
     "vendor/histogram.cpp" = ["histogram_u32_interleaved"]
@@ -26,8 +26,8 @@ from pathlib import Path
 from typing import Any
 
 from ..compiler.cairnc import compile_program, write_program
-from ..compiler.codegen import Emitter
-from ..compiler.tree import Function
+from ..compiler.lower.codegen import Emitter
+from ..compiler.syntax.tree import Function
 from ..perf.device import resources
 from .project import Project, ProjectError, digest
 from .target import DeviceTarget

@@ -1,5 +1,5 @@
 /-
-The layout rules of `src/cairn/compiler/layout_algebra.py`: a declared storage layout gives every element its own
+The layout rules of `src/cairn/compiler/device/layout_algebra.py`: a declared storage layout gives every element its own
 offset, and a declared spread gives every element of its tile exactly one (participant, value) holder.
 
 A storage layout is transliterated from the Python: each dimension is a list of modes, an extent and a stride,

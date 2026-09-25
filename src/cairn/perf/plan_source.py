@@ -16,9 +16,9 @@ from typing import Any
 
 from ..compiler import compilations
 from ..compiler.cairnc import Diagnostic
-from ..compiler.concurrency import PLAN_ITEMS, planned_functions
-from ..compiler.lexing import lex
-from ..compiler.tree import Function, fail
+from ..compiler.check.concurrency import PLAN_ITEMS, planned_functions
+from ..compiler.syntax.lexing import lex
+from ..compiler.syntax.tree import Function, fail
 
 Plan = tuple[tuple[str, int], ...]  # the items a plan sets, in the checker's order, zeros left out
 KEEP = object()  # a selection left as it is

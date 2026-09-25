@@ -3,7 +3,7 @@ A mechanized core of CAIRN's ownership and lease discipline.
 
 This file is a self-contained calculus: a first-order statement language over
 named locals and the places borrowed out of them, an executable checker that
-mirrors the rules `src/cairn/compiler/checking.py` enforces (moved set, lease map, visibly
+mirrors the rules `src/cairn/compiler/check/checking.py` enforces (moved set, lease map, visibly
 disjoint array parts, disjoint call arguments, branch joins, no live ticket at
 scope exit), and an interleaving small-step machine with explicit error states.
 The theorems at the bottom say that the checker's acceptance rules out every one of

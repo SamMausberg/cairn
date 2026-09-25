@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from ..compiler.cairnc import RUNTIME_FILES
-from ..compiler.machine import unbuildable
+from ..compiler.primitives.machine import unbuildable
 from ..version import VERSION
 from .project import Project, ProjectError, digest
 from .target import parse, refuse, resolve, toolkit_record

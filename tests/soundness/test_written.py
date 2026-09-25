@@ -1,4 +1,4 @@
-"""Shared arrays with no zero fill, `shared s:f32[256];` (compiler/written.py): accepted when every element a thread
+"""Shared arrays with no zero fill, `shared s:f32[256];` (compiler/cooperative/written.py): accepted when every element a thread
 reads was written first, by that thread earlier or by any thread before a barrier between them.
 
 Every rule has a rejection naming E-COOP-UNWRITTEN. A block reduction and a transpose that keep their shared arrays

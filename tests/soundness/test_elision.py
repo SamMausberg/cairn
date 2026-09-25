@@ -1,4 +1,4 @@
-"""A guard is left out only where `verify/elision.py`, which does not use `compiler/facts.py`, accepts its proof.
+"""A guard is left out only where `verify/elision.py`, which does not use `compiler/check/facts.py`, accepts its proof.
 
 facts.py proposes: each discharged site keeps the facts its decision used, each naming the loop, `let`, condition,
 `&&` or exit it came from. The audit walks the function itself, holds each cited fact to an origin in force at the
@@ -15,11 +15,11 @@ from pathlib import Path
 
 import pytest
 
-from cairn.compiler import facts
 from cairn.compiler.cairnc import compile_program, compile_source
-from cairn.compiler.codegen import Emitter
-from cairn.compiler.facts import Fact
-from cairn.compiler.tree import Expr, Stmt
+from cairn.compiler.check import facts
+from cairn.compiler.check.facts import Fact
+from cairn.compiler.lower.codegen import Emitter
+from cairn.compiler.syntax.tree import Expr, Stmt
 from cairn.projects.project import load_project
 from emitted import build, sanitized
 

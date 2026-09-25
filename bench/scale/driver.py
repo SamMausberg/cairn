@@ -27,7 +27,9 @@ LIFTED = {"MAX_SOURCE": 1 << 28, "MAX_FUNCTIONS": 1 << 30, "MAX_NODES": 1 << 40}
 
 def lift() -> None:
     """Raise the size limits wherever a module imported them by name."""
-    from cairn.compiler import expansion, lexing, traits, tree
+    from cairn.compiler.check import traits
+    from cairn.compiler.derive import expansion
+    from cairn.compiler.syntax import lexing, tree
     from cairn.projects import project
 
     for module in (tree, lexing, expansion, traits, project):

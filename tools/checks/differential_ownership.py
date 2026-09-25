@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Differential check: `checking.py` and the Lean ownership calculus on the same generated programs.
 
-`proofs/Cairn/Ownership.lean` is a hand-written model of the rules `src/cairn/compiler/checking.py`
+`proofs/Cairn/Ownership.lean` is a hand-written model of the rules `src/cairn/compiler/check/checking.py`
 enforces.  Nothing extracts one from the other, so the two can drift.  This harness
 generates programs in the fragment both of them understand, renders each one TWICE from a
 single intermediate -- once as CAIRN source, once as a Lean `Program` literal -- and requires

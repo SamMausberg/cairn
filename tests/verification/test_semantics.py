@@ -3,13 +3,11 @@
 The helpers `fn`, `check`, `agree` and `refute` are shared with the sibling test_semantics_* modules.
 """
 
-import inspect
-import re
 from pathlib import Path
 
 import pytest
 
-from cairn.compiler.tree import VOID
+from cairn.compiler.syntax.tree import VOID
 from cairn.verify.scalar_concrete import Concrete
 from cairn.verify.scalar_semantics import equivalent, prepared
 from cairn.verify.scalar_values import identical
@@ -423,14 +421,13 @@ def test_records_and_sums_inside_fixed_storage():
 
 
 def test_the_receipt_is_pinned_to_every_file_that_decides_what_a_program_means():
-    """A semantic receipt names the compiler that judged it: every parser, checker and emitter file is in the hash, so a
-    change to a builtin's rule changes every receipt's implementation_sha256 as surely as a change to the parser."""
+    """A semantic receipt names the compiler that judged it: every file under compiler/, in every subpackage, is in
+    the hash beside the SMT path, so a change to a builtin's rule changes every receipt's implementation_sha256 as
+    surely as a change to the parser, and a new module is covered without anyone listing it."""
     from cairn.verify import scalar_semantics
 
-    listed = set(re.findall(r'"(compiler/[a-z_]+\.py)"', inspect.getsource(scalar_semantics.implementation_hash)))
-    compiler = Path(scalar_semantics.__file__).parents[1] / "compiler"
-    semantic = {f"compiler/{p.name}" for p in compiler.glob("*.py")} - {
-        "compiler/__init__.py",
-        "compiler/header.py",  # the C header of a library build, which no receipt describes
-    }
-    assert semantic <= listed, f"add to implementation_hash(): {sorted(semantic - listed)}"
+    package = Path(scalar_semantics.__file__).parents[1]
+    pinned = [f.relative_to(package).as_posix() for f in scalar_semantics.implementation_files()]
+    compiler = {f.relative_to(package).as_posix() for f in (package / "compiler").rglob("*.py")}
+    assert compiler <= set(pinned) and {"compiler/primitives/builtins.py", "compiler/syntax/parser.py"} <= compiler
+    assert set(scalar_semantics.SEMANTIC) <= set(pinned) and pinned == sorted(pinned)

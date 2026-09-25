@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 
 from cairn.cli import main
-from cairn.compiler import expansion
 from cairn.compiler.cairnc import compile_source
+from cairn.compiler.derive import expansion
 from cairn.projects import build as build_module
 from cairn.projects.build import build
 from cairn.projects.graph import graph

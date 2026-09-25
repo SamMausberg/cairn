@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Differential check: `compiler/facts.py` and `proofs/Cairn/Facts.lean` decide the same generated inputs alike.
+"""Differential check: `compiler/check/facts.py` and `proofs/Cairn/Facts.lean` decide the same generated inputs alike.
 
 Lowering drops a guard when `facts.py` shows it cannot fail. `Facts.lean` transliterates the search, the bounds and the
 five decisions lowering acts on, and proves each sound. This harness generates fact sets and usize expressions, asks
@@ -22,9 +22,9 @@ from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
-from cairn.compiler import facts as F
-from cairn.compiler.scope import Binding
-from cairn.compiler.tree import USIZE, Expr, Type
+from cairn.compiler.check import facts as F
+from cairn.compiler.check.scope import Binding
+from cairn.compiler.syntax.tree import USIZE, Expr, Type
 from support import find_lake, run_lean
 
 ATOMS = 4  # x0..x3 are immutable usize values; m0 is one that can change.

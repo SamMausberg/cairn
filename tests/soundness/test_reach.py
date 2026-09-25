@@ -1,4 +1,4 @@
-"""Who reaches a statement of a cooperative region together (compiler/cooperative.py, `Reach`).
+"""Who reaches a statement of a cooperative region together (compiler/cooperative/cooperative.py, `Reach`).
 
 A barrier needs every thread of its block and a warp operation every thread of its warp, so any value that decides
 whether a thread gets there must be the same in all of them. Each program below makes such a value differ from thread

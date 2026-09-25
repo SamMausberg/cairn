@@ -19,12 +19,14 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from ..compiler import compilations, layouts, wide
+from ..compiler import compilations
 from ..compiler.cairnc import write_program
-from ..compiler.codegen import Emitter, demangled, mangle
-from ..compiler.cooperative import SHUFFLES, VOTES
-from ..compiler.modules import library_path
-from ..compiler.tree import Expr, Function, Stmt
+from ..compiler.cooperative.cooperative import SHUFFLES, VOTES
+from ..compiler.device import layouts
+from ..compiler.lower.codegen import Emitter, demangled, mangle
+from ..compiler.primitives import wide
+from ..compiler.syntax.modules import library_path
+from ..compiler.syntax.tree import Expr, Function, Stmt
 from ..perf.regions import walked
 from ..projects.toolchain import REMARKS, find, flags
 from ..projects.toolchain import version as compiler_version
@@ -57,10 +59,10 @@ SYNCHRONIZATION = {  # What blocks, or starts something to block on later, and h
     "device reduce reads back": "cr::gpu::reduce_on",
     "device scan reads back": "cr::gpu::scan_on",
     "device compact reads back": "cr::gpu::compact_on",
-    "cooperative region completes": "cr::coop::launch<",  # compiler/cooperative.py, on the execution context
+    "cooperative region completes": "cr::coop::launch<",  # compiler/cooperative/cooperative.py, on the execution context
     "host cooperative region completes": "cr::coop::run<",
     "barrier": "cr_blk.sync()",
-    "pipeline copies start": ".fill(cr_blk,",  # compiler/pipelines.py: cp.async, committed as one group
+    "pipeline copies start": ".fill(cr_blk,",  # compiler/cooperative/pipelines.py: cp.async, committed as one group
     "pipeline wait": ".template wait<",  # cp.async.wait_group N, then the block's barrier
     "warp shuffle": "cr_blk.shuffle",
     "warp reduction": "cr_blk.reduce(",

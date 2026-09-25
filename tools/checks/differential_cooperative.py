@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Differential check: `compiler/phases.py` and `proofs/Cairn/Cooperative.lean` decide the same generated regions alike.
+"""Differential check: `compiler/cooperative/phases.py` and `proofs/Cairn/Cooperative.lean` decide the same generated regions alike.
 
 `Cooperative.lean` proves that a phase its rule accepts has no clashing steps in any interleaving and one result
 whatever the threads' order, and its `program` runs a cut-down source (element reads and writes at indexes built from
