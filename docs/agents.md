@@ -167,7 +167,7 @@ The checker answers a type query itself. For each function, `cairn find` writes 
 
 A word query matches a function's name, its module and the first sentence of its comment, and a few words from other languages count as CAIRN's: `integer` finds `i64`, `string` finds `text` and `thread` finds `spawn`. Only the functions that match the most words are listed. A builtin's rule is code, so each has one line that says what it does, and its effect row belongs to a call: a type query gives it and a word query does not.
 
-Without `--in`, the program searched is the project in the current directory when it has a `cairn.toml`, and otherwise only the builtins and the library are. A program the checker refuses is left out, and the answer says so with the refusal's code. A type may leave out its module when one module declares it, so `Vec[i64]` is `std.vec.Vec[i64]`.
+Without `--in`, the program searched is the project in the current directory when it has a `cairn.toml`, and otherwise only the builtins and the library are. A program the checker refuses is left out, and the answer says so with the refusal's code. A type may leave out its module when one module declares it, so `Vec[i64]` is `std.vec.Vec[i64]`. A type the checker cannot resolve, or one no parameter can have, such as a `Group` by value, is refused with the checker's own code (`E-TYPE`, `E-PINNED`).
 
 ## Interface migrations
 

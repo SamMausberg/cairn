@@ -334,7 +334,11 @@ class Probes:
             c.check()
         if c.stopped:
             fail("E-INTERNAL", f"The check of the candidate calls stopped at {c.stopped}, so no answer is complete.")
-        refused = {about: error.data["code"] for about, _, error, _ in c.refusals}
+        errors = {about: error for about, _, error, _ in c.refusals}
+        alone = errors.get("cairn_find")  # the values alone: a type no parameter can have, such as a Group by value
+        if alone is not None and alone.data["code"] != "E-LINEAR-LEAK":
+            raise alone
+        refused = {about: error.data["code"] for about, error in errors.items()}
         base = c.local_effects.get("cairn_find", set())
         out = []
         for name, probe in self.probes.items():

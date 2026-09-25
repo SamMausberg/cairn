@@ -116,6 +116,9 @@ def test_a_query_names_a_type_it_cannot_resolve_or_asks_nothing():
     with pytest.raises(Diagnostic) as unknown:
         find(None, takes=["Vec[Nothing]"])
     assert unknown.value.data["code"] == "E-TYPE"
+    with pytest.raises(Diagnostic) as pinned:  # a value no parameter can hold is the checker's refusal, not "nothing"
+        find(None, takes=["Group[u64]"])
+    assert pinned.value.data["code"] == "E-PINNED"
     with pytest.raises(Diagnostic) as empty:
         find(None, " ")
     assert empty.value.data["code"] == "E-REQUEST"
