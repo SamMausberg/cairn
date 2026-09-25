@@ -129,6 +129,8 @@ def infer(c: Checker, f: Function, args: list[Expr], targs: tuple, expected: Typ
             bound.update({declared.extent: int(extent)} if extent.isdigit() else {})
         if unbound(c, declared, generics, bound):
             actual = c.peek(a.args[0] if a.tag == "slice" else a)  # A part has the element type of its base.
+            if declared.extent and not is_view(actual) and not actual.args:  # `sort(x)` of a scalar or a record
+                fail("E-TYPE-MISMATCH", f"{actual.display()} has no elements: it does not fit {declared.display()}.", a)
             element = actual if not declared.extent or is_view(actual) else actual.args[0]
             if not bind(declared, element):
                 fail("E-TYPE-MISMATCH", f"{actual.display()} does not fit {declared.display()}.", a)
