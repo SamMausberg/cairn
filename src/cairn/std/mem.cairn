@@ -1,9 +1,9 @@
 // Element-wise bulk operations on host views. Nothing here allocates or copies an owner:
 // `fill` and `copy` assign, so they instantiate only for copyable elements, and an owner
 // element is rejected where it would have to be moved out of a place.
-// Cost: one pass over the destination; `equal` stops at the first difference.
+// Cost: one pass over the destination; `equal` and `compare` stop at the first difference.
 module std.mem;
-import std.core (Eq);
+import std.core (Eq, Ord);
 
 pub fn fill[T:copy](n:usize, dst:rw<T>[n], value:T) {
   for i in 0..n { dst[i] = value; }
@@ -18,4 +18,15 @@ pub fn equal[T:Eq](n:usize, a:ro<T>[n], m:usize, b:ro<T>[m]) -> bool {
   if n != m { return false; }
   for i in 0..n { if !same(a[i], b[i]) { return false; } }
   return true;
+}
+
+// Lexicographic order by the element type's Ord, shorter first on a common prefix: -1, 0 or 1.
+pub fn compare[T:Ord](n:usize, a:ro<T>[n], m:usize, b:ro<T>[m]) -> i32 {
+  for i in 0..min(n, m) {
+    if less(a[i], b[i]) { return -1; }
+    if less(b[i], a[i]) { return 1; }
+  }
+  if n < m { return -1; }
+  if n > m { return 1; }
+  return 0;
 }

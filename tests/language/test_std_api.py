@@ -156,7 +156,7 @@ def test_parallel_and_device_placement_are_separate_effects():
 
 
 COVERAGE = """
-import std.core (Option);
+import std.core (Option, Eq, Ord, Hash);
 import std.arena (Arena, Handle);
 import std.map (Map);
 import std.mem;
@@ -231,6 +231,23 @@ fn main() -> i32 {
   match m.get(4) {
     Option.Some(x) => { if !bumped || x != 5 { return 31; } }
     Option.None => { return 32; }
+  }
+  let at = m.entry(4, 0);
+  m.vals[at] += 1;
+  let mut order = vec.new[usize]();
+  m.sorted(order);
+  if order.len != m.count() || m.keys[order.data[3]] != 4 || m.vals[order.data[3]] != 6 { return 33; }
+
+  let word = vec.from(3, "abc");
+  let other = vec.from(3, "abd");
+  if !less(word, other) || same(word, other) || hash(word) != vec.hash_view(3, "abc") { return 34; }
+  if mem.compare(3, "abc", 2, "ab") != 1 { return 35; }
+  let mut words = map.new[Vec[u8], u64]();
+  let first = map.entry_view(words, 3, "abc", 1);
+  words.vals[first] += 1;
+  match map.find_view(words, 3, "abc") {
+    Option.Some(slot) => { if words.vals[slot] != 2 { return 36; } }
+    Option.None => { return 37; }
   }
 
   let mut a = arena.new[u64]();
@@ -307,6 +324,29 @@ def test_the_api_reference_is_what_the_compiler_says_today():
     assert "pub fn twice[T:integer](x:T) -> T" in own and "Doubles." in own and "hidden" not in own
     assert "pub fn twice[T:integer](x:T) -> T  // effects: trap" in own
     assert own.startswith("A generic function's effects are what it may do for any arguments within its bounds")
+
+
+def examples() -> dict[str, list[str]]:
+    """Every fenced `cairn` example in a std module's own comment, by module, as `cairn doc` prints it."""
+    import re
+
+    from cairn.editor.docs import introduction
+
+    found = {}
+    for path in sorted((pathlib.Path(__file__).resolve().parents[2] / "src/cairn/std").glob("*.cairn")):
+        text = path.read_text(encoding="utf-8")
+        told = "\n".join(introduction(text, re.search(r"^module ", text, re.M).start()))
+        found[path.stem] = re.findall(r"^```cairn\n(.*?)^```", told, flags=re.S | re.M)
+    return found
+
+
+def test_an_example_in_a_module_comment_is_a_program_the_compiler_accepts():
+    """`cairn doc --std --module std.map` shows a word count; like every example in docs/, it compiles."""
+    found = examples()
+    assert len(found["map"]) == 1 and "map.entry_view" in found["map"][0]
+    for module, sources in found.items():
+        for source in sources:
+            assert compile_source(source)[0], module
 
 
 def test_doc_std_prints_only_the_modules_named(capsys):

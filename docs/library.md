@@ -24,7 +24,7 @@ A guard is a check the compiled code makes before an operation, such as an index
 | `std.derived` | `derive eq`, `derive ord`, `derive hash` | no |
 | `std.sort` | a heapsort in place, a stable radix sort of unsigned keys, and binary search | no |
 | `std.arena` | `Arena[T]`: values named by handles that notice when their value was removed | yes |
-| `std.mem` | `fill`, `copy`, `equal` over views | no |
+| `std.mem` | `fill`, `copy`, `equal`, `compare` over views | no |
 | `std.wire` | `derive wire`: records of unsigned fields to bytes and back | no |
 | `std.math` | the C math library on `f64`, whose last bit varies between machines | no |
 | `std.zlib` | the system zlib: compressing a whole view, CRC-32, Adler-32 | only `compress` |
@@ -101,6 +101,8 @@ fn main() -> i32 {
   return 0;
 }
 ```
+
+`vec.from(s)` makes a `Vec` that holds a copy of the view `s`. A `Vec` is equal to, ordered against and hashed as the elements it holds, so two `Vec[u8]` compare as their bytes do and a `Vec[u8]` keys a map.
 
 When a `Vec` runs out of room, its capacity doubles and its elements move with `swap`, so an owner is never copied and `push` costs amortized O(1). The move is one pass over two views of the same extent, so no index in it is guarded, and `extend_from` copies a view into one part. `pop` and `remove` move an element out as an `Option[T]`. `get` takes only copyable elements, and `set` takes any. Both trap on an index at or past `len`.
 
@@ -312,48 +314,35 @@ Each function is one system call, except that `sleep` calls again for the rest o
 
 ## std.map
 
-`Map[K, V]` is a hash table with open addressing, linear probing and tombstones. The map owns its keys and values, so `Map[u64, Vec[u8]]` is ordinary.
+`Map[K, V]` is a hash table with open addressing, linear probing and tombstones. The map owns its keys and values, so `Map[u64, Vec[u8]]` is ordinary, and so is a map keyed by words, `Map[Vec[u8], u64]`.
 
 ```cairn
 import std.core (Option);
 import std.map as map;
 import std.text as text;
-
-fn bump(counts:rw<map.Map[u64, u64]>, key:u64) {
-  match map.find(counts, key) {
-    Some(slot) => counts.vals[slot] += 1;
-    None => map.insert(counts, key, 1);
-  }
-}
-
-// One count per distinct word, keyed by the word's FNV digest: a Vec has no Hash of its own.
-fn tally(n:usize, line:ro<u8>[n], counts:rw<map.Map[u64, u64]>) {
-  let mut start:usize = 0;
-  while start < n {
-    let mut stop = n;
-    match text.find_byte(n, line, 32, start) { Some(at) => stop = at; None => {} }
-    if stop > start { bump(counts, text.hash_bytes(stop - start, line[start..stop])); }
-    start = stop + 1;
-  }
-}
+import std.vec (Vec);
 
 fn main() -> i32 {
-  let mut counts = map.new[u64, u64]();
   let line = "put get put del get put";
-  tally(line, counts);
+  let mut counts = map.new[Vec[u8], u64]();
+  let mut w = text.cursor();
+  while text.next_word(line, w) {
+    let at = map.entry_view(counts, line[w.lo..w.hi], 0);   // copies the word into a key the first time only
+    counts.vals[at] += 1;
+  }
   if map.count(counts) != 3 { return 1; }
-  match map.find(counts, text.hash_bytes(3, "put")) {
+  match map.find_view(counts, "put") {
     Some(slot) => { if counts.vals[slot] != 3 { return 2; } }
     None => return 3;
   }
-  let mut seen:u64 = 0;
-  for slot in 0..map.slots(counts) { if map.live(counts, slot) { seen += counts.vals[slot]; } }
-  if seen != 6 { return 4; }
+  let mut order = vec.new[usize]();
+  map.sorted(counts, order);                                  // the slots of del, get, put
+  if order.len != 3 || counts.vals[order.data[0]] != 1 { return 4; }
   return 0;
 }
 ```
 
-`insert` releases the old value when it replaces one, and `remove` moves the value out.
+`insert` releases the old value when it replaces one, and `remove` moves the value out. `entry(m, key, value)` returns the slot of `key`'s entry, inserting `value` first when there is none, and `entry_view` and `find_view` look up a `Vec` key by a view of its elements, so the key is copied only when it is inserted. `sorted(m, out)` appends the live slots to `out` in the order of their keys.
 
 A slot index from `find` stays good only until the next `insert` or `remove`, because growth rehashes and a slot can be reused. For a position you keep longer, `slot(m, key)` returns a `Slot` stamped when its key was placed. `resolve(m, s)` returns `None` once that key is removed or the map has rehashed, and you then look the key up again. It never returns another entry's index. `update(m, key, f)` lends the value to a closure, and the closure may not reach the map (`E-ALIAS`).
 
@@ -508,7 +497,7 @@ fn main() -> i32 {
 
 ## std.mem
 
-`fill`, `copy` and `equal` work over whole views. `fill` and `copy` assign, so they take only copyable elements. `equal` takes any element type that implements `Eq`, and it stops at the first difference.
+`fill`, `copy`, `equal` and `compare` work over whole views. `fill` and `copy` assign, so they take only copyable elements. `equal` takes any element type that implements `Eq`, `compare` any that implements `Ord`, and both stop at the first difference. `compare` orders two views lexicographically, a shorter one first on a common prefix, and returns -1, 0 or 1.
 
 ```cairn
 import std.mem as mem;
@@ -524,7 +513,7 @@ fn main() -> i32 {
 }
 ```
 
-`copy` is no memmove. It refuses two overlapping parts of one array (`E-ALIAS`), so shift a buffer with an ordinary loop. `equal` takes two extents, because the two lengths may differ.
+`copy` is no memmove. It refuses two overlapping parts of one array (`E-ALIAS`), so shift a buffer with an ordinary loop. `equal` and `compare` take two extents, because the two lengths may differ.
 
 ## std.wire
 

@@ -2,7 +2,7 @@
 
 # std.mem
 
-Element-wise bulk operations on host views. Nothing here allocates or copies an owner: `fill` and `copy` assign, so they instantiate only for copyable elements, and an owner element is rejected where it would have to be moved out of a place. Cost: one pass over the destination; `equal` stops at the first difference.
+Element-wise bulk operations on host views. Nothing here allocates or copies an owner: `fill` and `copy` assign, so they instantiate only for copyable elements, and an owner element is rejected where it would have to be moved out of a place. Cost: one pass over the destination; `equal` and `compare` stop at the first difference.
 
 ```cairn
 pub fn fill[T:copy](n:usize, dst:rw<T>[n]@host, value:T)  // effects: ffi_precondition, trap, write:dst
@@ -13,6 +13,10 @@ pub fn copy[T:copy](n:usize, dst:rw<T>[n]@host, src:ro<T>[n]@host)
 // Two extents, because a comparison is the one place where the lengths may legitimately differ.
 // effects: diverge, ffi_precondition, local_read, local_write, read:a, read:b, stack_storage, trap, zero_init
 pub fn equal[T:Eq](n:usize, a:ro<T>[n]@host, m:usize, b:ro<T>[m]@host) -> bool
+
+// Lexicographic order by the element type's Ord, shorter first on a common prefix: -1, 0 or 1.
+// effects: diverge, ffi_precondition, local_read, local_write, read:a, read:b, stack_storage, trap, zero_init
+pub fn compare[T:Ord](n:usize, a:ro<T>[n]@host, m:usize, b:ro<T>[m]@host) -> i32
 ```
 
 A generic function's effects are what it may do for any arguments within its bounds, besides what their own trait members do.

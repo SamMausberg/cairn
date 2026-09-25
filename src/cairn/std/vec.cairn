@@ -1,6 +1,6 @@
 // A growable owner. Growth is the only allocation and it is visible in every caller's effect row.
 module std.vec;
-import std.core (Option, Eq);
+import std.core (Option, Eq, Ord, Hash);
 import std.mem;
 
 // Lent where a view is expected: `io.print(line)` passes the elements it holds, `line.data[0..line.len]`.
@@ -9,6 +9,13 @@ pub struct Vec[T:affine] { data:Buf[T]; len:usize; lends data[0..len]; }
 pub fn new[T:affine]() -> Vec[T] = Vec(Buf[T](0), 0);
 pub fn with_capacity[T:affine](capacity:usize) -> Vec[T] = Vec(Buf[T](capacity), 0);
 pub fn capacity[T:affine](v:ro<Vec[T]>) -> usize = len(v.data);
+
+// A Vec holding a copy of `src`, in one allocation of exactly its length: `vec.from(input.data[lo..hi])`.
+pub fn from[T:copy](n:usize, src:ro<T>[n]) -> Vec[T] {
+  let mut v = with_capacity[T](n);
+  extend_from(v, n, src);
+  return v;
+}
 
 // Doubling keeps pushes amortized constant; elements move by swap, so owners are never copied.
 // Cost: one allocation, and one pass over the elements held with no guard in it.
@@ -99,4 +106,20 @@ pub fn truncate[T:affine](v:rw<Vec[T]>, count:usize) {
   if count >= v.len { return; }
   for i in count..v.len { take(v.data[i]); }
   v.len = count;
+}
+
+// A Vec is equal to, ordered against and hashed as the elements it holds, so a Vec[u8] of a word keys a map
+// and sorts as its bytes do. Cost: one pass over the elements, stopping at the first difference.
+impl[T:Eq + affine] Eq for Vec[T] { fn same(a:ro<Vec[T]>, b:ro<Vec[T]>) -> bool = mem.equal(a, b); }
+impl[T:Ord + affine] Ord for Vec[T] {
+  fn less(a:ro<Vec[T]>, b:ro<Vec[T]>) -> bool = mem.compare(a, b) < 0;
+}
+impl[T:Hash + affine] Hash for Vec[T] { fn hash(value:ro<Vec[T]>) -> u64 = hash_view(value); }
+
+// The hash of a Vec holding `xs`, FNV-1a over its elements' own hashes, so a view finds the Vec that holds
+// the same elements (map.find_view) without a Vec being made for it. Cost: one pass over `xs`.
+pub fn hash_view[T:Hash](n:usize, xs:ro<T>[n]) -> u64 {
+  let mut h = 14695981039346656037;
+  for i in 0..n { h = mul_wrap(h ^ hash(xs[i]), 1099511628211); }
+  return h;
 }
