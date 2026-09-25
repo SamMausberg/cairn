@@ -215,7 +215,7 @@
       "docs": "devices.md#emulating-device-code-on-the-host",
       "implemented": "yes",
       "compiles": "yes: x86-64, clang++ and g++, judged against a device target",
-      "ran_on_cpu": "yes: every device example under both compilers",
+      "ran_on_cpu": "yes: every device example `--emulate` accepts, under both compilers; a vendored CUDA kernel is refused with `E-EMULATE`",
       "ran_on_gpu": "n/a",
       "sanitizers": "yes: address, undefined and leak; thread on cooperative regions",
       "measured": "n/a: an emulated time measures host threads, never a device",
@@ -230,7 +230,7 @@
       "ran_on_cpu": "yes: every example emits the same C++ and receipt from a kept copy as from scratch",
       "ran_on_gpu": "n/a",
       "sanitizers": "n/a",
-      "measured": "yes: MCP checks, edit sessions and edit-then-check cycles before and after, on one loaded machine",
+      "measured": "yes: MCP checks, edit sessions, and cycles of an edit and a check, before and after, on one loaded machine",
       "records": ["evidence/v1_1/workspace/README.md", "tests/agent/test_compilations.py", "tests/agent/test_mcp.py"]
     },
     {
@@ -240,7 +240,7 @@
       "implemented": "yes",
       "compiles": "yes: sm_120 in the suite; sm_80, sm_89, sm_90a, sm_100a and sm_120a for the suite's kernels",
       "ran_on_cpu": "yes: emulated, and on a host stand-in for the CUDA runtime",
-      "ran_on_gpu": "partial: `parallel` regions, the `reduce` collector, `reduce op out[k]` over device views and a device `scan` ran on an RTX 5070 Ti, each result checked against the host, CUDA or the exact sum; `compact` has not run since v0.8.3",
+      "ran_on_gpu": "partial: `parallel` regions, the `reduce` collector, `reduce op out[k]` over device views, a device `scan` and a device `compact` ran on an RTX 5070 Ti, each result checked against the host, CUDA or the exact sum; a checked total that overflows has not trapped on a GPU",
       "sanitizers": "partial: the host sanitizers on emulated builds; Compute Sanitizer has not run",
       "measured": "partial: regions and `reduce` against hand-written CUDA on an RTX 5070 Ti; `scan` and `compact` untimed",
       "records": ["evidence/v0_8_3/gpu/benchmark.json", "evidence/v1_1/catalog/README.md", "evidence/v1_1/emulation/README.md", "evidence/v1_0/execution/README.md", "evidence/v1_1/device_perf/README.md", "evidence/v1_1/gpu/README.md"]
@@ -290,7 +290,7 @@
       "ran_on_cpu": "yes: in host code, host lanes and host threads, and emulated, under both compilers",
       "ran_on_gpu": "yes: `load_wide[4]` and `store_wide` with cache hints in lanes and a cooperative region on an RTX 5070 Ti, checked against plain loops, and in the sums of bench/device",
       "sanitizers": "partial: address and undefined under clang++, thread on host threads; Compute Sanitizer has not run",
-      "measured": "partial: that load in a two-pass sum against CUDA's `__ldcg` on an RTX 5070 Ti",
+      "measured": "partial: that load in a sum of two passes against CUDA's `__ldcg` on an RTX 5070 Ti",
       "records": ["tests/soundness/test_wide.py", "evidence/v1_1/device_perf/README.md", "evidence/v1_1/gpu/README.md"]
     },
     {
@@ -312,7 +312,7 @@
       "implemented": "yes",
       "compiles": "yes: sm_80, sm_89, sm_90a, sm_100a and sm_120a",
       "ran_on_cpu": "yes: each block's threads as host threads at a barrier, under both compilers",
-      "ran_on_gpu": "yes: layer norm, transpose, stencil and two-pass sums on an RTX 5070 Ti, each result checked against CUDA, and warp votes checked against plain loops",
+      "ran_on_gpu": "yes: layer norm, transpose, stencil and sums of two passes on an RTX 5070 Ti, each result checked against CUDA, and warp votes checked against plain loops",
       "sanitizers": "partial: thread under both compilers, which reports a removed barrier; Compute Sanitizer has not run",
       "measured": "yes: against hand-written CUDA of the same algorithms on an RTX 5070 Ti",
       "records": ["evidence/v1_0/cooperative/README.md", "evidence/v1_1/catalog/README.md", "evidence/v1_0/predict_cooperative/README.md", "tests/soundness/test_cooperative.py", "tests/projects/test_reduction_example.py", "evidence/v1_1/kernels/README.md", "tests/soundness/test_votes.py", "evidence/v1_1/device_perf/README.md", "evidence/v1_1/gpu/README.md"]
@@ -324,7 +324,7 @@
       "implemented": "yes",
       "compiles": "yes: sm_120, one launch whose last block runs the finish",
       "ran_on_cpu": "yes: one more team of host threads after the blocks, grids of 0 to 70 blocks, under both compilers, and emulated",
-      "ran_on_gpu": "yes: the suite's finish, `examples/reduction`'s one-launch sums, and a finish's `cq_` entry replayed in a CUDA graph beside direct launches, on an RTX 5070 Ti",
+      "ran_on_gpu": "yes: the suite's finish, `examples/reduction`'s sums in one launch, and a finish's `cq_` entry replayed in a CUDA graph beside direct launches, on an RTX 5070 Ti",
       "sanitizers": "partial: thread, which reports a finish that does not wait for the blocks; Compute Sanitizer has not run",
       "measured": "no",
       "records": ["tests/soundness/test_finish.py", "evidence/v1_1/gpu/README.md"]
@@ -348,10 +348,10 @@
       "implemented": "yes",
       "compiles": "yes: sm_120 with `cp.async`; sm_80, sm_89, sm_90a, sm_100a and sm_120a",
       "ran_on_cpu": "yes: row sums at depth 2 and 3 on host threads, under both compilers",
-      "ran_on_gpu": "no",
+      "ran_on_gpu": "partial: `examples/cooperative`'s row sums at depth 2 and 3 on an RTX 5070 Ti, equal to their plain loops",
       "sanitizers": "partial: thread under both compilers; Compute Sanitizer has not run",
       "measured": "no",
-      "records": ["evidence/v1_0/cooperative/README.md", "evidence/v1_1/catalog/README.md", "tests/soundness/test_pipelines.py"]
+      "records": ["evidence/v1_0/cooperative/README.md", "evidence/v1_1/catalog/README.md", "tests/soundness/test_pipelines.py", "evidence/v1_1/gpu/README.md"]
     },
     {
       "feature": "The tensor-core multiply and its fragments",
@@ -372,10 +372,10 @@
       "implemented": "yes",
       "compiles": "yes: sm_120",
       "ran_on_cpu": "yes: the offsets of 120 random layouts against the checker's own enumeration, under both compilers",
-      "ran_on_gpu": "no",
+      "ran_on_gpu": "partial: the tensor-core tile kernels, which index shared memory through `T.at`, on an RTX 5070 Ti within their contract; a coordinate outside its layout has not trapped on a GPU",
       "sanitizers": "partial: undefined under both compilers on the host; Compute Sanitizer has not run",
       "measured": "no",
-      "records": ["evidence/v1_0/review_implementation_layer/README.md", "evidence/v1_0/tensor/README.md", "tests/language/test_layouts.py"]
+      "records": ["evidence/v1_0/review_implementation_layer/README.md", "evidence/v1_0/tensor/README.md", "tests/language/test_layouts.py", "evidence/v1_1/gpu/README.md"]
     },
     {
       "feature": "Storage floats, gradients and asserts in a lane",
@@ -398,7 +398,7 @@
       "ran_on_cpu": "no: `--emulate` refuses it",
       "ran_on_gpu": "yes: 16-byte loads and `brev` in a `parallel` and a cooperative region on an RTX 5070 Ti, once PTX in a region's body launched",
       "sanitizers": "no",
-      "measured": "yes: a two-pass sum with 16-byte PTX loads against CUDA on an RTX 5070 Ti",
+      "measured": "yes: a sum of two passes with 16-byte PTX loads against CUDA on an RTX 5070 Ti",
       "records": ["evidence/v1_0/foreign/README.md", "tests/language/test_assembly.py", "evidence/v1_1/device_perf/README.md"]
     },
     {
@@ -443,7 +443,7 @@
       "docs": "devices.md#benchmark-submissions",
       "implemented": "yes",
       "compiles": "yes: sm_100a, compiled and linked against torch 2.9.0+cu130 as SOL-ExecBench's build_ext.py builds a solution, and accepted by its pydantic models",
-      "ran_on_cpu": "yes: a host-view solution built by torch.utils.cpp_extension.load equals the reference with CPU torch, and an emulated RMSNorm is within SOL-ExecBench's tolerance on nine workloads",
+      "ran_on_cpu": "yes: a solution with its views on the host, built by torch.utils.cpp_extension.load, equals the reference with CPU torch, and an emulated RMSNorm is within SOL-ExecBench's tolerance on nine workloads",
       "ran_on_gpu": "no",
       "sanitizers": "no",
       "measured": "no",
@@ -455,7 +455,7 @@
       "docs": "devices.md#benchmark-submissions",
       "implemented": "yes",
       "compiles": "yes: sm_100a through load_inline, compiled and linked against torch 2.9.0+cu130",
-      "ran_on_cpu": "yes: a host-view submission built by load_inline returns the reference's output with CPU torch",
+      "ran_on_cpu": "yes: a submission with its views on the host, built by load_inline, returns the reference's output with CPU torch",
       "ran_on_gpu": "no",
       "sanitizers": "no",
       "measured": "no",
@@ -467,7 +467,7 @@
       "docs": "devices.md#benchmark-submissions",
       "implemented": "yes",
       "compiles": "yes: sm_100a through load_inline, compiled and linked against torch 2.9.0+cu130, and valid under KernelBench's static checker",
-      "ran_on_cpu": "yes: a host-view ModelNew built by load_inline equals the problem's Model with CPU torch",
+      "ran_on_cpu": "yes: a ModelNew with its views on the host, built by load_inline, equals the problem's Model with CPU torch",
       "ran_on_gpu": "no",
       "sanitizers": "no",
       "measured": "no",

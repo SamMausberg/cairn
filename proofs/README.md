@@ -1,5 +1,10 @@
 # Lean proofs
 
-A Lean 4 project with no dependencies, pinned in `lean-toolchain`. `lake build` here checks it from scratch. `make lean` also checks that the generated certificates are current and runs the differential checks of the compiler's rules against these models.
+This folder is a Lean 4 project that proves properties of models of CAIRN's rules, written by hand beside the compiler. It has no dependencies, and `lean-toolchain` pins the Lean version.
 
-[docs/verification.md](../docs/verification.md#the-lean-project) says what each file models, what is proved of it, and what the proofs do not cover: they are about models written by hand beside the compiler, not about its Python.
+```sh
+lake build        # in proofs/: checks every proof from scratch
+make lean         # at the root: the certificates are current, lake build, and the differential runs
+```
+
+`make lean` also checks that the generated certificates are current, and it runs the differential checks, which give the compiler's rules and these models the same generated inputs and require the same answers. The proofs are about the models. Nothing proves that the compiler's Python implements them. [docs/verification.md](../docs/verification.md#the-lean-project) says what each file models, what is proved of it, and what the proofs do not cover.

@@ -1,6 +1,8 @@
 # Implement: an agent writes a faster sum of squares, and cairn tune chooses one
 
-`src/sumsq.cairn` holds `sumsq`, the sum of squares of an f64 vector, the reduction a vector norm or an RMS normalization starts with. It adds one term at a time, so each addition depends on the one before it. An agent writes faster implementations of it through the implementation tools of `cairn mcp`, the host validates each one against the reference before it keeps it, and `cairn tune` times on this host only the ones that validated.
+This demo shows an agent adding faster versions of a function without being able to change what the function means. `src/sumsq.cairn` holds `sumsq`, the sum of squares of an f64 vector, the reduction a vector norm or an RMS normalization starts with. It adds one term at a time, so each addition depends on the one before it.
+
+An agent writes faster implementations of it through the implementation tools of `cairn mcp`. An implementation is an alternative version of a function that a plan can select in place of the original, the reference. The host validates each implementation against the reference before it keeps it, and `cairn tune` times on this host only the ones that validated.
 
 ```sh
 make demo-implement                                 # or: python3 demos/implement/run.py
@@ -8,7 +10,7 @@ make demo-implement                                 # or: python3 demos/implemen
 
 ## What happens
 
-`run.py` copies the project to `results/demos/implement/sumsq` and starts `cairn mcp` beside it. `implementation_open` pins the reference and the policy in `policy.json`, each by digest: a relative tolerance of 2^-40 on the result, 128 generated cases from seed 0 and extents up to 4096. It answers with a packet of 7,650 bytes ([evidence/v1_1/validation](../../evidence/v1_1/validation/README.md)): the reference's declaration and row, six rule cards, the pinned numerical policy and the form of a reply.
+`run.py` copies the project to `results/demos/implement/sumsq` and starts `cairn mcp` beside it. `implementation_open` pins the reference and the policy in `policy.json`, each by digest: a relative tolerance of 2^-40 on the result, 128 generated cases from seed 0, and extents up to 4096. It answers with a packet of 7,650 bytes ([evidence/v1_1/validation](../../evidence/v1_1/validation/README.md)): the reference's declaration and row, six rule cards, the pinned numerical policy and the form of a reply.
 
 The agent's first submission, `sumsq_by4`, keeps four running sums `when n >= 4`. Four sums round differently from one, so it also asks for a relative tolerance of 1e-6. The host refuses it before compiling anything:
 
@@ -16,7 +18,7 @@ The agent's first submission, `sumsq_by4`, keeps four running sums `when n >= 4`
 [sumsq] host: refused E-TOLERANCE: tolerance is the host's: a submission carries protocol, handle, kind and source, and nothing it carries changes the reference, the tolerance, the test policy or the permitted inputs.
 ```
 
-Sent again without the tolerance, it compiles and the validator runs it against the reference, each call in a process of its own. The 11th case fails, and the validator shrinks it:
+Sent again without the tolerance, it compiles, and the validator runs it against the reference, each call in a process of its own. The 11th case fails, and the validator shrinks it:
 
 ```text
 [sumsq] host: refused E-VALIDATION: sumsq_by4 is not validated: failed against sumsq.
@@ -25,7 +27,9 @@ Sent again without the tolerance, it compiles and the validator runs it against 
     kept in regressions/sumsq.json
 ```
 
-The loop covers the first four elements and never reads `xs[4]`. The corrected submission says `when n % 4 == 0`, so the reference runs on every other length. It validates on 129 cases, the kept one first, 49 of which met the condition and ran `sumsq_by4`, and the host writes it beside the reference in `src/sumsq.cairn`. The last submission is `sumsq_blocks[K]`: blocks of `K` terms, each summed from zero and added to the total, with `tune K in [4, 8, 16, 32]`. The host validates each of the four instances on its own and writes the implementation with its helper.
+The loop covers the first four elements and never reads `xs[4]`. The corrected submission says `when n % 4 == 0`, so the reference runs on every other length. It validates on 129 cases, the kept one first, 49 of which met the condition and ran `sumsq_by4`, and the host writes it beside the reference in `src/sumsq.cairn`.
+
+The last submission is `sumsq_blocks[K]`: blocks of `K` terms, each summed from zero and added to the total, with `tune K in [4, 8, 16, 32]`. The host validates each of the four instances on its own and writes the implementation with its helper.
 
 Given no history, `cairn tune` has no validation to cite, so it marks every implementation `not validated`, times only the reference and keeps it. With the history the session wrote, every row says `finite-tested`, and the search times all six on this host within its budgets and writes the fastest:
 
@@ -48,7 +52,7 @@ $ cairn tune results/demos/implement/sumsq --symbol sumsq --at n=65536 --measure
   --write put plan sumsq use sumsq_blocks[4]; into src/sumsq.cairn
 ```
 
-The model ranks the reference first and `sumsq_by4` last. Measured, the reference is the slowest, at nearly four times the fastest's time, and the search's answer counts 3 of 15 measured pairs in the predicted order. `cairn tune --compare` reports the difference between the reference and the chosen instance, each line labelled by the kind of evidence it is:
+The model ranks the reference first and `sumsq_by4` last. Measured, the reference is the slowest, at nearly four times the fastest's time, and the search's answer counts 3 of 15 measured pairs in the predicted order. `cairn tune --compare` reports the difference between the reference and the chosen instance, with each line labelled by the kind of evidence it is:
 
 ```text
 $ cairn tune results/demos/implement/sumsq --symbol sumsq --at n=65536 --compare none --compare "use sumsq_blocks[4]"
@@ -68,12 +72,12 @@ The measurements come from the history the search wrote, so the report starts no
 
 Every implementation computes the same products `xs[i] * xs[i]` and adds them in another order. Added in any order, m nonnegative terms come within gamma(m - 1) = (m - 1)u / (1 - (m - 1)u) of their exact sum, relative, where u = 2^-53. Two orders are then within 2 gamma(m - 1) / (1 - gamma(m - 1)) of each other, relative to either result, which for m up to 4096 is below 8192u = 2^-40. The host pins that bound: a correct reordering validates under it, and no submission can widen it. The bound holds while no partial sum overflows; a term that overflows is infinite in every order.
 
-A zero tolerance refuses the correct `sumsq_by4`: `cairn validate` with an exact policy finds that at n = 4096, with random elements, its result and the reference's differ by 3 units in the last place.
+A zero tolerance refuses the correct `sumsq_by4`. `cairn validate` with an exact policy finds that at n = 4096, with random elements, its result and the reference's differ by 3 units in the last place.
 
 ## What is verified and what is not
 
-The agent is scripted: its four submissions are the files in `candidates/` and the tolerance in `run.py`, written by hand to show one refusal of each kind, and no model wrote them. Every refusal, validation, timing and search is computed on every run, and `tests/projects/test_demos.py` checks each outcome above except the times and which instance the search chooses, which depend on the machine.
+The agent is scripted: its four submissions are the files in `candidates/` and the tolerance in `run.py`, written by hand to show one refusal of each kind, and no model wrote them. Every refusal, validation, timing and search is computed on every run. `tests/projects/test_demos.py` checks each outcome above except the times and which instance the search chooses, which depend on the machine.
 
-A validation is finite testing on the cases that ran, never proof: the reference and each implementation are compiled by the same compiler, so a fault they share would agree with itself. Z3 is asked apart from the tests, and its query covers only n <= 16, its unrolling bound. A counterexample it gave would be replayed natively under the pinned tolerance, and would refuse the implementation if it broke it. In the recorded run it answered `unknown` for all five, within its time limit; an earlier run answered `smt-equivalent` for `sumsq_blocks[32]`, where that bound leaves only n = 0.
+A validation is finite testing on the cases that ran, never proof. The reference and each implementation are compiled by the same compiler, so a fault they share would agree with itself. Z3 is asked apart from the tests, and its query covers only n <= 16, its unrolling bound. A counterexample it gave would be replayed natively under the pinned tolerance, and would refuse the implementation if it broke that tolerance. In the recorded run it answered `unknown` for all five, within its time limit; an earlier run answered `smt-equivalent` for `sumsq_blocks[32]`, where that bound leaves only n = 0.
 
-The times are host timing only, one run on a shared machine; [evidence/v1_0/demos](../../evidence/v1_0/demos/README.md) records the machine, its load and the run. They show every implementation faster than the reference at n = 65536 on that host. Which `K` wins is within the noise, and a run on a quiet machine may choose another. Nothing ran on a GPU.
+The times are host timing only, from one run on a shared machine; [evidence/v1_0/demos](../../evidence/v1_0/demos/README.md) records the machine, its load and the run. They show every implementation faster than the reference at n = 65536 on that host. Which `K` wins is within the noise, and a run on a quiet machine may choose another. Nothing ran on a GPU.

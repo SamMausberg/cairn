@@ -1,6 +1,8 @@
 # Guide
 
-Start with the program below: it reads input, computes on two tasks and prints, and the tables after it give the refusals a first program meets and the library calls it needs. The rest of the guide sets up a project that builds, runs, tests itself and refuses a wrong edit, then walks through twelve complete programs. At a terminal every command prints lines for a person; piped, or given `--format json`, it prints the JSON record a script or an agent reads.
+This guide takes you from a fresh checkout to a CAIRN project that builds, runs, tests itself and refuses a wrong edit, and then through twelve complete programs, one idea each. It opens with a program that reads input, counts on two tasks and prints, followed by the refusals a first program meets most often and the library calls it needs.
+
+At a terminal every `cairn` command prints lines for a person. Piped, or given `--format json`, it prints the JSON record that a script or an agent reads, and `CAIRN_FORMAT` sets the default.
 
 ## Write a program
 
@@ -58,7 +60,7 @@ printf '3 -1 4' | cairn run first.cairn                     # count 3 negative 1
 printf '3 -1 4' | cairn run first.cairn --sanitize address  # the same, checked by the address sanitizer
 ```
 
-The refusals a first program meets most often, from the programs the 1.1 evaluation's subjects wrote:
+These are the refusals a first program meets most often, taken from the programs that the subjects of the 1.1 evaluation wrote:
 
 | written | CAIRN wants | code |
 |---|---|---|
@@ -71,7 +73,7 @@ The refusals a first program meets most often, from the programs the 1.1 evaluat
 | `x as u64`, `i64::MIN`, `(a, b)` | `u64(x)`, `-9223372036854775808`, a `struct` | `E-PARSE` |
 | `add_wrap(x, y)` on `i64` | wrapping is unsigned only; test first, `y > 0 && x > MAX - y` | `E-WRAP-TYPE` |
 
-The library calls a program like this uses; `cairn doc --std --module std.text` prints one module's signatures:
+These are the library calls a program like this uses. `cairn doc --std --module std.text` prints the signatures of one module:
 
 | need | call |
 |---|---|
@@ -84,13 +86,15 @@ The library calls a program like this uses; `cairn doc --std --module std.text` 
 
 ## Install
 
+From a checkout of the repository:
+
 ```sh
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e '.[dev]'
 cairn doctor
 ```
 
-`doctor` names the compilers it found and the optional tools that are present. Clang or GCC with C++20 is required. `libz3`, `nvcc`, Lean and QEMU each switch on one more check, and none is ever downloaded. Without an install, `python3 bin/cairn` is the same command.
+`cairn doctor` names the C++ compilers it found and which optional tools are present. You need Clang or GCC with C++20. `libz3`, `nvcc`, Lean and QEMU each turn on one more check, and CAIRN never downloads them. Without an install, `python3 bin/cairn` runs the same command.
 
 ## A project
 
@@ -98,7 +102,7 @@ cairn doctor
 cairn new demo
 ```
 
-A project is a directory with a manifest, sources and task contracts. The manifest is data: it lists files and names a build kind, and it cannot run anything.
+A project is a directory with a manifest, `cairn.toml`, its sources and its task contracts. A task contract is a JSON file of finite test cases for one function. The manifest is data: it lists files and names a build kind, and it cannot run anything.
 
 ```toml
 [project]
@@ -131,9 +135,11 @@ fn main() -> i32 {
 }
 ```
 
-`u64` is a fixed-width integer and `+` traps on overflow. `&` and `^` are unsigned, and `shr` takes a count below the width. A body written `= expression;` returns that expression. `test average { ... }` runs only under `cairn test`, and `assert_eq` traps when its two values differ, printing both. A `let` is immutable, a call that returns nothing is a statement, and `main` returns the process exit status.
+`u64` is a 64-bit unsigned integer, and `+` traps on overflow. `&` and `^` work on unsigned integers only, and `shr` takes a count below the width. A body written `= expression;` returns that expression.
 
-That project is the default template. Four more are starting points for real programs, and each carries a test block:
+`test average { ... }` runs only under `cairn test`, and `assert_eq` traps when its two values differ, printing both. A `let` is immutable, a call that returns nothing is a statement, and `main` returns the process exit status.
+
+That project is the default template. Four more templates are starting points for real programs, and each carries a test block:
 
 ```sh
 cairn new tool --template cli        # counts the files named after --, as wc does: std.env, std.fs, std.fmt
@@ -142,7 +148,7 @@ cairn new echo --template service    # a server that keeps every client's receiv
 cairn new squares --template parallel  # a host region, a checked reduce and a plan that splits it
 ```
 
-The test suite creates, builds, runs and tests every template. Every new project also gets an `AGENTS.md` of under 25 lines. It tells a coding agent the check, test and run loop, where the rules are (the CAIRN skill and `cairn doc --std`), and never to widen a ceiling or weaken a test to get past a refusal. A one-line `CLAUDE.md` imports it for Claude Code, which reads that file instead.
+The test suite creates, builds, runs and tests every template. Every new project also gets an `AGENTS.md` of under 25 lines. It tells a coding agent the loop of check, test and run, where the rules are (the CAIRN skill and `cairn doc --std`), and never to widen an effect ceiling or weaken a test to get past a refusal. A `CLAUDE.md` of one line imports it for Claude Code, which reads that file instead.
 
 ## Check, run, test
 
@@ -155,16 +161,17 @@ typed: 3 functions
 ```
 
 ```json
-{"status": "typed", "functions": 3, "library_functions": 0, "formal_status": "not-verified"}
+{"status": "typed", "functions": 3, "library_functions": 0, "formal_status": "not-verified",
+ "project": {"name": "demo", "manifest_sha256": "e029...", "sources": [...], ...}}
 ```
 
-`typed` means the program passed every static rule: syntax, types, ownership, leases, lanes, placement and effects. The three functions are the program's own, counting the test. When a program imports library modules, the library functions it reaches are checked with it and counted in `library_functions`. `formal_status` is always `not-verified`, because acceptance is not a proof.
+`typed` means the program passed every rule the compiler checks before it runs: syntax, types, ownership, leases, lanes, placement and effects. The three functions are the program's own, counting the test. When a program imports library modules, the library functions it reaches are checked with it and counted in `library_functions`. `formal_status` is always `not-verified`, because acceptance is not a proof.
 
 ```sh
 cairn run demo
 ```
 
-`run` builds a native executable in a fresh directory under `build/` and runs it with its memory capped. At a terminal the program writes to the terminal, and `cairn` exits with the program's status:
+`run` builds a native executable in a fresh directory under `build/` and runs it with its data memory capped, at 1024 MiB unless `--memory-mib` says otherwise. At a terminal the program writes to the terminal, and `cairn` exits with the program's status:
 
 ```text
 average(10, 20) = 15
@@ -173,18 +180,23 @@ average(10, 20) = 15
 Piped, the record carries what it printed:
 
 ```json
-{"status": "program-exited", "exit_code": 0, "stdout": "average(10, 20) = 15\n", "build_directory": "demo/build/demo-38_uge7b", "memory_limit_mib": 1024}
+{"status": "program-exited", "exit_code": 0, "stdout": "average(10, 20) = 15\n", "stderr": "",
+ "build_directory": "/home/you/demo/build/demo-38_uge7b", "security_sandbox": false, "memory_limit_mib": 1024, "emulator": null}
 ```
 
-`cairn run demo -- one two` passes `one` and `two` to the program, which reads them through `std.env`.
+`security_sandbox` is `false` because the memory cap stops a runaway program and isolates nothing. `cairn run demo -- one two` passes `one` and `two` to the program, which reads them through `std.env`.
 
-The build directory holds the generated `program.cpp`, the runtime headers it includes, and `receipt.json`, which records what was compiled, with which compiler, and every function's effect row:
+The build directory holds the generated `program.cpp`, the runtime headers, the executable and `receipt.json`. The receipt records what was compiled, with which compiler, and every function's effect row, the list of what the function may do:
 
 ```json
-"average": {"effects": ["trap"], "calls": [], "syntactic_check_sites": {"shift": 1, "overflow": 1}, "discharged_check_sites": {}}
+"average": {"effects": ["trap"], "calls": [], "syntactic_check_sites": {"shift": 1, "overflow": 1}, "discharged_check_sites": {"shift": 1},
+            "heap_allocations": 0, "allocation_count_kind": "syntactic-sites-not-dynamic-bound", "local_storage": [],
+            "implicit_synchronization": 0, "status": "prototype-checked-not-proved"}
 ```
 
-`trap` means the function has a guard that can abort: here the shift count and the checked `+`. `discharged_check_sites` lists the guards the checker proved cannot fail, which the C++ leaves out. Nothing bounds `x` and `y`, so both guards stay. A function that allocates, writes through a borrow, starts a task or uses the device says so in the same list, and so does every function that calls it.
+A guard is a check the program makes at run time. `syntactic_check_sites` counts the guards the source asks for, here the shift count and the checked `+`. `discharged_check_sites` counts those the checker proved cannot fail, which the C++ leaves out: the shift count is the literal 1, below the width. Nothing bounds `x` and `y`, so the guard of `+` stays, and `trap` in the row says the function has a guard that can abort.
+
+A function that allocates, writes through a borrow, starts a task or uses the device says so in the same list, and so does every function that calls it.
 
 ```sh
 cairn test demo
@@ -194,7 +206,7 @@ cairn test demo
 passed-finite-tests: 1 test, 1 contract, 81 cases
 ```
 
-`test` runs each test block in its own process, so a failed assert fails only that test. Then it runs the manifest's contracts. A contract names a symbol and a finite list of cases, and `test` builds a shared library and calls the symbol once per case from Python. A wrong answer, or a child that exits abnormally, fails the run whatever it printed.
+`test` runs each test block in a process of its own, so a failed assert fails only that test. Then it runs the manifest's contracts. A contract names a symbol and a finite list of cases, and `test` builds a shared library and calls the symbol once per case from Python. A wrong answer, or a child that exits abnormally, fails the run whatever it printed.
 
 ```json
 {"schema": "cairn.task/1", "symbol": "average",
@@ -203,7 +215,7 @@ passed-finite-tests: 1 test, 1 contract, 81 cases
 
 ## A wrong edit
 
-Change the type of a local and the compiler refuses the program with a code, a message and a position:
+Change the type of a local in `src/main.cairn`, and the compiler refuses the program with a code, a message and a position:
 
 ```cairn rejects E-TYPE-MISMATCH
 fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
@@ -228,13 +240,14 @@ error[E-TYPE-MISMATCH]: Expected u32, got u64.
 ```
 
 ```json
-{"status": "rejected", "code": "E-TYPE-MISMATCH", "message": "Expected u32, got u64.", "line": 3, "column": 18, "file": "src/main.cairn",
+{"protocol": "cairn.diagnostic/2", "status": "rejected", "code": "E-TYPE-MISMATCH", "message": "Expected u32, got u64.",
+ "line": 3, "column": 18, "trust": "prototype-not-verified", "expected_type": "u32", "actual_type": "u64", "file": "src/main.cairn",
  "card": "base", "repair_hint": "Convert explicitly, u32(x), which traps outside u32's range, or compute in u32."}
 ```
 
 Nothing converts implicitly. `u32(average(10, 20))` writes the narrowing out and checks it at run time. The safety rules refuse a program the same way: a heap array is an owner, so using it after `let first = data;` is `E-MOVED`.
 
-Every refusal names the rule card that states its rule, which `cairn rules` prints, and carries the fix when the compiler can state one without guessing. Every diagnostic code also has a paragraph in the reference, with a program it refuses.
+Every refusal names the rule card that states its rule, and `cairn rules E-TYPE-MISMATCH` prints that card. A refusal carries the fix in `repair_hint` when the compiler can state one without guessing. Every code the compiler emits has a rule card.
 
 ## Format, document, edit
 
@@ -244,15 +257,15 @@ cairn doc demo                 # a Markdown reference from the checked program, 
 cairn emit demo/src/math.cairn # the C++ one file lowers to
 ```
 
-`fmt` re-lexes its output and rewrites a file only if the tokens and comments come out unchanged. The [editor extension](tools.md#the-editor-extension) shows diagnostics as you type, types and effect rows on hover, completion and rename, all from the same language server.
+`fmt` lexes its output again and rewrites a file only if the tokens and comments come out unchanged. The [editor extension](tools.md#the-editor-extension) shows diagnostics as you type, types and effect rows on hover, completion and rename, all from the same language server.
 
 ## The tour in twelve programs
 
-The suite builds and runs every program below under the address and undefined-behaviour sanitizers (`tests/language/test_tour.py`), and each must exit 0.
+Each program below shows one idea and checks its own results, returning 0 only when they hold. The suite builds and runs every one under the address and undefined-behaviour sanitizers (`tests/language/test_tour.py`), and each must exit 0.
 
 ### 1. Values, checked arithmetic, explicit conversions
 
-Integers trap on overflow in every build, the wrapping forms say so by name, and a narrowing conversion is a range check.
+Integer arithmetic traps on overflow in every build. The wrapping forms, such as `add_wrap`, say so by name. A conversion is a call such as `u32(x)`, and one that narrows checks the range.
 
 ```cairn
 fn mean(a:u32, b:u32) -> u32 = u32((u64(a) + u64(b)) / 2);   // widen, then narrow with a check
@@ -270,7 +283,7 @@ fn main() -> i32 {
 
 ### 2. Views: borrowed arrays whose length is part of the type
 
-`ro<T>[n]` and `rw<T>[n]` borrow `n` elements, where `n` is an earlier parameter, a literal or a constant. Indexing is bounds checked, two `rw` views passed to one call cannot overlap, and a part `xs[lo..hi]` costs one guard.
+A view is a borrowed array. `ro<T>[n]` borrows `n` elements to read, and `rw<T>[n]` borrows them to read and write. The length `n` is the view's extent, and it is an earlier parameter, a literal or a constant. Indexing is bounds checked, two `rw` views passed to one call cannot overlap, and a part `xs[lo..hi]`, a view of elements `lo` through `hi - 1`, costs one guard.
 
 ```cairn
 const N:usize = 4 * 2;
@@ -290,7 +303,7 @@ fn main() -> i32 {
 
 ### 3. Records, sums, `match` and `try`
 
-A sum has one payload per variant. `match` is exhaustive and has no wildcard. `try` yields the success payload or returns the failure from the enclosing function; it is the only way to propagate an error.
+A `struct` is a record, and an `enum` is a sum whose variants each carry at most one payload. `match` must give every variant an arm, and it has no wildcard arm. `try` yields the success payload, or returns the failure from the enclosing function. It is the only way to pass an error up.
 
 ```cairn
 struct Point { x:i64; y:i64; }
@@ -315,7 +328,7 @@ fn main() -> i32 {
 
 ### 4. Generics and what a parameter promises
 
-Each instance of a generic is checked. A bound is a promise checked at the call: a trait, a kind (`copy`, `affine`), or a closed class of scalars that allows operators.
+The checker checks each instance of a generic function or record at the types it is used with. A bound on a type parameter is a promise checked at the call: a trait, a kind (`copy`, `affine`), or a closed class of scalars that allows operators, such as `numeric`. A `family` makes one function for each value of a natural parameter.
 
 ```cairn
 struct Pair[T:copy] { a:T; b:T; }
@@ -334,7 +347,7 @@ fn main() -> i32 {
 
 ### 5. Traits, static and dynamic
 
-Dispatch is static on the type of `Self`. A `dyn` reference is an explicit two-word borrow, and a call through it adds `dispatch` and the rows of every implementation to the effect row.
+A trait call is resolved at compile time from the type of `Self`. A `dyn` reference is an explicit borrow of two words, the object and a static table of its functions. A call through it adds `dispatch`, and the effect rows of every implementation, to the caller's effect row.
 
 ```cairn
 trait Shape { fn area(self:ro<Self>) -> u64; }
@@ -356,7 +369,7 @@ fn main() -> i32 {
 
 ### 6. Owners: moved, never copied, released at scope exit
 
-`Buf[T]` is a zeroed heap array and an ordinary affine value. `take` and `swap` are the only ways out of a place, a `linear struct` must be consumed exactly once on every path, and `defer` schedules one visible call.
+An owner is a value that holds memory and releases it when it goes out of scope. `Buf[T]` is a zeroed heap array and an ordinary affine value: it moves, and it is never copied. `take` and `swap` are the only ways to get a value out of a place such as a field. A `linear struct` must be consumed exactly once on every path, and `defer` schedules one visible call for the end of the block.
 
 ```cairn
 linear struct Token { id:u64; }
@@ -399,7 +412,7 @@ fn main() -> i32 {
 
 ### 8. Tasks lease what they borrow
 
-`spawn` runs a declared function on its own thread and hands back a linear ticket. Until `wait`, nobody else may touch what the task writes. Visibly disjoint parts may go to different tasks.
+`spawn` runs a declared function as a task on a thread of its own and returns a ticket. The ticket is linear, so every path must `wait` for it. Until that `wait` the task leases what it borrows, and nothing else may touch what the task writes. Parts that are visibly disjoint may go to different tasks.
 
 ```cairn
 fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }
@@ -425,7 +438,7 @@ fn main() -> i32 {
 
 ### 9. Lanes are race free by construction
 
-A lane may touch what it writes only at `[i]`. Lanes combine through `reduce`, into one value, and `scan`, into every prefix. The checked `+` is allowed where no order of evaluation can change whether it traps. A lane may call a closure that writes nothing it captured.
+A lane may touch what any lane writes only at its own index `[i]`, or inside its own block of a constant size ([concurrency.md](concurrency.md#parallel-regions)). Lanes combine their values through `reduce`, into one value, and `scan`, into every prefix. The checked `+` is allowed where no order of evaluation can change whether it traps. A lane may call a closure that writes nothing it captured.
 
 ```cairn
 fn map(n:usize, out:rw<u64>[n], f:ro<fn(u64) -> u64>) { parallel i in n { out[i] = f(u64(i)); } }
@@ -447,7 +460,7 @@ fn main() -> i32 {
 
 ### 10. Generators are library code
 
-A recipe is ordinary declarations with static `each`, `where` and `$name` splices. `derive wire`, `derive eq`, `derive ord` and `derive hash` are recipes in the standard library.
+A recipe generates declarations for a type, and `derive R for T;` applies it. It is written as ordinary declarations with static `each` and `where` clauses and `$name` splices. `derive wire`, `derive eq`, `derive ord` and `derive hash` are recipes in the standard library.
 
 ```cairn
 import std.core (Eq, Ord);
@@ -485,7 +498,7 @@ fn main() -> i32 {
 
 ### 11. Modules and the library
 
-`module` names what follows, `pub` exports, and `import` brings a module, or listed names, into view. Growable arrays, maps and I/O are library code written in CAIRN, so their costs show in every caller's effect row.
+`module` names the module the declarations after it belong to, `pub` exports a declaration, and `import` brings a module, or listed names, into view. Growable arrays, maps and I/O are library code written in CAIRN, so their costs show in every caller's effect row.
 
 ```cairn
 module inventory;
@@ -529,7 +542,7 @@ pub fn main() -> i32 {
 
 ### 12. The foreign boundary states its effects
 
-The checker cannot read an `extern` function's body, so the declaration states what it may do, a call to it needs `unsafe`, and the effect reaches every caller. `pure` and `effects(...)` are checked ceilings.
+The checker cannot read an `extern` function's body, so the declaration states what the function may do. A call to it needs `unsafe`, and its effect reaches every caller. `pure` and `effects(...)` on a signature are ceilings: the checker refuses a body whose effect row goes past them.
 
 ```cairn
 extern fn getpid() -> i32 effects(io);
@@ -543,8 +556,8 @@ fn main() -> i32 {
 }
 ```
 
-The device half of the language (placement types, `kernel fn`, device `reduce` and `compact`, queued work with `spawn ... after`) is shown by [examples/apps/gpu_pipeline](examples.md#examplesappsgpu_pipeline) and [examples/apps/simulator](examples.md#examplesappssimulator). Their device runs happen only under `make gpu`.
+Three example projects show the device half of the language. [examples/apps/gpu_pipeline](examples.md#examplesappsgpu_pipeline) has placement types and a device `reduce` and `compact`, [examples/apps/simulator](examples.md#examplesappssimulator) the same lanes on the host and on the device, and the `gpu.toml` of [examples/apps/analytics](examples.md#examplesappsanalytics) a `kernel fn` and queued work with `spawn ... after`. Their device runs happen only under `make gpu`.
 
 ## Where to go next
 
-[language.md](language.md), [memory.md](memory.md), [abstractions.md](abstractions.md), [concurrency.md](concurrency.md), [devices.md](devices.md) and [numerics.md](numerics.md) are the reference: every rule with a program it accepts and one it refuses. The [index](README.md) gives the rest in reading order.
+[language.md](language.md), [memory.md](memory.md), [abstractions.md](abstractions.md), [concurrency.md](concurrency.md), [devices.md](devices.md) and [numerics.md](numerics.md) are the reference: each rule with a program the compiler accepts and one it refuses. The [index](README.md) lists the rest in reading order.
