@@ -301,7 +301,21 @@ def test_the_api_reference_is_what_the_compiler_says_today():
     whole = standard_library()
     for name in set(pages) - {"std_api.md"}:  # each page is its module's section of the one document, word for word
         assert pages[name].removeprefix(GENERATED).removesuffix("\n\n" + NOTE + "\n") in whole, name
+    alone = standard_library(["std.text"]).removeprefix(GENERATED + NOTE + "\n\n")
+    assert alone.startswith("# std.text") and alone.removesuffix("\n") in whole and "# std.io" not in alone
     own = document("module m;\n// Doubles.\npub fn twice[T: integer](x:T) -> T = x + x;\nfn hidden() {}\n")
     assert "pub fn twice[T:integer](x:T) -> T" in own and "Doubles." in own and "hidden" not in own
     assert "pub fn twice[T:integer](x:T) -> T  // effects: trap" in own
     assert own.startswith("A generic function's effects are what it may do for any arguments within its bounds")
+
+
+def test_doc_std_prints_only_the_modules_named(capsys):
+    """`cairn doc --std --module text` is one module's signatures, not the whole library an agent then pages through."""
+    from cairn.cli import main
+
+    assert main(["doc", "--std", "--module", "text", "--module", "std.vec"]) == 0
+    printed = capsys.readouterr().out
+    assert "# std.text" in printed and "# std.vec" in printed and "# std.io" not in printed
+    assert main(["doc", "--std", "--module", "texts", "--format", "json"]) == 2
+    assert "No packaged module std.texts: the library has std.arena" in capsys.readouterr().out
+    assert main(["doc", "--std", "--module", "text", "--pages", "unused", "--format", "json"]) == 2

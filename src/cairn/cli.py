@@ -244,10 +244,15 @@ def main(argv: list[str] | None = None) -> int:
         if a.command in {"run", "test"} and not 64 <= a.memory_mib <= 65536:
             raise ProjectError("Native memory limit must be 64..65536 MiB.")
         if a.command == "doc" and a.std:  # The packaged library needs no project.
-            from .editor.docs import standard_library, standard_library_pages
+            from .editor.docs import library_names, standard_library, standard_library_pages
 
+            wanted = [m if m.startswith("std.") else "std." + m for m in a.module or []]  # `text` is `std.text`
+            if missing := [m for m in wanted if m not in library_names()]:
+                raise ProjectError(f"No packaged module {missing[0]}: the library has {', '.join(library_names())}.")
+            if wanted and a.pages:
+                raise ProjectError("--pages writes every module's page; --module prints the modules it names.")
             if not a.pages:
-                print(standard_library(), end="")
+                print(standard_library(wanted), end="")
                 return 0
             pages = standard_library_pages()
             (a.pages / "std").mkdir(parents=True, exist_ok=True)

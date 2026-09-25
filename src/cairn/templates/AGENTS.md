@@ -10,7 +10,7 @@ This is a CAIRN project. CAIRN is a checked systems language that compiles to C+
 
 ## Where the rules are
 
-The CAIRN agent skill holds them: `skills/cairn/` of the CAIRN repository, or the Claude Code plugin, which also puts `cairn` on `PATH`. `cairn rules CODE` prints the card a refusal names, offline. `cairn doc --std` lists every signature of the standard library, and `cairn doc .` this project's, each with its effect row. Nothing else exists: no library a file does not declare or import, and no syntax from Rust, C++ or Python.
+The CAIRN agent skill holds them: `skills/cairn/` of the CAIRN repository, or the Claude Code plugin, which also puts `cairn` on `PATH`. `cairn rules CODE` prints the card a refusal names, offline. `cairn doc --std --module text` lists the signatures of one module of the standard library, and `cairn doc .` this project's, each with its effect row. Nothing else exists: no library a file does not declare or import, and no syntax from Rust, C++ or Python.
 
 ## What not to do
 

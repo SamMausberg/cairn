@@ -116,7 +116,7 @@ A refusal from a host or the command line may name [hosts](cards/hosts.md), [mig
 ## Mistakes that cost the most
 
 - Habits from Rust or C++: there are no `&`/`&mut` references, lifetimes, `::` paths, `as` casts (write `u64(x)`) or tail-expression returns. `impl` is only `impl Trait for T`; `value.f(args)` calls a plain `fn f(v, args)` from the type's module. Text is `ro<u8>[n]` or `Vec[u8]`; there is no `String`.
-- Invented libraries: only what a file declares, the builtins the cards name and the `std.*` modules exist; `cairn doc --std` lists every `std` signature.
+- Invented libraries: only what a file declares, the builtins the cards name and the `std.*` modules exist; `cairn doc --std --module std.text` prints one module's signatures with their effect rows, and `cairn doc --std` every module's.
 - Guessing a fix: each diagnostic code has one rule behind it, and its card says what that rule accepts.
 
 ## More

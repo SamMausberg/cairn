@@ -140,7 +140,8 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"check"}, "--generics", {"action": "store_true", "help": "Also check each generic function once against its "
                                "bounds; fail if one needs more."}),
     ({"doc"}, "--module", {"action": "append",
-                           "help": "Document this module (repeatable); default: the project's own."}),
+                           "help": "Document this module (repeatable); default: the project's own, or with --std "
+                                   "every packaged module."}),
     ({"doc"}, "--std", {"action": "store_true", "help": "Document the packaged standard library instead."}),
     ({"doc"}, "--pages", {"type": Path, "metavar": "DIR", "help": "With --std, write DIR/std_api.md and one page per "
                           "module under DIR/std/ instead of printing; a page no module has is removed."}),
