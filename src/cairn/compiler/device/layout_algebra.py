@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import Any
 
 from ..syntax.tree import fail
@@ -35,16 +36,17 @@ Mode = tuple[int, int]  # (extent, stride): one digit of a logical dimension, fa
 @dataclass(frozen=True)
 class Layout:
     """A storage layout: each logical dimension is a list of modes, fastest first, and a coordinate's digits in
-    those modes, times their strides, sum to its offset; then the swizzle, if any, permutes the offset."""
+    those modes, times their strides, sum to its offset; then the swizzle, if any, permutes the offset. A value never
+    changes, so what is worked out from it (its shape, size and cosize) is worked out once."""
 
     dims: tuple[tuple[Mode, ...], ...]
     swizzle: tuple[int, int, int] = (0, 0, 0)  # CuTe's Swizzle<B, M, S>; B == 0 is none
 
-    @property
+    @cached_property
     def shape(self) -> tuple[int, ...]:
         return tuple(math.prod(e for e, _ in modes) for modes in self.dims)
 
-    @property
+    @cached_property
     def size(self) -> int:
         return math.prod(self.shape)
 
@@ -60,7 +62,7 @@ class Layout:
         """Every element's offset, in logical order: row by row, the last dimension fastest."""
         return [self.offset(unravel(e, self.shape)) for e in range(self.size)]
 
-    @property
+    @cached_property
     def cosize(self) -> int:
         """The elements an array needs to hold every offset: one past the largest."""
         return max(self.table(), default=-1) + 1
@@ -78,11 +80,11 @@ class Spread:
     wrap: bool = True
     origin: tuple[int, ...] = ()  # where participant 0's value 0 sits; the tile's first element when empty
 
-    @property
+    @cached_property
     def count(self) -> int:
         return math.prod(e for e, _ in self.participants)
 
-    @property
+    @cached_property
     def each(self) -> int:
         return math.prod(e for e, _ in self.values)
 

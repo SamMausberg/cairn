@@ -14,9 +14,10 @@ array, and `perf/cooperative_work.Census` counts what the warps move.
 
 from __future__ import annotations
 
-from collections.abc import Collection
+import operator
+from collections.abc import Callable, Collection
 from dataclasses import dataclass, field
-from itertools import count
+from itertools import count, repeat
 from typing import Any
 
 from ..device import fragments, layouts
@@ -61,6 +62,15 @@ def norm(p: Poly) -> Any:
     return p if k is None else k if 0 <= k <= MAX else TRAP
 
 
+# The usize operations on two numbers; a result outside 0..MAX is where the checked ones trap.
+INTEGER: dict[str, Callable[[int, int], int]] = {
+    "+": operator.add, "-": operator.sub, "*": operator.mul, "/": operator.floordiv, "%": operator.mod,
+    "&": operator.and_, "|": operator.or_, "^": operator.xor, "min": min, "max": max, "shr": operator.rshift,
+    "add_wrap": lambda a, b: (a + b) & MAX, "sub_wrap": lambda a, b: (a - b) & MAX,
+    "mul_wrap": lambda a, b: (a * b) & MAX, "shl_wrap": lambda a, b: (a << b) & MAX,
+}  # fmt: skip
+
+
 def arith(op: str, a: Any, b: Any) -> Any:
     """One usize operation, as the machine does it: the checked ones trap where the program's guard would."""
     if a is TRAP or b is TRAP:
@@ -70,14 +80,10 @@ def arith(op: str, a: Any, b: Any) -> Any:
     if isinstance(a, int) and isinstance(b, int):
         if (op in {"/", "%"} and b == 0) or (op in {"shr", "shl_wrap"} and b > 63):
             return TRAP
-        r = {"+": lambda: a + b, "-": lambda: a - b, "*": lambda: a * b, "/": lambda: a // b, "%": lambda: a % b,
-             "&": lambda: a & b, "|": lambda: a | b, "^": lambda: a ^ b, "min": lambda: min(a, b),
-             "max": lambda: max(a, b), "add_wrap": lambda: (a + b) & MAX, "sub_wrap": lambda: (a - b) & MAX,
-             "mul_wrap": lambda: (a * b) & MAX, "shr": lambda: a >> b,
-             "shl_wrap": lambda: (a << b) & MAX}.get(op)  # fmt: skip
+        r = INTEGER.get(op)
         if r is None:
             return None
-        value = r()
+        value = r(a, b)
         return value if 0 <= value <= MAX else TRAP
     if op in {"+", "-", "*"}:
         pa, pb = as_poly(a), as_poly(b)
@@ -159,7 +165,7 @@ class BlockRun:
         if self.work > WORK:
             fail("E-COOP-UNDECIDED", f"The phase rule would take more than {WORK} thread steps for this region; "
                  "split it, or give its loops fewer iterations.", self.node)  # fmt: skip
-        return [f(*(v[t] if isinstance(v, list) else v for v in vs)) for t in range(self.T)]
+        return [f(*xs) for xs in zip(*(v if isinstance(v, list) else repeat(v, self.T) for v in vs), strict=True)]
 
     def at(self, v: Any, t: int) -> Any:
         return v[t] if isinstance(v, list) else v
@@ -308,15 +314,18 @@ class BlockRun:
         if array not in self.counts:
             return  # a read-only device view: nothing in the region writes it
         found: list[Any] = []
+        held: dict[tuple[int, int], Any] = {}  # a warp's threads name one fragment: its footprint, worked out once
         for t in range(self.T):
             i, j = self.at(values[2], t), self.at(values[3], t)
             if not all(isinstance(x, int) and not isinstance(x, bool) for x in (i, j)):
                 found.append(None)  # an unknown fragment: every element it may touch is unknown
                 continue
-            try:
-                found.append(fragments.footprint(self.c, e, i, j))
-            except IndexError:
-                found.append(TRAP)  # the coordinates' guard aborts the thread first
+            if (i, j) not in held:
+                try:
+                    held[i, j] = fragments.footprint(self.c, e, i, j)
+                except IndexError:
+                    held[i, j] = TRAP  # the coordinates' guard aborts the thread first
+            found.append(held[i, j])
         size = next((len(f) for f in found if isinstance(f, list)), 1)
         for k in range(size):
             index = [f[k][0] if isinstance(f, list) else f for f in found]
