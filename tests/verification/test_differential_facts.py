@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from support import find_lake
+
 ROOT = Path(__file__).resolve().parents[2]
 HARNESS = ROOT / "tools" / "checks" / "differential_facts.py"
 UNAVAILABLE = 3
@@ -36,7 +38,7 @@ def test_the_rule_and_its_lean_model_decide_alike():
 def test_a_slip_in_the_rule_would_be_reported(monkeypatch):
     from checks import differential_facts as harness
 
-    lake = harness.find_lake()
+    lake = find_lake()
     if lake is None:
         pytest.skip("lake is not installed")
 

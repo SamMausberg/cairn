@@ -423,13 +423,15 @@ def test_the_agent_example_passes_its_task_contract():
 
 
 def test_audit_repository():
+    """The history HEAD holds has nothing the audit refuses: no credential pattern, binary or oversized file."""
     if not (ROOT / ".git").exists():
         pytest.skip("the history audit needs a git checkout, not an exported tree")
     done = subprocess.run(
-        [PY, "tools/release/audit_repository.py"], cwd=ROOT, text=True, capture_output=True, timeout=300
-    )
+        [PY, "tools/release/audit_repository.py", "--revision", "HEAD"], cwd=ROOT, text=True, capture_output=True,
+        timeout=300,
+    )  # fmt: skip
     result = parsed(done.stdout)
-    assert done.returncode == (1 if result["findings"] else 0)
+    assert done.returncode == 0 and not result["findings"], result["findings"][:20]
     assert result["commits"] > 0 and result["distinct_blobs"] > 0 and result["bytes_scanned"] > 0
 
 
