@@ -208,6 +208,15 @@ def test_skill_tokens():
     assert record["files"]["SKILL.md"] < record["tour"]["tokens"] < record["skill_total"]
 
 
+@needs_clang
+def test_output_sizes():
+    """Every output of the corpus an agent reads is within its budget, so no change adds to it unnoticed."""
+    record = parsed(tool("tools/ai/output_sizes.py", "--check", timeout=600))
+    assert set(record["cases"]) == set(json.loads((ROOT / "tools/ai/output_budgets.json").read_text()))
+    assert set(record["surfaces"]) == {"check", "build", "other", "mcp"}
+    assert record["cases"]["check, the 69 programs of the 1.1 replay"]["bytes"] > 69 * 50
+
+
 def test_friction_costs():
     """Where the 1.1 evaluation's CAIRN subjects spent their tokens, read from the kept transcripts."""
     record = parsed(tool("tools/ai/friction.py", "costs"))
