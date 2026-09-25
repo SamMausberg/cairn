@@ -1,6 +1,86 @@
 # Guide
 
-This guide takes a fresh checkout to a project that builds, runs, tests itself and refuses a wrong edit, then walks through twelve complete programs. At a terminal every command prints lines for a person; piped, or given `--format json`, it prints the JSON record a script or an agent reads. The guide shows both.
+Start with the program below: it reads input, computes on two tasks and prints, and the tables after it give the refusals a first program meets and the library calls it needs. The rest of the guide sets up a project that builds, runs, tests itself and refuses a wrong edit, then walks through twelve complete programs. At a terminal every command prints lines for a person; piped, or given `--format json`, it prints the JSON record a script or an agent reads.
+
+## Write a program
+
+```cairn
+// Reads integers from standard input; prints how many, and how many are negative, counted on two tasks.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
+
+fn negatives(n:usize, xs:ro<i64>[n]) -> usize {
+  let mut k:usize = 0;                              // an unannotated 0 would be a u64
+  for x in xs { if x < 0 { k += 1; } }
+  return k;
+}
+
+fn main() -> i32 {
+  let mut input = vec.new[u8]();                    // a growable owner, freed at scope exit
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => { if got == 0 { more = false; } else { vec.extend_from(input, got, chunk[0..got]); } }
+      Err(_) => more = false;
+    }
+  }
+  let mut values = vec.new[i64]();
+  let mut lo:usize = 0;
+  while lo < input.len {
+    let mut hi = lo;
+    while hi < input.len && input.data[hi] > 32 { hi += 1; }
+    if hi > lo {
+      match text.parse_i64(hi - lo, input.data[lo..hi]) {   // a part is written where it is passed
+        Ok(v) => vec.push(values, v);
+        Err(_) => return 1;
+      }
+    }
+    lo = hi + 1;
+  }
+  let n = values.len;
+  let halves = Group[usize](2);
+  spawn negatives(values.data[0..n / 2]) into halves;   // each task reads its own part; n is len of it
+  spawn negatives(values.data[n / 2..n]) into halves;
+  let first = collect(halves);                      // a call that joins or writes is its own statement
+  let second = collect(halves);
+  wait(halves);
+  println("count ", n, " negative ", first + second);
+  return 0;
+}
+```
+
+```sh
+cairn check first.cairn                                     # typed, or a refusal with its code, line and fix
+printf '3 -1 4' | cairn run first.cairn                     # count 3 negative 1
+printf '3 -1 4' | cairn run first.cairn --sanitize address  # the same, checked by the address sanitizer
+```
+
+The refusals a first program meets most often, from the programs the 1.1 evaluation's subjects wrote:
+
+| written | CAIRN wants | code |
+|---|---|---|
+| `let x = next(inp) + 1;`, where `next` writes `inp` | `let v = next(inp);` then `v + 1`; `usize(next(inp))` alone is fine | `E-EFFECT-ORDER` |
+| `f(n, b)`, where `b` is `Buf[u64](n)` | `f(b)`, which passes `len(b)`, or `f(n, b[0..n])` | `E-TYPE-MISMATCH` |
+| `let mut i = 0;` then `xs[i]` | `let mut i:usize = 0;`: a literal is a `u64` when nothing expects another type | `E-TYPE-MISMATCH` |
+| `let x = if c { a } else { b };` | `let mut x = b; if c { x = a; }` | `E-NAME` |
+| `let s = xs[lo..hi];` | the part in the call itself: `f(xs[lo..hi])` | `E-VIEW-ALIAS` |
+| `len(v)` of a `Vec` | `v.len`, and `v.data[i]` for an element | `E-LEN` |
+| `x as u64`, `i64::MIN`, `(a, b)` | `u64(x)`, `-9223372036854775808`, a `struct` | `E-PARSE` |
+| `add_wrap(x, y)` on `i64` | wrapping is unsigned only; test first, `y > 0 && x > MAX - y` | `E-WRAP-TYPE` |
+
+The library calls a program like this uses; `cairn doc --std --module std.text` prints one module's signatures:
+
+| need | call |
+|---|---|
+| read standard input | `io.read_stdin(n, into)`: bytes read, 0 at the end |
+| numbers from text | `text.parse_u64(n, s)`, `text.parse_i64(n, s)`: `Ok(v)` or `Err(ParseError)`; `text.find_byte(n, s, byte, from)` |
+| a growing list | `vec.new[T]()`, `vec.push(v, x)`, `vec.extend_from(v, n, part)`, `v.len`, `v.data[i]` |
+| a fixed array | `Buf[T](n)`, `n` zeroed elements; `stack chunk:u8[4096] = zeroed;` |
+| output | `println(...)` and `print(...)`: integers, bools, `'c'`, strings and `u8` views; `eprintln` to standard error |
+| threads | `let t = spawn f(args);` and `wait(t)`; `Group[T](k)`, `spawn f(args) into g;`, `collect(g)`, `wait(g)` |
 
 ## Install
 
@@ -152,26 +232,7 @@ error[E-TYPE-MISMATCH]: Expected u32, got u64.
  "card": "base", "repair_hint": "Convert explicitly, u32(x), which traps outside u32's range, or compute in u32."}
 ```
 
-Nothing converts implicitly. `u32(average(10, 20))` writes the narrowing out and checks it at run time. The safety rules refuse a program the same way. A heap array is an owner, so using it as a value moves it, and the old name is dead:
-
-```cairn rejects E-MOVED
-fn average(x:u64, y:u64) -> u64 = (x & y) + shr(x ^ y, 1);
-fn main() -> i32 {
-  let mut data = Buf[u64](4);
-  let first = data;
-  return i32(average(data[0], 1));
-}
-```
-
-```text
-error[E-MOVED]: data was moved.
-  --> src/main.cairn:5:22
-  |
-5 |   return i32(average(data[0], 1));
-  |                      ^^^^
-  = help: use it before it moves, move it once, or lend it (ro<T>, rw<T>) instead of passing it by value.
-  = note: the owners card states this rule: cairn rules E-MOVED
-```
+Nothing converts implicitly. `u32(average(10, 20))` writes the narrowing out and checks it at run time. The safety rules refuse a program the same way: a heap array is an owner, so using it after `let first = data;` is `E-MOVED`.
 
 Every refusal names the rule card that states its rule, which `cairn rules` prints, and carries the fix when the compiler can state one without guessing. Every diagnostic code also has a paragraph in the reference, with a program it refuses.
 

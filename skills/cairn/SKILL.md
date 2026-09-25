@@ -15,11 +15,9 @@ CAIRN is its own language, not Rust, C++ or Python with different spelling. The 
 ## Loop
 
 1. Write the program. One file with `fn main() -> i32` runs as is; `cairn new NAME` makes a project (a data-only `cairn.toml`, `src/`, a test).
-2. Run `cairn check PATH --format json` until it prints `"status": "typed"`. A refusal gives a `code`, a line and a column, the `card` that states its rule (`cairn rules CODE` prints it) and, when the compiler can state one, a `repair_hint`; `further` lists every other refusal the check could judge on its own, each the same way, so fix them all before checking again. Change the code the rule is about. Never widen an effect ceiling, turn `ro` into `rw`, add `unsafe` or delete a check to get past a refusal.
-3. `cairn test PATH` runs every `test` block in a process of its own; `cairn run PATH` builds and runs, with arguments after `--`.
-4. Read the costs instead of guessing: `cairn doc PATH` prints each signature with its effect row, `cairn explain PATH` the guards, allocations and waits left at run time, `cairn predict PATH` a time per function from a machine profile, without running anything.
-5. To make a function faster, leave it as the reference and write an implementation beside it: `fn g(...) implements f when COND { }`, with natural parameters to search if useful. `cairn validate PATH --symbol g` tests it against the reference on generated boundary inputs, `cairn tune PATH --symbol f` searches plans and validated implementations within its budgets and `--write` selects the winner (`plan f use g;`). Never edit the reference, a tolerance or a test to make an implementation pass. When CAIRN cannot say the design you want, keep the design: write that function in CUDA or C++ as a foreign implementation, `fn g(...) implements f` calling vendored code ([foreign](cards/foreign.md)), which `cairn foreign` inspects and `cairn validate` holds to the reference, never a slower or narrower workaround.
-6. An agent without a shell gets the same through `cairn mcp`: `check`, `state`, and the edit, plan and implementation sessions, which write an admitted change back to its files.
+2. Run `cairn check PATH --format json` until it prints `"status": "typed"`. A refusal gives a `code`, a line and a column, the `card` that states its rule (`cairn rules CODE` prints it) and, when the compiler can state one, a `repair_hint`; `further` lists every other refusal the check could judge on its own, so fix them all before checking again. Change the code the rule is about. Never widen an effect ceiling, turn `ro` into `rw`, add `unsafe` or delete a check to get past a refusal.
+3. `cairn run PATH < input` builds and runs, with arguments after `--`; `--sanitize address` or `--sanitize thread` runs the build a sanitizer checks. `cairn test PATH` runs every `test` block in a process of its own.
+4. For speed, read costs instead of guessing (`cairn explain PATH`, `cairn predict PATH`), then leave the function as the reference and write an implementation beside it, `fn g(...) implements f when COND { }`, which `cairn validate` holds to the reference and `cairn tune` selects ([implementations](cards/implementations.md)); a design CAIRN cannot say is a foreign implementation ([foreign](cards/foreign.md)), never a slower or narrower workaround. `cairn mcp` serves the same to an agent without a shell.
 
 `cairn --help` lists every command, and a command that reports prints JSON when piped.
 
@@ -45,78 +43,99 @@ Their codes: base E-BUILTIN-NAME E-DUPLICATE E-ELEMENT-LOOP E-EXPRESSION-BODY E-
 
 ## A program
 
-Tasks, leases, a test block and a checked reduction; `cairn run` prints `total = 499500`.
+Standard input, integers, a Vec and two tasks; `printf '3 -1 4 -9' | cairn run .` prints `count 4 negative 2`.
 
 ```cairn
-// Two tasks fill the two halves of an array, then main adds it up.
-fn fill(n:usize, out:rw<u64>[n], start:u64) {
-  for i in 0..n { out[i] = start + u64(i); }     // checked: an overflow traps
-}
+// Reads integers from standard input; prints how many, and how many are negative, counted on two tasks.
+import std.core (Option, Result);
+import std.io as io;
+import std.text as text;
+import std.vec (Vec);
 
-fn halves(n:usize, data:rw<u64>[n]) {
-  let mid = n / 2;
-  let left = spawn fill(data[0..mid], 0);        // left holds data[0..mid] until wait
-  let right = spawn fill(data[mid..n], u64(mid));
-  wait(left);
-  wait(right);
-}
-
-test halves_count_up {
-  let mut data = Buf[u64](10);
-  halves(data);                                  // n is len(data)
-  assert_eq(data[9], 9);
+fn negatives(n:usize, xs:ro<i64>[n]) -> usize {
+  let mut k:usize = 0;                              // an unannotated 0 would be a u64
+  for x in xs { if x < 0 { k += 1; } }
+  return k;
 }
 
 fn main() -> i32 {
-  let mut data = Buf[u64](1000);                 // an owner, released at scope exit
-  halves(data);
-  let total = reduce + for i in len(data) yield data[i];
-  println("total = ", total);
+  let mut input = vec.new[u8]();                    // a growable owner, freed at scope exit
+  stack chunk:u8[4096] = zeroed;
+  let mut more = true;
+  while more {
+    match io.read_stdin(4096, chunk) {
+      Ok(got) => { if got == 0 { more = false; } else { vec.extend_from(input, got, chunk[0..got]); } }
+      Err(_) => more = false;
+    }
+  }
+  let mut values = vec.new[i64]();
+  let mut lo:usize = 0;
+  while lo < input.len {
+    let mut hi = lo;
+    while hi < input.len && input.data[hi] > 32 { hi += 1; }
+    if hi > lo {
+      match text.parse_i64(hi - lo, input.data[lo..hi]) {   // a part is written where it is passed
+        Ok(v) => vec.push(values, v);
+        Err(_) => return 1;
+      }
+    }
+    lo = hi + 1;
+  }
+  let n = values.len;
+  let halves = Group[usize](2);
+  spawn negatives(values.data[0..n / 2]) into halves;   // each task reads its own part; n is len of it
+  spawn negatives(values.data[n / 2..n]) into halves;
+  let first = collect(halves);                      // a call that joins or writes is its own statement
+  let second = collect(halves);
+  wait(halves);
+  println("count ", n, " negative ", first + second);
   return 0;
 }
 ```
 
 ## Cards
 
-Each card states one part of the language and the codes of its rules. A host sends an agent the cards its program's words select, below, and `cairn rules FILE` names them.
+Each card, `cards/NAME.md`, states one part of the language and the codes of its rules. A host sends an agent the cards its program's words select, below, and `cairn rules FILE` names them.
 
-- [views](cards/views.md): ro rw buffer len stack
-- [compact](cards/compact.md): compact
-- [scan](cards/scan.md): scan
-- [floats](cards/floats.md): f32 f64
-- [math](cards/math.md): abs ceil floor sqrt to_bits trunc
-- [storage](cards/storage.md): bf16 f16 f8e4m3 f8e5m2 from_bits mma_unordered quantize quantize_stochastic
-- [gradients](cards/gradients.md): grad
-- [records](cards/records.md): struct enum
-- [generators](cards/generators.md): derive family recipe
-- [memory](cards/memory.md): buffer stack
-- [sums](cards/sums.md): enum match try
-- [generics](cards/generics.md): impl trait
-- [owners](cards/owners.md): Array Buf defer linear swap take
-- [assembly](cards/assembly.md): asm
-- [foreign](cards/foreign.md): launch
-- [effects](cards/effects.md): effects extern pure unsafe
-- [parallel](cards/parallel.md): device parallel pinned reduce transfer unified
-- [wide](cards/wide.md): Cache load_wide store_wide
-- [atomics](cards/atomics.md): atomic_add_unordered atomic_add_wrap atomic_and atomic_cas atomic_max atomic_min atomic_or atomic_xor
-- [cooperative](cards/cooperative.md): barrier pipeline shuffle shuffle_down shuffle_up shuffle_xor warp warp_all warp_any warp_ballot warp_match
-- [tasks](cards/tasks.md): Atomic Group Mutex collect spawn wait
-- [rings](cards/rings.md): IoRing
-- [closures](cards/closures.md): dyn
-- [tests](cards/tests.md): assert assert_eq test
-- [implementations](cards/implementations.md): implements
-- [printing](cards/printing.md): eprint eprintln format print println
-- [layouts](cards/layouts.md): layout
-- [fragments](cards/fragments.md): MmaA MmaAcc MmaB TmemAcc WmmaA WmmaAcc WmmaB
-- [lends](cards/lends.md): lends
-- [modules](cards/modules.md): import module pub
+- views: ro rw buffer len stack
+- compact: compact
+- scan: scan
+- floats: f32 f64
+- math: abs ceil floor sqrt to_bits trunc
+- storage: bf16 f16 f8e4m3 f8e5m2 from_bits mma_unordered quantize quantize_stochastic
+- gradients: grad
+- records: struct enum
+- generators: derive family recipe
+- memory: buffer stack
+- sums: enum match try
+- generics: impl trait
+- owners: Array Buf defer linear swap take
+- assembly: asm
+- foreign: launch
+- effects: effects extern pure unsafe
+- parallel: device parallel pinned reduce transfer unified
+- wide: Cache load_wide store_wide
+- atomics: atomic_add_unordered atomic_add_wrap atomic_and atomic_cas atomic_max atomic_min atomic_or atomic_xor
+- cooperative: barrier pipeline shuffle shuffle_down shuffle_up shuffle_xor warp warp_all warp_any warp_ballot warp_match
+- tasks: Atomic Group Mutex collect spawn wait
+- rings: IoRing
+- closures: dyn
+- tests: assert assert_eq test
+- implementations: implements
+- printing: eprint eprintln format print println
+- layouts: layout
+- fragments: MmaA MmaAcc MmaB TmemAcc WmmaA WmmaAcc WmmaB
+- lends: lends
+- modules: import module pub
 
-A refusal from a host or the command line may name [hosts](cards/hosts.md), [migrations](cards/migrations.md), [sketches](cards/sketches.md), [validation](cards/validation.md), [commands](cards/commands.md), [harness](cards/harness.md), [limits](cards/limits.md).
+A refusal from a host or the command line may name hosts, migrations, sketches, validation, commands, harness, limits.
 
 ## Mistakes that cost the most
 
-- Habits from Rust or C++: there are no `&`/`&mut` references, lifetimes, `::` paths, `as` casts (write `u64(x)`) or tail-expression returns. `impl` is only `impl Trait for T`; `value.f(args)` calls a plain `fn f(v, args)` from the type's module. Text is `ro<u8>[n]` or `Vec[u8]`; there is no `String`.
-- Invented libraries: only what a file declares, the builtins the cards name and the `std.*` modules exist; `cairn doc --std --module std.text` prints one module's signatures with their effect rows, and `cairn doc --std` every module's.
+- Habits from Rust or C++: no `&`/`&mut`, lifetimes, `::` paths, `as` casts (write `u64(x)`), tuples (a `struct`), tail-expression returns, or `if` and `match` as values (`let mut x = b; if c { x = a; }`). `impl` is only `impl Trait for T`; `value.f(args)` calls a plain `fn f(v, args)` from the type's module. Text is `ro<u8>[n]` or `Vec[u8]`, never a `String`.
+- An integer literal is a `u64` unless something expects another type: `let mut i:usize = 0;` for an index. A signed minimum is a literal, `-9223372036854775808`.
+- A `Buf[T](n)` is `len(b)` long, which the checker does not tie to `n`: pass `f(b)` and the call supplies `len(b)`, or pass the part `b[0..n]`. A part `xs[lo..hi]` is written only as a call's argument. A `Vec`'s length is `v.len` and its elements `v.data[i]`.
+- Invented libraries: only what a file declares, the builtins the cards name and the `std.*` modules exist; `cairn doc --std --module std.text` prints one module's signatures.
 - Guessing a fix: each diagnostic code has one rule behind it, and its card says what that rule accepts.
 
 ## More
