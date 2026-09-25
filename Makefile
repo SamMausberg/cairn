@@ -116,8 +116,8 @@ calibrate-device:
 # (tests/emitted.py); CI runs this under g++ and under clang++. tests/tooling/test_workflow.py holds this list to
 # every module that builds device code or skips without nvcc.
 NVCC_HOST ?= g++
-DEVICE_TESTS = tests/language/test_assembly.py tests/language/test_assert_eq.py tests/language/test_gradients.py \
-  tests/language/test_layouts.py tests/language/test_storage_floats.py \
+DEVICE_TESTS = tests/language/test_assembly.py tests/language/test_assert_eq.py tests/language/test_blank.py \
+  tests/language/test_gradients.py tests/language/test_layouts.py tests/language/test_storage_floats.py \
   tests/projects/test_app_matmul.py tests/projects/test_cooperative_examples.py tests/projects/test_demos.py \
   tests/projects/test_emulation.py::test_the_device_command_is_unchanged_when_emulation_is_off \
   tests/projects/test_export.py tests/projects/test_harness.py tests/projects/test_harness_torch.py \

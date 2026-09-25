@@ -27,6 +27,9 @@ KINDS = {"library", "exe"}
 STRICT = ["-std=c++20", "-O3", "-ffp-contract=off", "-fno-fast-math", "-fno-exceptions", "-fno-rtti"]
 WARNINGS = ["-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-Wno-unused-variable"]
 WARNINGS += ["-Wno-unused-but-set-variable"]
+# nvcc's own front end makes every warning an error too, but for the two WARNINGS lets pass, since CAIRN accepts a
+# local the program never reads: one declared and never read (177), and one set and never read (550).
+DEVICE_WARNINGS = ["-Werror", "all-warnings", "-diag-suppress", "177,550"]
 # `--sanitize`: a host build checked while it runs, as the 1.1 evaluation judged programs: -O1 with frame pointers so a
 # report has its stack, every report fatal, and no -Werror, since such a build is run, never shipped.
 SANITIZERS = {"address": ["-fsanitize=address,undefined", "-fno-sanitize-recover=all"], "thread": ["-fsanitize=thread"]}
@@ -183,7 +186,7 @@ def device_prefix(cxx: str, arch: str | None, kind: str, device: DeviceTarget) -
     # it is nvcc's host compiler; g++ does not, and nothing CAIRN writes is a static function.
     host.append("-Wno-unused-function")
     shared = ["-shared"] if kind == "library" else []
-    return [find("nvcc"), *nvcc_flags(device), "-Werror", "all-warnings", "-ccbin", find(cxx), "-x", "cu", *shared,
+    return [find("nvcc"), *nvcc_flags(device), *DEVICE_WARNINGS, "-ccbin", find(cxx), "-x", "cu", *shared,
             "-Xcompiler", ",".join(host)]  # fmt: skip
 
 
