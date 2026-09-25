@@ -22,6 +22,7 @@ filled with a pattern (runtime/cairn_coop.hpp), so a read the rule let through w
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 from ..syntax.tree import fail
@@ -67,6 +68,19 @@ class Written(BlockRun):
             return [None]
         return [self.at(index, t)]
 
+    def reach(self, index: Any, mask: list[int] | None, surely: bool = False) -> Iterator[tuple[int, Any]]:
+        """Each thread `mask` lets make an access, or with `surely` each that makes it for sure, and each element its
+        index reaches there, thread by thread."""
+        part, listed = isinstance(index, tuple), isinstance(index, list)
+        for t in range(self.T):
+            m = 1 if mask is None else mask[t]
+            if not m or (surely and m != 1):
+                continue
+            if part:
+                yield from ((t, idx) for idx in self.elements(index, t))
+            else:
+                yield t, index[t] if listed else index
+
     def record(self, array, index, write, node, time, mask, warp=False, atomic=False, sure=True):
         if array in self.unset and (not write or atomic or not sure):
             self.reached(array, index, node, mask)
@@ -90,21 +104,15 @@ class Written(BlockRun):
 
     # ------------------------------------------------------------------------------------------------------------
 
-    def sure(self, ev: Event, t: int) -> bool:
-        return ev.write and ev.sure and not ev.atomic and not ev.warp and (ev.mask is None or ev.mask[t] == 1)
-
     def surely(self, alternative: list[Event]) -> set[tuple]:
         """What one way through the phase writes for sure, in any thread."""
         out: set[tuple] = set()
         for ev in alternative:
             if ev.array not in self.unset or not (ev.write and ev.sure and not ev.atomic):
                 continue
-            for t in range(self.T):
-                if ev.mask is not None and ev.mask[t] != 1:
-                    continue
-                for idx in self.elements(ev.index, t):
-                    if (key := keyed(idx)) is not None:
-                        out.add((ev.array, key))
+            for _, idx in self.reach(ev.index, ev.mask, surely=True):
+                if (key := keyed(idx)) is not None:
+                    out.add((ev.array, key))
         return out
 
     def mine(self, alternative: list[Event], t: int) -> set[tuple]:
@@ -113,13 +121,11 @@ class Written(BlockRun):
         if seen > len(alternative):  # another list now has this id: start again
             seen, held = 0, {}
         for ev in alternative[seen:]:
-            if ev.array not in self.unset:
+            if ev.array not in self.unset or not ev.write or not ev.sure or ev.atomic or ev.warp:
                 continue
-            for u in range(self.T):
-                if self.sure(ev, u):
-                    held.setdefault(u, set()).update(
-                        (ev.array, k) for i in self.elements(ev.index, u) if (k := keyed(i)) is not None
-                    )
+            for u, i in self.reach(ev.index, ev.mask, surely=True):
+                if (k := keyed(i)) is not None:
+                    held.setdefault(u, set()).add((ev.array, k))
         self.own[id(alternative)] = (len(alternative), held)
         return held.get(t, set())
 
@@ -128,21 +134,18 @@ class Written(BlockRun):
         size = self.counts[array]
         whole = all((array, (frozenset(), e)) in self.done for e in range(size))  # the array written throughout
         for alternative in self.open:
-            for t in range(self.T):
-                if mask is not None and not mask[t]:
+            for t, idx in self.reach(index, mask):
+                if idx is TRAP or (isinstance(idx, int) and not isinstance(idx, bool) and idx >= size):
+                    continue  # the thread's guard aborts it first
+                key = keyed(idx)
+                if key is not None and ((array, key) in self.done or (array, key) in self.mine(alternative, t)):
                     continue
-                for idx in self.elements(index, t):
-                    if idx is TRAP or (isinstance(idx, int) and not isinstance(idx, bool) and idx >= size):
-                        continue  # the thread's guard aborts it first
-                    key = keyed(idx)
-                    if key is not None and ((array, key) in self.done or (array, key) in self.mine(alternative, t)):
-                        continue
-                    if key is None and whole:
-                        continue  # every element was written first, so whichever one the index names was
-                    shown = "..." if key is None else repr(idx)
-                    why = "an index the checker cannot follow, so it cannot show the element was written first" \
-                        if key is None else "and no thread surely wrote that element first"  # fmt: skip
-                    fail("E-COOP-UNWRITTEN", f"{array} is declared without `= zeroed`, and {self.who(t)} reads "
-                         f"{array}[{shown}] at line {getattr(node, 'line', 0)}, {why}. Write it first, in this "
-                         "thread or in another before a barrier, or declare the array `= zeroed`.", node,
-                         array=array)  # fmt: skip
+                if key is None and whole:
+                    continue  # every element was written first, so whichever one the index names was
+                shown = "..." if key is None else repr(idx)
+                why = "an index the checker cannot follow, so it cannot show the element was written first" \
+                    if key is None else "and no thread surely wrote that element first"  # fmt: skip
+                fail("E-COOP-UNWRITTEN", f"{array} is declared without `= zeroed`, and {self.who(t)} reads "
+                     f"{array}[{shown}] at line {getattr(node, 'line', 0)}, {why}. Write it first, in this "
+                     "thread or in another before a barrier, or declare the array `= zeroed`.", node,
+                     array=array)  # fmt: skip

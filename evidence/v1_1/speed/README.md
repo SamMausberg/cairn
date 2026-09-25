@@ -1,0 +1,38 @@
+# Speed of the suite and of the tools an agent calls
+
+Where the test suite and `cairn check`, `build` and `validate` spent their time before the 1.1 speed work, and what each change of that work cut. Everything ran on one machine on 2026-09-25: an AMD Ryzen 7 7800X3D (8 cores, 16 threads, 70 GB) under WSL2 (Linux 6.18), Python 3.12.3, clang++ 21.1.8, g++ 13.3, nvcc 13.2.78. Four other agents ran test suites on the same machine throughout, so the load average moved between 5 and 590 while these numbers were taken. Every comparison below is interleaved: the before and after arms alternate in fresh processes, and the load is given beside each. Read the ratios, not the absolute seconds.
+
+## Where the suite's time went
+
+`pytest -q tests -n 3` on main at 3c4b9e3 passed 5611 tests and skipped 58 in 1269 seconds. A second run with a measuring plugin, kept out of the repository, recorded every subprocess and every `compile_program` call of each test. Of 4967 seconds summed over tests in that run:
+
+| What ran | Seconds | Share |
+|---|---|---|
+| nvcc, 253 device builds | 1286 | 25.9% |
+| the Python compiler and the tests themselves | 1129 | 22.7% |
+| clang++, 779 compiles | 722 | 14.5% |
+| Python subprocesses (scripts under `tools/`, demos, isolated calls) | 549 | 11.1% |
+| g++, 342 compiles | 484 | 9.8% |
+| built programs | 409 | 8.2% |
+| sanitized programs under `setarch` | 235 | 4.7% |
+
+The suite seldom builds one program twice: 626 of 779 clang++ compiles had distinct arguments and sources. It does check one source again and again: 14690 `compile_program` calls on 5739 distinct sources, and the repeats cost 358 of their 548 seconds. `examples/tensor/tile64.cairn` alone was checked 14 times, at 13.6 seconds a check under that load.
+
+## The phase rule
+
+`cairn check examples/tensor/tile64.cairn` spent all but a second in the phase rule's run of one block (`compiler/cooperative`). Four things made that run slow, and none of them was the rule. Every writer of an element was compared with every access to it, so an element one warp's store wrote 32 times cost 1024 comparisons; `arith` built a table of fifteen closures for each of 547000 integer operations; a fragment's footprint was worked out again for each of a warp's 32 threads; and `Layout.shape` and `cosize` were recomputed on each of 427000 reads. The change decides an element with no possible conflict from who made its accesses, keeps the operations in one table, works each footprint out once per call and each layout's shape once per value, and expands each access into its threads and elements in one place.
+
+`cairn check` from a fresh process, the median of four interleaved runs, main at 349c77b against the change, load 86 to 156:
+
+| Program | Before, s | After, s |
+|---|---|---|
+| `examples/tensor/tile64.cairn` | 9.48 | 4.11 |
+| `examples/tensor/tile32.cairn` | 3.03 | 1.34 |
+| `examples/tensor/transpose.cairn` | 1.27 | 1.00 |
+| `examples/cooperative/tuned.toml` | 0.25 | 0.21 |
+
+What the checker says is unchanged. Every program `tools/checks/emission_identity.py` takes, 2101 of them with 1173 refusals, gives the same C++, the same whole manifest and the same whole refusal record, message included. 3000 regions from `tools/checks/differential_cooperative.py`'s generator, with some writes made atomic updates, some reads at an index the rule cannot follow and some arrays left unzeroed, give the same record before and after: 974 accepted, and every code of the rule among the refusals (E-COOP-UNWRITTEN 701, E-COOP-CONFLICT 665, E-COOP-BARRIER 289, E-ATOMIC-MIXED 225, E-COOP-UNORDERED 69, E-COOP-REUSE 59, E-COOP-UNDECIDED 18). `tools/checks/differential_cooperative.py --count 1000` agreed with the Lean model on all 1000 regions. `cairn predict --card all`, which runs the same block for its census, printed identical output for both tile examples, the transpose, `examples/cooperative/tuned.toml` and `examples/reduction/gpu.toml`.
+
+## What did not run
+
+Nothing here ran on a GPU. The suite's device builds compile for sm_120 and stop there, as everywhere outside `make gpu`.

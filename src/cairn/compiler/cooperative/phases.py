@@ -20,6 +20,7 @@ An index outside the array is no access, since its bounds guard aborts the threa
 
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 from ..syntax.tree import Stmt, fail
@@ -30,6 +31,9 @@ from .written import Written
 if TYPE_CHECKING:
     from ..check.checking import Checker
     from ..check.scope import Block
+
+
+NUMBER: frozenset = frozenset()  # the terms of an index that is a number
 
 
 class Phases(Written):
@@ -49,25 +53,23 @@ class Phases(Written):
 
     def check_array(self, array: str, found: list[Event]):
         size = self.counts[array]
-        cells: dict[tuple, list[tuple[int, Event]]] = {}
+        cells: defaultdict[tuple, list[tuple[int, Event]]] = defaultdict(list)
         vague: list[tuple[int, Event]] = []
         for ev in found:
-            for t in range(self.T):
-                m = 1 if ev.mask is None else ev.mask[t]
-                if not m:
+            for t, idx in self.reach(ev.index, ev.mask):
+                if idx is TRAP:
                     continue
-                for idx in self.elements(ev.index, t):
-                    if idx is TRAP:
-                        continue
-                    if idx is None or isinstance(idx, bool):
-                        vague.append((t, ev))
-                        continue
-                    if isinstance(idx, int):
-                        if idx < size:
-                            cells.setdefault((frozenset(), idx), []).append((t, ev))
-                    else:
-                        cells.setdefault((idx.key, idx.offset), []).append((t, ev))
+                if idx is None or isinstance(idx, bool):
+                    vague.append((t, ev))
+                    continue
+                if isinstance(idx, int):
+                    if idx < size:
+                        cells[NUMBER, idx].append((t, ev))
+                else:
+                    cells[idx.key, idx.offset].append((t, ev))
         for (key, offset), touches in cells.items():
+            if quiet(touches):
+                continue
             for writer in (x for x in touches if x[1].write):
                 others = [x for x in touches if clash(x, writer)]
                 if others:
@@ -131,12 +133,31 @@ class Phases(Written):
              "first.", b[1].node, array=array, read=a[1].node.line, write=b[1].node.line)  # fmt: skip
 
 
+def owner(x: tuple[int, Event]) -> Any:
+    """Who makes an access, as the rule tells makers apart: its thread, or for a write in a lane nobody names, that
+    write by its warp."""
+    t, ev = x
+    return (id(ev), t // LANES) if ev.warp else t
+
+
 def one(x: tuple[int, Event], y: tuple[int, Event]) -> bool:
     """Whether two accesses are one thread's, which never conflict: the same thread, or for a write in a lane
     nobody names, the same write by the same warp."""
-    if x[1].warp or y[1].warp:
-        return x[1] is y[1] and x[0] // LANES == y[0] // LANES
-    return x[0] == y[0]
+    return owner(x) == owner(y)
+
+
+def quiet(touches: list[tuple[int, Event]]) -> bool:
+    """Whether no writer among the accesses to one element clashes with any of them, decided without comparing each
+    writer with each access: a plain write clashes with an access by any other maker, an atomic update with a plain
+    access by any other maker, and two atomic updates never clash."""
+    makers = {owner(x) for x in touches}
+    if len(makers) == 1:
+        return True
+    if any(ev.write and not ev.atomic for _, ev in touches):
+        return False
+    plain = {owner(x) for x in touches if not x[1].atomic}
+    updating = {owner(x) for x in touches if x[1].atomic and x[1].write}
+    return not plain or not updating or len(plain | updating) == 1
 
 
 def clash(x: tuple[int, Event], y: tuple[int, Event]) -> bool:
