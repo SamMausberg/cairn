@@ -4,7 +4,7 @@
   "origin": "specification",
   "notes": "Published figures, not a measurement: no device run has confirmed any of them, and none has run here. launch_ns, link_ns, memory_efficiency, occupancy_to_saturate and memory_latency_ns are assumptions, the same on every packaged card, marked as such below.",
   "source": {
-    "published": ["sms", "cores_per_sm", "ghz", "dram_gbps", "flops", "link_gbps", "registers_per_sm", "threads_per_sm", "shared_per_sm", "warp", "tensor", "register_unit", "shared_reserved", "shared_bytes_per_clock"],
+    "published": ["sms", "cores_per_sm", "ghz", "dram_gbps", "flops", "link_gbps", "registers_per_sm", "threads_per_sm", "shared_per_sm", "registers_per_block", "registers_per_thread", "threads_per_block", "blocks_per_sm", "shared_per_block", "warp", "tensor", "register_unit", "partitions", "shared_unit", "shared_reserved", "shared_bytes_per_clock"],
     "assumed": ["launch_ns", "link_ns", "memory_efficiency", "occupancy_to_saturate", "memory_latency_ns"],
     "documents": {
       "datasheet": "NVIDIA A100 Tensor Core GPU datasheet, the A100 80GB SXM column (https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/a100/pdf/nvidia-a100-datasheet-us-nvidia-1758950-r4-web.pdf)",
@@ -17,7 +17,7 @@
     "flops": "Datasheet and Ampere whitepaper: FP32 19.5 TFLOPS (6912 cores, 2 operations per fused multiply-add, 1.41 GHz), FP64 9.7 TFLOPS. i32 is the Hopper whitepaper's Peak INT32 TOPS for A100, 19.5: 64 INT32 cores an SM, counted as the whitepapers count them, 2 operations per core a clock, the convention every packaged card follows.",
     "tensor": "Datasheet, dense (the sparse figures are twice these): TF32 Tensor Core 156 TFLOPS, BFLOAT16 and FP16 Tensor Core 312 TFLOPS. Compute capability 8.0 has no FP8 or FP4 tensor cores (Guide, Table 33). The model reads tensor_f16; the others are recorded for a reader.",
     "link_gbps": "Datasheet: PCIe Gen4 64 GB/s, both directions together, so 32 GB/s each way, before protocol overhead. NVLink joins GPUs to each other, not to the host.",
-    "occupancy": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html), 8.0 column: 64 K registers, 64 warps (2048 threads) and 164 KB of shared memory an SM; the CUDA C++ Programming Guide 12.9, section 20, says for each of 8.x, 9.0, 10.x and 12.0 that the 1 KB of shared memory not made available to a thread block is reserved for system use (shared_reserved); the CUDA Occupancy Calculator allocates registers a warp at a time in units of 256 (register_unit). No limit on resident blocks per SM is applied here.",
+    "occupancy": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html), 8.0 column: an SM holds 64 K registers, 64 warps (2048 threads), 32 blocks and 164 KB of shared memory, and a block at most 1024 threads, 64 K registers, 255 registers a thread and 163 KB of shared memory, past 48 KB only by opting in. The CUDA C++ Programming Guide 12.9, section 20, says for each of 8.x, 9.0, 10.x and 12.0 that the 1 KB of shared memory not made available to a thread block is reserved for system use (shared_reserved). CUDA 13.2's occupancy calculator, cuda_occupancy.h, allocates registers a warp at a time in units of 256 (register_unit) from each of the 4 parts of the register file (partitions) and shared memory in units of 128 bytes (shared_unit), and gives compute capability 8.0 the same 32 blocks an SM; tools/checks/occupancy.py holds the card's resident blocks to that calculator (evidence/v1_2/occupancy).",
     "shared_bytes_per_clock": "CUDA C++ Programming Guide: shared memory has 32 banks, each 32 bits wide a clock cycle.",
     "memory_latency_ns": "Assumed. NVIDIA publishes no device-memory latency and no run here has measured one; it prices only a pipeline's asynchronous copies, as the bytes in flight over this latency. Every packaged card assumes the same 500 ns."
   },
@@ -36,10 +36,17 @@
     "memory_efficiency": 0.85,
     "occupancy_to_saturate": 0.5,
     "registers_per_sm": 65536,
+    "registers_per_block": 65536,
+    "registers_per_thread": 255,
     "threads_per_sm": 2048,
+    "threads_per_block": 1024,
+    "blocks_per_sm": 32,
     "shared_per_sm": 167936,
+    "shared_per_block": 166912,
     "warp": 32,
+    "partitions": 4,
     "register_unit": 256,
+    "shared_unit": 128,
     "shared_reserved": 1024,
     "shared_bytes_per_clock": 128,
     "memory_latency_ns": 500.0

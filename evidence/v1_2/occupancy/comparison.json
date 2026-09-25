@@ -1,0 +1,187 @@
+{
+ "schema": "cairn.occupancy/1",
+ "status": "agree",
+ "header": "/usr/local/cuda-13.2/include/cuda_occupancy.h",
+ "toolkit": {
+  "nvcc": "/usr/local/cuda/bin/nvcc",
+  "release": "13.2",
+  "version": "V13.2.78"
+ },
+ "compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+ "grid": {
+  "threads_per_block": [
+   1,
+   16,
+   32,
+   33,
+   48,
+   64,
+   96,
+   100,
+   128,
+   160,
+   192,
+   200,
+   256,
+   288,
+   320,
+   384,
+   480,
+   512,
+   640,
+   768,
+   1000,
+   1024,
+   1025
+  ],
+  "registers_per_thread": [
+   0,
+   16,
+   24,
+   32,
+   37,
+   40,
+   48,
+   56,
+   64,
+   72,
+   80,
+   96,
+   128,
+   168,
+   200,
+   255
+  ],
+  "shared_bytes_per_block": [
+   0,
+   1,
+   100,
+   1000,
+   4096,
+   4224,
+   8192,
+   16000,
+   24576,
+   40000,
+   49152,
+   49153,
+   65536,
+   101376,
+   101377,
+   102400,
+   166912,
+   166913,
+   200000,
+   232448,
+   232449
+  ]
+ },
+ "fields": [
+  "blocks",
+  "by threads",
+  "by registers",
+  "by shared memory",
+  "by blocks",
+  "binding limits"
+ ],
+ "cards": {
+  "a100-sxm4-80gb": {
+   "compute_capability": "8.0",
+   "questions": 7728,
+   "agree": 7728,
+   "blocks_per_sm": 32,
+   "limited_by": {
+    "threads": 686,
+    "registers": 2557,
+    "shared memory": 2624,
+    "blocks": 234
+   }
+  },
+  "b200-hgx": {
+   "compute_capability": "10.0",
+   "questions": 7728,
+   "agree": 7728,
+   "blocks_per_sm": 32,
+   "limited_by": {
+    "threads": 776,
+    "registers": 2946,
+    "shared memory": 3145,
+    "blocks": 234
+   }
+  },
+  "h100-sxm5": {
+   "compute_capability": "9.0",
+   "questions": 7728,
+   "agree": 7728,
+   "blocks_per_sm": 32,
+   "limited_by": {
+    "threads": 776,
+    "registers": 2946,
+    "shared memory": 3145,
+    "blocks": 234
+   }
+  },
+  "h200-sxm": {
+   "compute_capability": "9.0",
+   "questions": 7728,
+   "agree": 7728,
+   "blocks_per_sm": 32,
+   "limited_by": {
+    "threads": 776,
+    "registers": 2946,
+    "shared memory": 3145,
+    "blocks": 234
+   }
+  },
+  "l40s": {
+   "compute_capability": "8.9",
+   "questions": 7728,
+   "agree": 7728,
+   "blocks_per_sm": 24,
+   "limited_by": {
+    "threads": 1041,
+    "registers": 2004,
+    "shared memory": 1987,
+    "blocks": 204
+   }
+  },
+  "rtx-4090": {
+   "compute_capability": "8.9",
+   "questions": 7728,
+   "agree": 7728,
+   "blocks_per_sm": 24,
+   "limited_by": {
+    "threads": 1041,
+    "registers": 2004,
+    "shared memory": 1987,
+    "blocks": 204
+   }
+  },
+  "rtx-5070-ti": {
+   "compute_capability": "12.0",
+   "questions": 7728,
+   "agree": 7728,
+   "blocks_per_sm": 24,
+   "limited_by": {
+    "threads": 1041,
+    "registers": 2004,
+    "shared memory": 1987,
+    "blocks": 204
+   }
+  },
+  "rtx-5090": {
+   "compute_capability": "12.0",
+   "questions": 7728,
+   "agree": 7728,
+   "blocks_per_sm": 24,
+   "limited_by": {
+    "threads": 1041,
+    "registers": 2004,
+    "shared memory": 1987,
+    "blocks": 204
+   }
+  }
+ },
+ "questions": 61824,
+ "differ": []
+}

@@ -79,6 +79,7 @@ class Limits:
     registers_per_sm: int
     threads_per_block: int
     warps_per_sm: int
+    blocks_per_sm: int  # the blocks an SM holds at most, however little each uses
     shared_per_block: int  # a block's static shared memory, and its dynamic share before it opts in to more
     shared_per_block_optin: int
     shared_per_sm: int
@@ -87,20 +88,21 @@ class Limits:
 KIB = 1024
 # CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31, whose 12.x column holds for 12.0 and 12.1:
 # a specification, not a measurement. A compute capability this table lacks has unknown limits, and whatever needs
-# them says so.
+# them says so. Where other NVIDIA documents give another block count, the table's is kept, and it is the fewer: CUDA
+# 13.2's occupancy calculator says 32 for 10.7, and the Blackwell Tuning Guide 13.4 says 32 for 12.0.
 LIMITS = {
-    75: Limits(255, 65536, 1024, 32, 48 * KIB, 64 * KIB, 64 * KIB),
-    80: Limits(255, 65536, 1024, 64, 48 * KIB, 163 * KIB, 164 * KIB),
-    86: Limits(255, 65536, 1024, 48, 48 * KIB, 99 * KIB, 100 * KIB),
-    87: Limits(255, 65536, 1024, 48, 48 * KIB, 163 * KIB, 164 * KIB),
-    89: Limits(255, 65536, 1024, 48, 48 * KIB, 99 * KIB, 100 * KIB),
-    90: Limits(255, 65536, 1024, 64, 48 * KIB, 227 * KIB, 228 * KIB),
-    100: Limits(255, 65536, 1024, 64, 48 * KIB, 227 * KIB, 228 * KIB),
-    103: Limits(255, 65536, 1024, 64, 48 * KIB, 227 * KIB, 228 * KIB),
-    107: Limits(255, 65536, 1024, 32, 48 * KIB, 327 * KIB, 328 * KIB),
-    110: Limits(255, 65536, 1024, 48, 48 * KIB, 227 * KIB, 228 * KIB),
-    120: Limits(255, 65536, 1024, 48, 48 * KIB, 99 * KIB, 100 * KIB),
-    121: Limits(255, 65536, 1024, 48, 48 * KIB, 99 * KIB, 100 * KIB),
+    75: Limits(255, 65536, 1024, 32, 16, 48 * KIB, 64 * KIB, 64 * KIB),
+    80: Limits(255, 65536, 1024, 64, 32, 48 * KIB, 163 * KIB, 164 * KIB),
+    86: Limits(255, 65536, 1024, 48, 16, 48 * KIB, 99 * KIB, 100 * KIB),
+    87: Limits(255, 65536, 1024, 48, 16, 48 * KIB, 163 * KIB, 164 * KIB),
+    89: Limits(255, 65536, 1024, 48, 24, 48 * KIB, 99 * KIB, 100 * KIB),
+    90: Limits(255, 65536, 1024, 64, 32, 48 * KIB, 227 * KIB, 228 * KIB),
+    100: Limits(255, 65536, 1024, 64, 32, 48 * KIB, 227 * KIB, 228 * KIB),
+    103: Limits(255, 65536, 1024, 64, 32, 48 * KIB, 227 * KIB, 228 * KIB),
+    107: Limits(255, 65536, 1024, 32, 16, 48 * KIB, 327 * KIB, 328 * KIB),
+    110: Limits(255, 65536, 1024, 48, 24, 48 * KIB, 227 * KIB, 228 * KIB),
+    120: Limits(255, 65536, 1024, 48, 24, 48 * KIB, 99 * KIB, 100 * KIB),
+    121: Limits(255, 65536, 1024, 48, 24, 48 * KIB, 99 * KIB, 100 * KIB),
 }
 LIMITS_ORIGIN = "specification: CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31"
 

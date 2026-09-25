@@ -74,6 +74,46 @@ def test_each_card_s_derived_figures_agree_with_its_published_ones(key):
         assert any(rate["tensor_f4"] == pytest.approx(rate["tensor_f8"] * times, rel=0.002) for times in (2, 4))
 
 
+@pytest.mark.parametrize("key", list(cards()))
+def test_each_card_names_where_its_resident_block_limit_comes_from(key):
+    """The count itself is held to the table of its compute capability in tests/tooling/test_target.py."""
+    spec = cards()[key]
+    d, said = spec.device, spec.source["source"]["occupancy"]
+    assert f"{d.blocks_per_sm} blocks" in said and "blocks_per_sm" in spec.source["source"]["published"]
+    assert "No limit on resident blocks" not in said
+    if d.compute_capability == "12.0":  # NVIDIA's documents disagree for 12.0, and the card says which it takes
+        assert "Tuning Guide" in said and "32 blocks" in said
+
+
+def test_an_sm_holds_blocks_as_cuda_counts_them():
+    """The review's case: 32 threads, 16 registers and no shared memory on the 5070 Ti were 48 blocks by threads
+    alone; the SM holds 24. A block of 48 threads takes two whole warps, and a block that asks for more than a block
+    may have is held by no SM."""
+    d = card("rtx-5070-ti").device
+    assert d.resident(16, 32) == {"threads": 48, "registers": 128, "shared memory": 100, "blocks": 24}
+    assert d.held(16, 32)["limited_by"] == ["blocks"] and d.held(16, 32)["occupancy"] == 0.5
+    assert d.resident(0, 48)["threads"] == 24 and d.occupancy(0, 48) == 1.0  # 24 blocks of two warps: all 48
+    assert d.resident(80, 32)["registers"] == 24  # each of 4 parts holds 6 warps of 2560 registers, not 25 in all
+    assert d.resident(0, 1056)["threads"] == 0 and d.resident(72, 1024)["registers"] == 0
+    assert d.resident(0, 256, 99 * 1024)["shared memory"] == 1  # the most one block may have
+    assert d.resident(0, 256, 99 * 1024 + 1)["shared memory"] == 0
+    assert d.resident(0, 256, 1)["shared memory"] == 102400 // 1152  # a byte takes a 128-byte unit beside the 1 KB
+
+
+@NVCC
+def test_the_resident_blocks_agree_with_cuda_s_occupancy_calculator():
+    """Every card over a grid of block sizes, registers and shared bytes against cuda_occupancy.h, the calculator
+    CUDA ships as a host header, built with g++: the same blocks by every limit, and the same limits binding.
+    Nothing runs on a device."""
+    from checks import occupancy
+
+    found = occupancy.compare()
+    if found["status"] == "skipped":
+        pytest.skip(found["reason"])
+    assert found["differ"] == [] and found["status"] == "agree"
+    assert set(found["cards"]) == set(cards()) and found["questions"] == 8 * 7728
+
+
 def test_a_card_is_named_by_its_key_or_the_start_of_one():
     assert card("h100").source["card"] == "h100-sxm5" and card("a100").source["card"] == "a100-sxm4-80gb"
     assert card().source["card"] == DEFAULT_CARD == "rtx-5070-ti"
@@ -163,6 +203,7 @@ def test_cards_lists_every_card_with_its_headline_figures(capsys):
     assert (h100["compute_capability"], h100["sms"], h100["dram_gbps"], h100["flops"]["tensor_f16"]) == (
         "9.0", 132, 3352.0, 989400.0)  # fmt: skip
     assert listed["b200-hgx"]["derived"] == ["ghz", "flops.i32"] and set(h100["assumed"]) == ASSUMED
+    assert (h100["blocks_per_sm"], h100["threads_per_block"], h100["shared_per_block"]) == (32, 1024, 227 * 1024)
     assert main(["cards", "--format", "human"]) == 0
     shown = capsys.readouterr().out
     assert "h100-sxm5" in shown and "no card was measured" in shown
@@ -193,9 +234,13 @@ def test_two_instances_are_compared_for_sm_90a_and_priced_on_the_h100(capsys):
 
 
 def test_residency_that_registers_change_is_priced_on_the_card():
-    """Two readings whose registers let a different share of an SM's threads stay resident on the H100: the hypothesis
-    cites the card's published limits."""
+    """Two readings whose registers let a different share of an SM's warps stay resident on the H100: the hypothesis
+    cites the card's published limits and names the limits that bind on each side. Blocks of 256 threads at 32
+    registers are held 8 an SM by their threads and their registers alike, and at 128 registers 2 by their registers."""
     read = {k: {"status": "read", "registers": regs, "shared_bytes": 0, "dynamic_shared_bytes": 0, "spill_bytes": 0,
                 "memory": {}} for k, regs in (("a", 32), ("b", 128))}  # fmt: skip
     said = feedback.reasoning([], read, True, {"a": [[]], "b": [[]]}, "f", priced=card("h100").device)
-    assert any("published limits of the H100 SXM5 80GB" in line["by"] for line in said if line["kind"] == "hypothesis")
+    (hypothesis,) = [line for line in said if line["kind"] == "hypothesis"]
+    assert "published limits of the H100 SXM5 80GB" in hypothesis["by"]
+    assert hypothesis["text"].startswith("at most 100% -> 25% of an SM's warps can be resident, limited by threads "
+                                         "and registers -> registers;")  # fmt: skip

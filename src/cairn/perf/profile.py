@@ -109,10 +109,17 @@ class Device:
     memory_efficiency: float = 0.85  # the share of peak bandwidth a streaming kernel reaches
     occupancy_to_saturate: float = 0.5  # the resident share of threads that keeps the memory system busy
     registers_per_sm: int = 65536
+    registers_per_block: int = 65536
+    registers_per_thread: int = 255
     threads_per_sm: int = 1536
+    threads_per_block: int = 1024
+    blocks_per_sm: int = 24  # the blocks an SM holds at most, however little each uses
     shared_per_sm: int = 102400
+    shared_per_block: int = 101376  # the most one block may use, once it opts in to more than 48 KB
     warp: int = 32
+    partitions: int = 4  # the register file is split among this many parts of an SM, each holding whole warps
     register_unit: int = 256  # registers are allocated a warp at a time, in units of this many
+    shared_unit: int = 128  # shared memory is allocated a block at a time, in units of this many bytes
     shared_reserved: int = 0  # shared memory the system keeps for each resident block, beside the block's own
     shared_bytes_per_clock: int = 128  # what one SM's shared memory serves a clock: 32 banks of 4 bytes
     memory_latency_ns: float = 0.0  # from a load's issue to its data, in device memory; 0 when not known
@@ -120,21 +127,39 @@ class Device:
     target: str = ""  # a measured card: the device target its figures were measured for (projects/target.py)
 
     def resident(self, registers: int, block: int = 256, shared: int = 0) -> dict[str, int]:
-        """How many blocks of `block` threads one SM holds by each of its limits: its threads; its registers, when
-        `registers` a thread is known, allocated a warp at a time in units of `register_unit`; and its shared
-        memory, `shared` bytes a block and the `shared_reserved` the system keeps beside each."""
-        found = {"threads": self.threads_per_sm // block}
+        """How many blocks of `block` threads one SM holds by each of its limits, as CUDA's occupancy calculator
+        (cuda_occupancy.h) counts them: its threads, a block's rounded up to whole warps; its registers, when
+        `registers` a thread is known, allocated a warp at a time in units of `register_unit` from each of the
+        register file's `partitions`; its shared memory, `shared` bytes a block and the `shared_reserved` the system
+        keeps beside each, in units of `shared_unit`; and the blocks it holds at all. A block that exceeds what one
+        block may have, in threads, registers or shared memory, is held 0 times by that limit: it cannot launch."""
+        warps = -(-block // self.warp)
+        found = {"threads": self.threads_per_sm // self.warp // warps if block <= self.threads_per_block else 0}
         if registers:
             per_warp = -(-registers * self.warp // self.register_unit) * self.register_unit
-            found["registers"] = self.registers_per_sm // per_warp // -(-block // self.warp)
+            parts = -(-warps // self.partitions) * self.partitions  # a launch is checked as if warps filled each part
+            fits = registers <= self.registers_per_thread and per_warp * parts <= self.registers_per_block
+            each = self.registers_per_sm // self.partitions // per_warp * self.partitions  # warps, part by part
+            found["registers"] = each // warps if fits else 0
         if shared or self.shared_reserved:
-            found["shared memory"] = self.shared_per_sm // (shared + self.shared_reserved)
+            taken = -(-(shared + self.shared_reserved) // self.shared_unit) * self.shared_unit
+            found["shared memory"] = self.shared_per_sm // taken if shared <= self.shared_per_block else 0
+        found["blocks"] = self.blocks_per_sm
         return found
 
     def occupancy(self, registers: int, block: int = 256, shared: int = 0) -> float:
-        """The resident share of an SM's threads for blocks of `block` threads using `registers` each and `shared`
+        """The resident share of an SM's warps for blocks of `block` threads using `registers` each and `shared`
         bytes of shared memory a block."""
-        return min(self.resident(registers, block, shared).values()) * block / self.threads_per_sm
+        warps = -(-block // self.warp)
+        return min(self.resident(registers, block, shared).values()) * warps * self.warp / self.threads_per_sm
+
+    def held(self, registers: int, block: int = 256, shared: int = 0) -> dict[str, Any]:
+        """The blocks one SM holds, as a prediction reports them: by each limit, which limits bind, and the share of
+        the SM's warps they keep resident. None held is a block that cannot launch."""
+        by = self.resident(registers, block, shared)
+        blocks = min(by.values())
+        return {"blocks_per_sm": blocks, "by_limit": by, "limited_by": [k for k, n in by.items() if n == blocks],
+                "occupancy": round(self.occupancy(registers, block, shared), 3)}  # fmt: skip
 
 
 @dataclass
@@ -196,15 +221,20 @@ def carrying(profile: Profile, chosen: Profile) -> Profile:
                     "card_origin": chosen.origin})  # fmt: skip
 
 
+# What one SM and one block hold, which the blocks an SM holds are counted from (`Device.resident`).
+HELD = ("threads_per_sm", "registers_per_sm", "shared_per_sm", "blocks_per_sm", "threads_per_block",
+        "registers_per_block", "registers_per_thread", "shared_per_block", "shared_reserved")  # fmt: skip
+
+
 def described(chosen: Profile) -> dict[str, Any]:
-    """A card as `cairn cards` lists it and a prediction names it: its key, device, capability and headline
-    figures, and where they came from."""
+    """A card as `cairn cards` lists it and a prediction names it: its key, device, capability, headline figures and
+    the limits an SM and a block hold, and where they came from."""
     d, said = chosen.device, chosen.source.get("source", {})
     assert d is not None
     return {"card": chosen.source.get("card") or chosen.name, "name": chosen.name, "device": d.name,
             "compute_capability": d.compute_capability, "origin": chosen.origin, "sms": d.sms, "ghz": d.ghz,
-            "dram_gbps": d.dram_gbps, "flops": d.flops, "threads_per_sm": d.threads_per_sm,
-            "shared_per_sm": d.shared_per_sm, "derived": said.get("derived", []), "assumed": said.get("assumed", []),
+            "dram_gbps": d.dram_gbps, "flops": d.flops, **{k: getattr(d, k) for k in HELD},
+            "derived": said.get("derived", []), "assumed": said.get("assumed", []),
             "documents": said.get("documents", {})}  # fmt: skip
 
 

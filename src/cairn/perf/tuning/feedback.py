@@ -232,12 +232,14 @@ def reasoning(lines: list[dict[str, Any]], read: dict[str, dict[str, Any]], devi
             block = {
                 k: (threads or {}).get(k) or dict(sides[k][0]).get("block", 256) for k in "ab"
             }  # a block's threads
-            resident = {k: spec.occupancy(got[k]["registers"], block[k], got[k]["shared_bytes"] +
-                                          got[k]["dynamic_shared_bytes"]) for k in "ab"}  # fmt: skip
-            if resident["a"] != resident["b"]:
+            held = {k: spec.held(got[k]["registers"], block[k], got[k]["shared_bytes"] +
+                                 got[k]["dynamic_shared_bytes"]) for k in "ab"}  # fmt: skip
+            if held["a"]["occupancy"] != held["b"]["occupancy"]:
+                by = " -> ".join(" and ".join(held[k]["limited_by"]) for k in "ab")
                 out.append(line(HYPOTHESIS, f"derived from the registers and the published limits of the {spec.name}",
-                                f"at most {resident['a']:.0%} -> {resident['b']:.0%} of an SM's threads can be resident; "
-                                "if the candidate with fewer is slower, fewer warps hiding memory latency may be why"))  # fmt: skip
+                                f"at most {held['a']['occupancy']:.0%} -> {held['b']['occupancy']:.0%} of an SM's warps "
+                                f"can be resident, limited by {by}; if the candidate with fewer is slower, fewer warps "
+                                "hiding memory latency may be why"))  # fmt: skip
         if b["spill_bytes"] != a["spill_bytes"]:
             more = "b" if b["spill_bytes"] > a["spill_bytes"] else "a"
             out.append(line(HYPOTHESIS, "derived from ptxas's spill report", f"{more} spills registers to local memory; "

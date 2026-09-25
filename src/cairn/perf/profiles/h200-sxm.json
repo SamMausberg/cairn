@@ -4,7 +4,7 @@
   "origin": "specification",
   "notes": "Published figures, not a measurement: no device run has confirmed any of them, and none has run here. launch_ns, link_ns, memory_efficiency, occupancy_to_saturate and memory_latency_ns are assumptions, the same on every packaged card, marked as such below.",
   "source": {
-    "published": ["sms", "cores_per_sm", "dram_gbps", "flops", "link_gbps", "registers_per_sm", "threads_per_sm", "shared_per_sm", "warp", "tensor", "register_unit", "shared_reserved", "shared_bytes_per_clock"],
+    "published": ["sms", "cores_per_sm", "dram_gbps", "flops", "link_gbps", "registers_per_sm", "threads_per_sm", "shared_per_sm", "registers_per_block", "registers_per_thread", "threads_per_block", "blocks_per_sm", "shared_per_block", "warp", "tensor", "register_unit", "partitions", "shared_unit", "shared_reserved", "shared_bytes_per_clock"],
     "derived": ["ghz", "flops.i32"],
     "assumed": ["launch_ns", "link_ns", "memory_efficiency", "occupancy_to_saturate", "memory_latency_ns"],
     "documents": {
@@ -18,7 +18,7 @@
     "flops": "Datasheet: FP32 67 TFLOPS, FP64 34 TFLOPS. i32 is derived as the other cards' is: 64 INT32 cores an SM, 2 operations each a clock, at 1.98 GHz on 132 SMs.",
     "tensor": "Datasheet, whose tensor figures are with sparsity; dense is half: TF32 989/2, BFLOAT16 and FP16 1,979/2, FP8 3,958/2 TFLOPS. The model reads tensor_f16; the others are recorded for a reader.",
     "link_gbps": "Datasheet: PCIe Gen5 128 GB/s, both directions together, so 64 GB/s each way, before protocol overhead.",
-    "occupancy": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html), 9.0 column: 64 K registers, 64 warps (2048 threads) and 228 KB of shared memory an SM; the CUDA C++ Programming Guide 12.9, section 20, says for each of 8.x, 9.0, 10.x and 12.0 that the 1 KB of shared memory not made available to a thread block is reserved for system use (shared_reserved); the CUDA Occupancy Calculator allocates registers a warp at a time in units of 256 (register_unit). No limit on resident blocks per SM is applied here.",
+    "occupancy": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html), 9.0 column: an SM holds 64 K registers, 64 warps (2048 threads), 32 blocks and 228 KB of shared memory, and a block at most 1024 threads, 64 K registers, 255 registers a thread and 227 KB of shared memory, past 48 KB only by opting in. The CUDA C++ Programming Guide 12.9, section 20, says for each of 8.x, 9.0, 10.x and 12.0 that the 1 KB of shared memory not made available to a thread block is reserved for system use (shared_reserved). CUDA 13.2's occupancy calculator, cuda_occupancy.h, allocates registers a warp at a time in units of 256 (register_unit) from each of the 4 parts of the register file (partitions) and shared memory in units of 128 bytes (shared_unit), and gives compute capability 9.0 the same 32 blocks an SM; tools/checks/occupancy.py holds the card's resident blocks to that calculator (evidence/v1_2/occupancy).",
     "shared_bytes_per_clock": "CUDA C++ Programming Guide: shared memory has 32 banks, each 32 bits wide a clock cycle.",
     "memory_latency_ns": "Assumed. NVIDIA publishes no device-memory latency and no run here has measured one; it prices only a pipeline's asynchronous copies, as the bytes in flight over this latency. Every packaged card assumes the same 500 ns."
   },
@@ -37,10 +37,17 @@
     "memory_efficiency": 0.85,
     "occupancy_to_saturate": 0.5,
     "registers_per_sm": 65536,
+    "registers_per_block": 65536,
+    "registers_per_thread": 255,
     "threads_per_sm": 2048,
+    "threads_per_block": 1024,
+    "blocks_per_sm": 32,
     "shared_per_sm": 233472,
+    "shared_per_block": 232448,
     "warp": 32,
+    "partitions": 4,
     "register_unit": 256,
+    "shared_unit": 128,
     "shared_reserved": 1024,
     "shared_bytes_per_clock": 128,
     "memory_latency_ns": 500.0

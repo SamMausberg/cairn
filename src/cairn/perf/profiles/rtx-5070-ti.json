@@ -4,13 +4,14 @@
   "origin": "specification",
   "notes": "Published figures, not a measurement: no device run has confirmed any of them. launch_ns, link_ns, memory_efficiency, occupancy_to_saturate and memory_latency_ns are assumptions, marked as such below, until a device calibration the owner runs replaces them.",
   "source": {
-    "published": ["sms", "cores_per_sm", "ghz", "dram_gbps", "flops", "link_gbps", "registers_per_sm", "threads_per_sm", "shared_per_sm", "warp", "tensor", "register_unit", "shared_reserved", "shared_bytes_per_clock"],
+    "published": ["sms", "cores_per_sm", "ghz", "dram_gbps", "flops", "link_gbps", "registers_per_sm", "threads_per_sm", "shared_per_sm", "registers_per_block", "registers_per_thread", "threads_per_block", "blocks_per_sm", "shared_per_block", "warp", "tensor", "register_unit", "partitions", "shared_unit", "shared_reserved", "shared_bytes_per_clock"],
     "assumed": ["launch_ns", "link_ns", "memory_efficiency", "occupancy_to_saturate", "memory_latency_ns"],
     "documents": {
       "whitepaper": "NVIDIA RTX Blackwell GPU Architecture whitepaper V1.1, Appendix B, the GeForce RTX 5070 Ti column (https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf)",
-      "guide": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html)"
+      "guide": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html)",
+      "tuning": "NVIDIA Blackwell Tuning Guide 13.4, section 1.4.1.1, Occupancy (https://docs.nvidia.com/cuda/blackwell-tuning-guide/index.html)"
     },
-    "occupancy": "CUDA C++ Programming Guide: from compute capability 8.0 on, 1 KB of an SM's shared memory is reserved for system use in each resident block (shared_reserved), and 12.0 gives an SM 100 KB, 64 K registers and 48 warps; the CUDA Occupancy Calculator allocates registers a warp at a time in units of 256 (register_unit). No limit on resident blocks per SM is applied here.",
+    "occupancy": "CUDA Programming Guide 13.4.2, Compute Capabilities, Tables 30 and 31 (https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html), 12.x column: an SM holds 64 K registers, 48 warps (1536 threads), 24 blocks and 100 KB of shared memory, and a block at most 1024 threads, 64 K registers, 255 registers a thread and 99 KB of shared memory, past 48 KB only by opting in. The CUDA C++ Programming Guide 12.9, section 20, says for each of 8.x, 9.0, 10.x and 12.0 that the 1 KB of shared memory not made available to a thread block is reserved for system use (shared_reserved). CUDA 13.2's occupancy calculator, cuda_occupancy.h, allocates registers a warp at a time in units of 256 (register_unit) from each of the 4 parts of the register file (partitions) and shared memory in units of 128 bytes (shared_unit), and gives compute capability 12.0 the same 24 blocks an SM; tools/checks/occupancy.py holds the card's resident blocks to that calculator (evidence/v1_2/occupancy). NVIDIA's Blackwell Tuning Guide 13.4, section 1.4.1.1, says 32 blocks an SM for 10.0 and 12.0 instead, and 128 KB of shared memory an SM for 12.0, the capacity it shares with L1. The card takes 24 blocks, on which the Programming Guide's table and the calculator agree and which is the fewer, and 100 KB, the most the calculator lets shared memory take on 12.x. The device's cudaDevAttrMaxBlocksPerMultiprocessor settles the count, and make device-limits asks it.",
     "shared_bytes_per_clock": "CUDA C++ Programming Guide: shared memory has 32 banks, each 32 bits wide a clock cycle.",
     "memory_latency_ns": "Assumed. NVIDIA publishes no device-memory latency and no run here has measured one; it prices only a pipeline's asynchronous copies, as the bytes in flight over this latency.",
     "flops": "f32 is 2 operations per fused multiply-add on 8960 cores at the 2.452 GHz boost clock; Blackwell's cores issue either f32 or i32, so i32 is the same; f64 runs at 1/64 of f32.",
@@ -32,10 +33,17 @@
     "memory_efficiency": 0.85,
     "occupancy_to_saturate": 0.5,
     "registers_per_sm": 65536,
+    "registers_per_block": 65536,
+    "registers_per_thread": 255,
     "threads_per_sm": 1536,
+    "threads_per_block": 1024,
+    "blocks_per_sm": 24,
     "shared_per_sm": 102400,
+    "shared_per_block": 101376,
     "warp": 32,
+    "partitions": 4,
     "register_unit": 256,
+    "shared_unit": 128,
     "shared_reserved": 1024,
     "shared_bytes_per_clock": 128,
     "memory_latency_ns": 500.0
