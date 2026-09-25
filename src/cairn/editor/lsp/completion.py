@@ -8,7 +8,7 @@ from ...compiler.check.traits import CLASSES, KINDS
 from ...compiler.primitives.builtins import TABLE
 from ...compiler.syntax.parser import IDENT, RESERVED
 from ..formatting import CLOSERS, OPENERS
-from .document import Document, before, call_at, declarations, dotted, promising, statement
+from .document import Document, before, call_at, dotted, promising, statement
 from .names import (
     TABLES,
     TYPES,
@@ -75,7 +75,7 @@ def scope_items(doc: Document, module: str, offset: int) -> list[dict]:
             out += [entry(n, word, word) for n in visible(p, module, getattr(p, table))]
         out += [entry(a, "module", target) for owner, target, a in p.imports if owner == module]
     # A test block is run, never called, so its name is written nowhere else.
-    out += [entry(d["name"], d["detail"], d["detail"]) for d in declarations(doc.code, 0, len(doc.code))
+    out += [entry(d["name"], d["detail"], d["detail"]) for d in doc.outline
             if IDENT.fullmatch(d["name"]) and d["detail"] != "test"]  # fmt: skip
     out += [entry(n, "fn", "builtin") for n in TABLE]
     out += [entry(n, "type", "type") for n in sorted(TYPES)]

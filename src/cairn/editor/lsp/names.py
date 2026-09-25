@@ -7,9 +7,9 @@ import re
 from typing import Any
 
 from ...agent.projection import local, signature
-from ...compiler.syntax.modules import STD
 from ...compiler.syntax.parser import INTRINSIC_TYPES, SCALAR, Function, Program
 from ...compiler.syntax.tree import STORAGE
+from ..docs import library_names
 from .document import Document, binders, enclosing
 
 ITEM = {  # LSP CompletionItemKind, by what the name is
@@ -129,7 +129,14 @@ def recipes(p: Program, module: str) -> list[str]:
 def modules(p: Program | None) -> list[str]:
     """Every module an import may name: the packaged library, and the document's own."""
     own = set(p.modules.values()) if p else set()
-    return sorted(({"std." + path.stem for path in STD.glob("*.cairn")} | own) - {""})
+    return sorted((set(library_names()) | own) - {""})
+
+
+def instance_of(symbol: str, module: str, name: str, member: bool) -> bool:
+    """Whether the checker's `symbol` names the function `name` that `module` declares: `m.f`, a generic instance of
+    it, and for a trait or impl member `m.Type.f` too."""
+    prefix, base = module + "." if module else "", template(symbol)
+    return base == prefix + name or (member and base.startswith(prefix) and base.endswith("." + name))
 
 
 def scope(doc: Document, offset: int) -> dict[str, str]:
@@ -139,11 +146,9 @@ def scope(doc: Document, offset: int) -> dict[str, str]:
     if d is None:
         return {}
     module = doc.module_at(d["head"])
-    prefix = module + "." if module else ""
     out: dict[str, str] = {}
     for s in doc.good.sites if doc.good else []:
-        base = template(s["symbol"])
-        if base == prefix + d["name"] or (member and base.startswith(prefix) and base.endswith("." + d["name"])):
+        if instance_of(s["symbol"], module, d["name"], member):
             for n, b in s["bindings"].items():
                 out.setdefault(n, b["type"])
     lo = next((i for i, t in enumerate(doc.code) if t.start >= d["head"]), len(doc.code))

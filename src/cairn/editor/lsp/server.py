@@ -115,10 +115,14 @@ class Server:
     def send(self, payload: dict) -> None:
         write_message(self.sink, {"jsonrpc": "2.0", **payload})
 
+    def buffers(self) -> dict[str, str]:
+        """Every open document's text, by uri: what a project is read with in place of its files on disk."""
+        return {u: d.text for u, d in self.docs.items()}
+
     def refresh(self, uri: str, text: str) -> None:
         """Analyse the buffer, within its project when it has one; every open file of that project is analysed
         again too, since an edit to one file can refuse or admit another."""
-        buffers = {u: d.text for u, d in self.docs.items()} | {uri: text}
+        buffers = self.buffers() | {uri: text}
         held = context(uri, buffers)
         again = [u for u in self.docs if u != uri and held and within(*held, u)] if held else []
         for u in [uri, *again]:
@@ -139,7 +143,7 @@ class Server:
         if method in IGNORED:
             return None
         if method == "workspace/symbol":
-            return workspace_symbols(str(p.get("query") or ""), {u: d.text for u, d in self.docs.items()}, self.roots)
+            return workspace_symbols(str(p.get("query") or ""), self.buffers(), self.roots)
         uri = (p.get("textDocument") or {}).get("uri", "")
         if method == "textDocument/didOpen":
             self.refresh(uri, (p.get("textDocument") or {}).get("text", ""))
@@ -155,7 +159,7 @@ class Server:
         doc = self.docs.get(uri)
         if doc is None:
             return None if method.startswith("textDocument/") else UNSUPPORTED
-        at, buffers = doc.offset(p.get("position") or {}), {u: d.text for u, d in self.docs.items()}
+        at, buffers = doc.offset(p.get("position") or {}), self.buffers()
         if method == "textDocument/codeLens":
             return code_lenses(doc, uri, buffers)
         if method in ACROSS and (ws := workspace(uri, buffers)) is not None:

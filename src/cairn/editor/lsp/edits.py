@@ -6,7 +6,7 @@ from __future__ import annotations
 from ...compiler.primitives.builtins import TABLE
 from ...compiler.syntax.parser import IDENT, RESERVED
 from ..formatting import format_source
-from .document import DECLARATIONS, Document, Item, binders, declarations, enclosing, flatten, word_at
+from .document import DECLARATIONS, Document, Item, binders, enclosing, word_at
 from .names import TYPES
 
 DECLARING = set(DECLARATIONS) - {"impl"}  # the word before a name that a declaration introduces
@@ -24,12 +24,11 @@ def occurrences(doc: Document, offset: int) -> list[Item]:
     if at is None or doc.good is None:
         return []
     name, p = at[1].s, doc.good.program
-    ds = declarations(cs, 0, len(cs))
     bound = [cs[i].s for i in binders(cs, 0, len(cs))]
     reachable = any(t.s == name and i and cs[i - 1].s in {".", "import"} for i, t in enumerate(cs))
-    top = [d for d in ds if d["name"] == name]
+    top = [d for d in doc.outline if d["name"] == name]
     if top:
-        marks = {d["mark"][0] for d in flatten(ds) if d is not top[0]}
+        marks = {d["mark"][0] for d in doc.declarations if d is not top[0]}
         found = [] if len(top) > 1 or reachable or name in bound else [t for t in cs if t.s == name]
         found = [t for t in found if t.start not in marks]
     else:
@@ -37,7 +36,7 @@ def occurrences(doc: Document, offset: int) -> list[Item]:
         lo = next((i for i, t in enumerate(cs) if t.start >= d["head"]), len(cs)) if d else 0
         hi = next((i for i, t in enumerate(cs) if t.end > d["tail"]), len(cs)) if d else 0
         mine = [i for i in binders(cs, lo, hi) if cs[i].s == name]
-        taken = {a for _, _, a in p.imports} | {bare for _, bare in p.uses} | {x["name"] for x in flatten(ds)}
+        taken = {a for _, _, a in p.imports} | {bare for _, bare in p.uses} | {x["name"] for x in doc.declarations}
         found = [] if len(mine) != 1 or name in taken else [
             t for i, t in enumerate(cs) if t.s == name and lo <= i < hi and t.start >= cs[mine[0]].start
             and cs[i - 1].s != "."]  # fmt: skip
@@ -83,7 +82,7 @@ def rename(doc: Document, uri: str, offset: int, fresh: str) -> dict:
         raise ValueError("This name cannot be renamed from one document alone.")
     if not IDENT.fullmatch(fresh) or fresh in RESERVED or fresh in TABLE or fresh in TYPES:
         raise ValueError(f"{fresh} is a reserved word, a builtin or not an identifier.")
-    taken = {d["name"] for d in flatten(declarations(doc.code, 0, len(doc.code)))}
+    taken = {d["name"] for d in doc.declarations}
     taken |= {doc.code[i].s for i in binders(doc.code, 0, len(doc.code))}
     if fresh in taken:
         raise ValueError(f"{fresh} is already declared or bound in this document.")

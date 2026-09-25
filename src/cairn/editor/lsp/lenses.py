@@ -3,7 +3,7 @@ and what it runs on, the document's project when it has one."""
 
 from __future__ import annotations
 
-from .document import Document, declarations
+from .document import Document
 from .workspace import context, path_of
 
 
@@ -23,7 +23,7 @@ def code_lenses(doc: Document, uri: str, buffers: dict[str, str]) -> list[dict]:
     if not where:
         return []
     out = []
-    for d in declarations(doc.code, 0, len(doc.code)):
+    for d in doc.outline:
         mark = doc.span(*d["mark"])
         if d["detail"] == "test":
             module = doc.module_at(d["head"])

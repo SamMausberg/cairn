@@ -18,6 +18,11 @@ def value(x: Any) -> str:
     return json.dumps(x, separators=(", ", ": "))
 
 
+def typed(signature: dict[str, Any]) -> str:
+    """A signature as the record lists it, by its types: `(u64, ro<u64>[n]) -> u64`."""
+    return f"({', '.join(t for _, t in signature['params'])}) -> {signature['returns']}"
+
+
 def inputs(given: dict[str, Any]) -> str:
     return ", ".join(f"{k} = {value(v)}" for k, v in given.items()) or "no input"
 
@@ -51,8 +56,7 @@ def evidence(entry: dict[str, Any]) -> str:
     if c == "renamed":
         return f"was {entry['from']}"
     if c in {"added", "removed"}:
-        s = entry["signature"]
-        return f"({', '.join(t for _, t in s['params'])}) -> {s['returns']}"
+        return typed(entry["signature"])
     if c == "smt-equivalent":
         return "Z3 found no input on which they differ" + through
     return entry.get("reason", "")
@@ -62,9 +66,7 @@ def changes(entry: dict[str, Any]) -> str:
     """The compiler-established differences, in a few words each."""
     d, out = entry.get("deltas", {}), []
     if "signature" in d:
-        before, after = d["signature"]["before"], d["signature"]["after"]
-        out.append(f"signature ({', '.join(t for _, t in before['params'])}) -> {before['returns']} became "
-                   f"({', '.join(t for _, t in after['params'])}) -> {after['returns']}")  # fmt: skip
+        out.append(f"signature {typed(d['signature']['before'])} became {typed(d['signature']['after'])}")
     if "effects" in d:
         out.append("effects " + " ".join([*("+" + e for e in d["effects"]["added"]),
                                           *("-" + e for e in d["effects"]["removed"])]))  # fmt: skip

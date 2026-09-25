@@ -14,7 +14,7 @@ from ...agent.projection import local
 from ...compiler.syntax.modules import library_path, link
 from ...compiler.syntax.parser import IDENT, Parser, Program
 from ...compiler.syntax.tree import Diagnostic
-from .document import Document, declarations, flatten
+from .document import Document, enclosing
 
 UNKNOWN_TYPE = re.compile(r"Unknown type ([a-z_]\w*)\.")
 
@@ -81,10 +81,9 @@ def make_mutable(doc: Document, error: dict, at: int) -> list[tuple[str, list[di
     name = str(error.get("message", "")).split(" ", 1)[0]
     if at < 0 or cs[at].s != name:
         return []
-    around = [d for d in flatten(declarations(cs, 0, len(cs))) if d["head"] <= cs[at].start <= d["tail"]]
-    if not around:
+    d = enclosing(doc, cs[at].start)[0]
+    if d is None:
         return []
-    d = min(around, key=lambda d: d["tail"] - d["head"])
     binder = [
         k for k, t in enumerate(cs) if d["head"] <= t.start < cs[at].start and t.s == "let" and cs[k + 1].s == name
     ]
