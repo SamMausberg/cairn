@@ -101,14 +101,29 @@ A device library's C header gives each such function a second entry, `cq_NAME(st
 void cf_smooth(size_t n, float *out, const float *x, float *tmp);
 void cq_smooth(void *stream, size_t n, float *out, const float *x, float *tmp);
 /* No enqueued entry (E-ENQUEUE), because each must wait on the host before it returns:
- * total: it allocates device memory: a device buffer, or the scratch of a device reduce, scan or compact, whose
- * result returns to the host (no form of the language writes such a result to a device view yet).
+ * total: it allocates device memory: a device buffer, or the scratch of a device reduce, scan or compact, which
+ * grows when a call needs more than it holds, and a caller's graph capture cannot allocate.
  */
 ```
 
 Under `cq_NAME` a failed guard is observed later than the call. The guard's `__trap()` ends its kernel and poisons the device context, so nothing queued after it runs and every later CUDA call in the process fails with `cudaErrorLaunchFailure`. The caller's next synchronization reports it (`cudaStreamSynchronize` returns it, `torch.cuda.synchronize()` raises it), and the next CAIRN entry the process calls aborts. What the kernel wrote before it trapped stays in device memory no copy can reach any more; that is why a `@unified` view, which the host reads without a CUDA call, keeps a function from having an enqueued entry.
 
 The suite's host machine counts every CUDA call the runtime makes (`tests/runtime/test_enqueue.py`). An enqueued call of a cooperative region, two regions and a device copy made no wait, stream, event or allocation, even as the thread's first device work; its checked entry waited once, where it had waited four times; and a copy to host memory after enqueued work waited first. On an RTX 5070 Ti under WSL2, where a launch and its wait took about 100 us of host time, the owner-style two-pass sum of 2^26 floats took 656 to 679 us a call with a wait after each pass, 466 to 550 us with one, and 341 to 344 us through `cq_`, against 336 to 337 us for one-pass CUDA; a CUDA graph captured the entries as the process's first CUDA work ([evidence/v1_1/device_perf](../evidence/v1_1/device_perf/README.md)).
+
+### Results that stay on the device
+
+A reduction whose total the next device work reads can leave it there. `reduce op out[k] for i in n yield e;` over `@device` views writes the total into a device element, the next region reads it there, and nothing crosses to the host. A `scan` whose total nobody binds does the same with its prefixes.
+
+```cairn
+fn normalize(n:usize, x:rw<f32>[n]@device, total:rw<f32>[1]@device) {
+  reduce + total[0] for i in n yield x[i];       // stays on the device: no copy, and no wait of its own
+  parallel i in n { x[i] = x[i] / total[0]; }    // one wait for both, when normalize returns
+}
+```
+
+A device total lands only in a `@device` element, and a device element takes only a device reduction (`E-PLACEMENT`); bind the total with `let` to read it on the host. A checked `+` carries its overflow flag with the total, and the one lane that stores the total traps if it overflowed, as a guard in any lane does. A device scan's lanes check each prefix they store the same way, since a prefix of naturals overflows only when the total does. The form's row is a device reduction's: `par:device`, `gpu_alloc` and `gpu_free` for the scratch the context's arena provides and grows only when a call needs more, `write:out`, and `trap`. Because the arena may grow, a function with one has no `cq_` entry.
+
+On the counting host machine (`tests/soundness/test_reduce_into.py`) a call of `normalize` made no copy and one wait, when it returned, where the same function reading its total on the host made a copy and two waits. Emulated on host threads under both compilers, reductions into device elements, an element given its operator's identity for no indices, a normalization that reads its total on the device, and a scan whose prefixes a region then doubles all agree with plain loops. The program compiles for sm_120 and runs on a device only under `make gpu`, which has not run it.
 
 ## Cooperative regions
 

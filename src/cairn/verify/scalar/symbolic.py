@@ -661,6 +661,8 @@ class Symbolic:
         """`reduce` and `compact`: one in-order pass over 0..hi, unrolled under the loop budget."""
         if s.ref != "host":
             raise Unsupported("Only host reductions and collectors are modeled.")
+        if s.tag == "reduce" and len(s.exprs) > 2:
+            raise Unsupported("A reduction into an element is not modeled.")
         collect = s.tag == "compact"
         count = self.expr(s.exprs[1] if collect else s.exprs[0], env, frame.at(path))
         ok = conj(path, count.defined)

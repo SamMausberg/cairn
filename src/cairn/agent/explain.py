@@ -57,7 +57,9 @@ SYNCHRONIZATION = {  # What blocks, or starts something to block on later, and h
     "queued device work": "cr::gpu::queue",
     "transfer": "cr::gpu::copy_on(",
     "device reduce reads back": "cr::gpu::reduce_on",
+    "device reduce stays on the device": "cr::gpu::reduce_into<",
     "device scan reads back": "cr::gpu::scan_on",
+    "device scan stays on the device": "cr::gpu::scan_into<",
     "device compact reads back": "cr::gpu::compact_on",
     "cooperative region completes": "cr::coop::launch<",  # compiler/cooperative/cooperative.py, on the execution context
     "host cooperative region completes": "cr::coop::run<",

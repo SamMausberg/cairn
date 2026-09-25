@@ -45,7 +45,8 @@ class StatementParser(ExpressionParser):
     def contracted(self, t: Token, tag: str, name: str, typ: Type | None) -> Stmt:
         form = self.take()
         if tag != "let" or (form == "compact" and typ not in (None, USIZE)):
-            fail("E-COLLECT-BINDING", f"{'A scan' if form == 'scan' else 'Compaction'} binds an immutable result.", t)
+            said = {"scan": "A scan", "reduce": "A reduction"}.get(form, "Compaction")
+            fail("E-COLLECT-BINDING", f"{said} binds an immutable result.", t)
         at: dict[str, Any] = {"line": t.line, "col": t.col}
         if form == "scan":  # The operator, then `exclusive` unless that is the output's own name.
             op = self.take()
@@ -70,7 +71,12 @@ class StatementParser(ExpressionParser):
             if op not in REDUCERS:
                 fail("E-REDUCE-OP", f"reduce accepts one of {sorted(REDUCERS)}.", self.t)
             self.i += 1
-            if self.t.s == "warp" and self.ahead(1) == "yield":  # `reduce + warp yield v`: over one warp's threads
+            warp = self.t.s == "warp" and self.ahead(1) == "yield"
+            into = self.element() if not warp and self.t.s not in {"for", "parallel"} else None
+            if bool(into) == bool(name):  # `reduce + out[k] for i in n yield v;` writes one element, and binds nothing
+                fail("E-COLLECT-BINDING", "A reduction binds its total with let, or writes it into one element, as in "
+                     "reduce + out[k] for i in n yield e; never both.", t)  # fmt: skip
+            if warp:  # `reduce + warp yield v`: over one warp's threads
                 self.i += 2
                 value = self.expr()
                 self.need(";")
@@ -78,9 +84,18 @@ class StatementParser(ExpressionParser):
             pooled = self.t.s == "parallel"
             binder, hi = self.generator("parallel" if pooled else "for")
             self.need("yield")
-            es = [hi, self.expr()]
+            es = [hi, self.expr(), *([into] if into else [])]
         self.need(";")
         return Stmt(form, name, typ, es, binder=binder, op=op, pooled=form == "reduce" and pooled, **at)
+
+    def element(self) -> Expr:
+        """`out[k]`: the one element a reduction writes its total into."""
+        t = self.t
+        array = Expr("name", self.ident(), line=t.line, col=t.col)
+        self.need("[")
+        index = self.expr()
+        self.need("]")
+        return Expr("index", "", [array, index], line=t.line, col=t.col)
 
     def cooperative(self, at: dict[str, Any]) -> Stmt:
         """`blocks b in G threads t in T { }`, up to three names and extents a side; `blocks` and `threads` are words
@@ -189,7 +204,7 @@ class StatementParser(ExpressionParser):
             return Stmt("each", ref=self.each(self.block), **at)
         if self.recipe and t.s == "require":
             return self.require(t)
-        if self.scanning():  # A scan whose total nobody reads.
+        if self.scanning() or t.s == "reduce":  # A scan whose total nobody reads, a reduction into an element.
             return self.contracted(t, "let", "", None)
         if t.s == "blocks" and IDENT.fullmatch(self.ahead(1)) and self.ahead(2) in {",", "in"}:
             return self.cooperative(at)

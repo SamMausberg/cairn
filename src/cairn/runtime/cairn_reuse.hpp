@@ -334,6 +334,10 @@ template<class T, class F> struct Indexed {
 // What a scan carries, as the element its output holds: a checked sum's value without its overflow flag.
 template<class T> CR_HD inline T plain(T x) noexcept { return x; }
 template<class T> CR_HD inline T plain(Sum<T> x) noexcept { return x.v; }
+// The same where no total reaches the host to check: a checked sum that overflowed traps in the lane that stores it,
+// as a guard in any lane does. Every prefix of naturals is at most the total, so one traps exactly when the total does.
+template<class T> CR_HD inline T settled(T x) noexcept { return x; }
+template<class T> CR_HD inline T settled(Sum<T> x) noexcept { return x.checked(); }
 
 // Transform-reduce of value(i) over [0,n), with its result on the host: one cell of the arena holds it on the
 // device, and one copy and one wait for the synchronous lane bring it back. Nothing is allocated within the
@@ -394,6 +398,65 @@ inline Lent<Api> reduce_to(Context<Api>& ctx, T* out, std::size_t n, T identity,
   return t;
 }
 
+// The reduction with its total in `at`, a device element, on the context's synchronous lane: nothing crosses to the
+// host, and in a held run nothing waits, so the next region reads the total where it lies. A checked sum lands through
+// one lane, which traps if it overflowed, as a guard in any lane does. Over the budget nothing is queued.
+template<class Api, class T, class R, class Op, class F>
+inline Scratch reduce_into(Context<Api>& ctx, R* at, std::size_t n, T identity, Op op, F value) noexcept {
+  Api& api = ctx.api();
+  typename Context<Api>::Lane* lane = ctx.lend(true);
+  Scratch answer = Scratch::ok;
+  if(!n) {
+    api.template lanes<1>(1, [=] CR_DEVICE(std::size_t) { *at = settled(identity); }, lane->stream, BLOCK, 1);
+  } else {
+    const Indexed<T, F> in{value};
+    const Binary<T, Op> fold{op};
+    std::size_t need = 0;
+    api.reduce(nullptr, need, in, static_cast<T*>(nullptr), n, fold, identity, lane->stream);
+    const std::size_t cell = aligned(sizeof(T));
+    void* base = nullptr;
+    answer = ctx.acquire(cell + aligned(need ? need : 1), *lane, &base);
+    if(answer == Scratch::ok) {
+      T* total = static_cast<T*>(base);
+      api.reduce(static_cast<char*>(base) + cell, need, in, total, n, fold, identity, lane->stream);
+      api.template lanes<1>(1, [=] CR_DEVICE(std::size_t) { *at = settled(*total); }, lane->stream, BLOCK, 1);
+      ctx.release(*lane);
+    }
+  }
+  ctx.finish(lane);
+  return answer;
+}
+
+// What both scans queue on `lane`: the inclusive scan into the arena, then out, and with `last` the total's copy to
+// the host, which the caller's wait completes.
+template<bool Exclusive, class Api, class T, class R, class Op, class F>
+inline Scratch scanned(Context<Api>& ctx, typename Context<Api>::Lane& lane, T* last, R* out, std::size_t n,
+                       T identity, Op op, F value) noexcept {
+  Api& api = ctx.api();
+  const Indexed<T, F> in{value};
+  const Binary<T, Op> fold{op};
+  std::size_t need = 0;
+  api.inclusive_scan(nullptr, need, in, static_cast<T*>(nullptr), fold, n, lane.stream);
+  const std::size_t held = aligned(span<T>(n));
+  void* base = nullptr;
+  const Scratch answer = ctx.acquire(held + aligned(need ? need : 1), lane, &base);
+  if(answer != Scratch::ok) return answer;
+  T* h = static_cast<T*>(base);
+  api.inclusive_scan(static_cast<char*>(base) + held, need, in, h, fold, n, lane.stream);
+  if(last) {
+    api.template lanes<1>(
+        n, [=] CR_DEVICE(std::size_t i) { out[i] = plain(Exclusive ? (i ? h[i - 1] : identity) : h[i]); },
+        lane.stream, BLOCK, 1);
+    api.copy(last, h + (n - 1), sizeof(T), Dir::d2h, lane.stream);
+  } else {
+    api.template lanes<1>(
+        n, [=] CR_DEVICE(std::size_t i) { out[i] = settled(Exclusive ? (i ? h[i - 1] : identity) : h[i]); },
+        lane.stream, BLOCK, 1);
+  }
+  ctx.release(lane);
+  return answer;
+}
+
 // Scan of value(i) over [0,n) into out: out[i] is op over value(0..i], or over value(0..i) when Exclusive, and
 // `total` is op over every value. The association order is the machine's, exact for the integer operators the
 // language admits here. The inclusive scan lands in arena scratch first, so a value(i) that reads out[i] reads it
@@ -406,27 +469,22 @@ inline Scratch scan(Context<Api>& ctx, T& total, R* out, std::size_t n, T identi
     return Scratch::ok;
   }
   ctx.observed();
-  Api& api = ctx.api();
   typename Context<Api>::Lane* lane = ctx.lend(true);
-  const Indexed<T, F> in{value};
-  const Binary<T, Op> fold{op};
-  std::size_t need = 0;
-  api.inclusive_scan(nullptr, need, in, static_cast<T*>(nullptr), fold, n, lane->stream);
-  const std::size_t held = aligned(span<T>(n));
-  void* base = nullptr;
-  const Scratch answer = ctx.acquire(held + aligned(need ? need : 1), *lane, &base);
   T last = identity;
-  if(answer == Scratch::ok) {
-    T* h = static_cast<T*>(base);
-    api.inclusive_scan(static_cast<char*>(base) + held, need, in, h, fold, n, lane->stream);
-    api.template lanes<1>(
-        n, [=] CR_DEVICE(std::size_t i) { out[i] = plain(Exclusive ? (i ? h[i - 1] : identity) : h[i]); },
-        lane->stream, BLOCK, 1);
-    api.copy(&last, h + (n - 1), sizeof(T), Dir::d2h, lane->stream);
-    ctx.release(*lane);
-  }
+  const Scratch answer = scanned<Exclusive>(ctx, *lane, &last, out, n, identity, op, value);
   ctx.give_back(lane);
   if(answer == Scratch::ok) total = last;
+  return answer;
+}
+
+// The same scan with no total for the host: nothing crosses, and in a held run nothing waits. A checked sum traps in
+// the lane that stores a prefix that overflowed.
+template<bool Exclusive, class Api, class T, class R, class Op, class F>
+inline Scratch scan_into(Context<Api>& ctx, R* out, std::size_t n, T identity, Op op, F value) noexcept {
+  if(!n) return Scratch::ok;
+  typename Context<Api>::Lane* lane = ctx.lend(true);
+  const Scratch answer = scanned<Exclusive>(ctx, *lane, static_cast<T*>(nullptr), out, n, identity, op, value);
+  ctx.finish(lane);
   return answer;
 }
 

@@ -145,6 +145,9 @@ class Adjoint:
 
     def bind(self, s: Stmt):
         """What a let, a reduction or a region teaches: its value's type and whether it carries a derivative."""
+        if s.tag == "reduce" and not s.name:
+            fail("E-GRAD-FORM", "derive grad differentiates a reduction whose total a let binds, not one written "
+                 "into an element.", s)  # fmt: skip
         if s.tag in {"let", "reduce", "reg"}:
             if s.name in self.names:
                 fail("E-DERIVE-COLLISION", f"derive grad uses {s.name} itself; rename the local.", s)

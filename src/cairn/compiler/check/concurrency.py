@@ -212,16 +212,33 @@ def combining(c: Checker, s: Stmt, ty: Type, code: str):
 
 
 def s_reduce(c: Checker, s: Stmt):
-    hi, value = s.exprs
+    """`let t = reduce op for i in n yield v;` binds the total; `reduce op out[k] for i in n yield v;` writes it into
+    one element where the reduction runs, so over @device views it stays on the device for the work after it."""
+    hi, value, *into = s.exprs
     c.expr(hi, USIZE)
-    declared = c.resolve(s.ty, s) if s.ty else None
-    ty = c.region(s, [value], lambda: c.expr(value, declared))
+    target = c.env.get(root(into[0]).val) if into else None
+    if into and (target is None or not is_view(target.ty) or target.ty.mode != "rw"):
+        fail("E-REDUCE-TARGET", f"reduce writes its total into {root(into[0]).val}[...]: name an rw view or a buffer "
+             "the function holds.", into[0])  # fmt: skip
+    declared = target.ty.value if target else c.resolve(s.ty, s) if s.ty else None
+    placed = "device" if target and target.ty.place == "device" else ""
+    ty = c.region(s, [value], lambda: c.expr(value, declared), placed)
     combining(c, s, ty, "E-REDUCE-OP")
     if s.pooled and s.ref == "host" and ty.name in FLOAT:
         fail("E-REDUCE-ORDER", f"reduce {s.op} parallel adds {ty.name} in blocks on the lane pool, and floating "
              "addition in another order gives another answer: fold with for, or write the blocks yourself.", s)  # fmt: skip
     s.ty = ty
-    c.bind(s.name, Binding(ty), s)
+    if not target:
+        return c.bind(s.name, Binding(ty), s)
+    out = root(into[0]).val
+    if s.ref == "device" and target.ty.place != "device":
+        fail("E-PLACEMENT", f"A device reduction writes its total where it runs, so {out} must be @device, not "
+             f"@{target.ty.place}: bind the total with let to read it on the host.", into[0])  # fmt: skip
+    if any(name == out for name, _, _ in s.touched):
+        fail("E-PARALLEL-RACE", f"{out}[...] receives the total, so no yield may read {out}.", value)
+    depth, c.device_depth = c.device_depth, int(s.ref == "device")  # The store runs where the reduction does.
+    c.place(into[0], write=True)
+    c.device_depth = depth
 
 
 def s_scan(c: Checker, s: Stmt):

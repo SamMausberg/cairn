@@ -49,7 +49,7 @@ OBSERVES = {
     "transfer:h2d": "it transfers from host memory, which the host may change once the copy is queued",
     "transfer:d2h": "it transfers to host memory, which the host reads when it returns",
     "gpu_alloc": "it allocates device memory: a device buffer, or the scratch of a device reduce, scan or compact, "
-    "whose result returns to the host (no form of the language writes such a result to a device view yet)",
+    "which grows when a call needs more than it holds, and a caller's graph capture cannot allocate",
     "gpu_free": "it releases device memory, which work still queued may reach",
     "spawn": "it queues device work whose wait is the host's",
     "join": "it waits for queued work",
@@ -124,6 +124,14 @@ def on_device(s: Stmt) -> bool:
     return (s.tag in REGIONS and s.ref == "device") or (s.tag == "blocks" and getattr(s.ref, "device", False))
 
 
+def resident(s: Stmt) -> bool:
+    """Whether a device statement leaves its result on the device, where the host does not wait for it: a region, a
+    reduction into an element, a scan whose total nobody reads."""
+    return (
+        s.tag in {"parallel", "blocks"} or (s.tag == "reduce" and len(s.exprs) > 2) or (s.tag == "scan" and not s.name)
+    )
+
+
 def reaches(c: Checker, ss: list[Stmt], seen: set[str], expr=lambda e: False, stmt=lambda s: False) -> bool:
     """Whether a statement `stmt` accepts or an expression `expr` accepts is in the statements outside their device
     regions, in a closure they make, or in what a function they call may run, each function walked once."""
@@ -156,8 +164,9 @@ def host_atomics(c: Checker, ss: list[Stmt], seen: set[str]) -> bool:
 def runs(c: Checker, ss: list[Stmt], open_: int, fusing: Function | None = None) -> tuple[int, int]:
     """The most device operations the statements queue in one stretch with nothing between that waits for a held run,
     and how many are still queued unwaited at their end, after `open_` were before them. An operation is a region,
-    a cooperative region, a device copy, a multiply or a call to a function that queues device work (`queued`); a
-    device reduction, scan or compaction, whose result the host reads, waits, as does a ROUTED operation, a device,
+    a cooperative region, a device copy, a multiply, a reduction or scan whose result stays on the device, or a call to
+    a function that queues device work (`queued`); a device reduction, scan or compaction whose result the host reads
+    waits, as does a ROUTED operation, a device,
     pinned or unified owner's allocation and its release where its block ends. A loop's body counts twice, since its
     end meets its start, and the arms of a branch count one after another. With `fusing`, the function they are in,
     regions a plan fuses are one operation and the arrays their lanes hold are never allocated (plans/fusion.py)."""
@@ -169,7 +178,7 @@ def runs(c: Checker, ss: list[Stmt], open_: int, fusing: Function | None = None)
         if id(s) in inside or (s.tag in {"buffer", "stack"} and s.name in in_lanes):
             continue
         if on_device(s):
-            open_ = open_ + 1 if s.tag in {"parallel", "blocks"} else 0
+            open_ = open_ + 1 if resident(s) else 0
         elif s.tag == "buffer" and s.ref != "host":
             open_, owners = 0, True
         else:

@@ -322,7 +322,10 @@ class Walk:
         elif tag == "reduce":
             self.expr(es[0])
             self.inside(s, s.binder, self.bound(s.binder, None, es[0], True), lambda: self.expr(es[1]))
-            self.bind(s.name, True)
+            if len(es) > 2:  # `reduce op out[k] ...`: the element the total lands in
+                self.expr(es[2])
+            else:
+                self.bind(s.name, True)
         elif tag == "scan":  # The yield and the store out[i] it feeds, both below the count.
             out, hi, value, store = es
             self.expr(out)

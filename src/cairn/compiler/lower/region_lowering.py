@@ -75,18 +75,24 @@ def combiner(g: Emitter, s: Stmt, carried: str, combine: str) -> str:
 
 def s_reduce(g: Emitter, s: Stmt, es: list[str], before=None):
     ty, combine, identity, carried, start = g.folding(s)
-    i = "v_" + s.binder
+    i, into = "v_" + s.binder, es[2] if len(es) > 2 else ""  # `reduce op out[k] ...`: the total lands in out[k]
+    total = "v_" + s.name if s.name else g.fresh("cr_total_")[0]
     if s.ref == "device" or s.pooled:  # Pooled: blocks the count fixes, each folded in order, then their totals.
         value = g.lane(s, lambda: [before and before(), g.put(f"return {g.expr(s.exprs[1])};")])
         fold, parts = g.combiner(s, carried, combine), [es[0], start]
-        total = (collected(g, "reduce_on", [*parts, fold, value], [carried]) if s.ref == "device"
-                 else f"cr::par::reduce<{carried}>({es[0]}, {start}, {fold}, {value})")  # fmt: skip
-        return g.put(f"const {ty} v_{s.name} = {total}{'' if carried == ty else '.checked()'};")
-    count = g.fresh("n")[0]  # Without `parallel`, a host reduction is an in-order fold; its extent is read once.
-    g.puts(f"{ty} v_{s.name} = static_cast<{ty}>({identity});", f"const std::size_t {count} = {es[0]};")
-    step = [f"const {ty} a = v_{s.name}, b = {es[1]};", f"v_{s.name} = {combine};"]
-    g.nest(f"for (std::size_t {i} = 0; {i} < {count}; ++{i}) {{",
-              lambda: [before and before(), g.puts(*step)])  # fmt: skip
+        if into and s.ref == "device":  # on the device, where the next work reads it: nothing crosses, nothing waits
+            return g.put(collected(g, "reduce_into", [f"&{into}", *parts, fold, value], [carried]) + ";")
+        folded = (collected(g, "reduce_on", [*parts, fold, value], [carried]) if s.ref == "device"
+                  else f"cr::par::reduce<{carried}>({es[0]}, {start}, {fold}, {value})")  # fmt: skip
+        g.put(f"const {ty} {total} = {folded}{'' if carried == ty else '.checked()'};")
+    else:
+        count = g.fresh("n")[0]  # Without `parallel`, a host reduction is an in-order fold; its extent is read once.
+        g.puts(f"{ty} {total} = static_cast<{ty}>({identity});", f"const std::size_t {count} = {es[0]};")
+        step = [f"const {ty} a = {total}, b = {es[1]};", f"{total} = {combine};"]
+        g.nest(f"for (std::size_t {i} = 0; {i} < {count}; ++{i}) {{",
+               lambda: [before and before(), g.puts(*step)])  # fmt: skip
+    if into:
+        g.put(f"{into} = {total};")
 
 
 def s_scan(g: Emitter, s: Stmt, _: list[str]):
@@ -96,6 +102,8 @@ def s_scan(g: Emitter, s: Stmt, _: list[str]):
     if s.ref == "device" or s.pooled:  # The runtime writes each element; the yield is a lane's.
         each = g.lane(s, lambda: g.put(f"return {g.expr(value)};"))
         fold, parts = g.combiner(s, carried, combine), [g.expr(out), g.expr(hi), start]
+        if s.ref == "device" and not s.name:  # no total for the host: the prefixes stay on the device, unwaited
+            return g.put(collected(g, "scan_into", [*parts, fold, each], [exclusive, carried]) + ";")
         called = (collected(g, "scan_on", [*parts, fold, each], [exclusive, carried]) if s.ref == "device"
                   else f"cr::par::scan<{exclusive}, {carried}>({', '.join([*parts, fold, each])})")  # fmt: skip
         return g.put(f"const {ty} {total} = {called}{'' if carried == ty else '.checked()'};")

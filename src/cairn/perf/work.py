@@ -252,7 +252,7 @@ class Counter:
         region(self, s, at)
 
     def s_reduce(self, s: Stmt, at: Frame) -> None:
-        self.reduction(s, at, *s.exprs)
+        self.reduction(s, at, *s.exprs[:2])  # a total written into an element is one store after the fold
 
     def s_scan(self, s: Stmt, at: Frame) -> None:
         out, hi, value, store = s.exprs
