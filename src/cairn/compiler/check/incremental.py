@@ -356,15 +356,16 @@ def held(ref: Any) -> list[Expr | Stmt]:
     return found
 
 
-def moved(c: Checker, edit: Edit) -> set[str]:
+def moved(p: Program, fs: dict[str, Function], edit: Edit) -> set[str]:
     """Move every position of the combined source below the edited body to where a whole parse of the edited source
-    puts it; the functions that moved."""
-    p, move = c.p, Moved(edit)
+    puts it, in a program as parsed or as checked (`fs` names every function, templates among them); the functions
+    that moved."""
+    move = Moved(edit)
     mine = {name for name, module in p.modules.items() if module not in p.sources}
     declared = [e for name, (_, e) in p.consts.items() if name in mine] + [e for n, e in p.layouts.items() if n in mine]
     move.nodes([e for e in declared if e.line > edit.line])
     move.kept([e for e in declared if e.line <= edit.line])  # a body below may hold a constant's literal above
-    after = {f.name for f in p.functions if f.line > edit.line and home(p, c.fs, f)}
+    after = {f.name for f in p.functions if f.line > edit.line and home(p, fs, f)}
     for f in p.functions:
         if f.name in after:
             move.function(f)
@@ -385,12 +386,6 @@ def moved(c: Checker, edit: Edit) -> set[str]:
             items(move, recipe.items, recipe.where)
     p.scopes[:] = [(at + edit.moved if module not in p.sources and at >= edit.end else at, module)
                    for at, module in p.scopes]  # fmt: skip
-    for site in c.sites:
-        if site["symbol"] in after:
-            site["start"], site["end"] = site["start"] + edit.moved, site["end"] + edit.moved
-    for name in after:
-        for record in [*c.resources.get(name, ()), *c.numerics.get(name, ())]:
-            record["line"] += edit.lines if record.get("line") else 0
     return after
 
 
@@ -474,10 +469,43 @@ def recheck(c: Checker, walk: Walk, edit: Edit, after: str, sites: bool, every: 
     before the edit left: its receipts, with `c` and `c.p` the checked program. `walked` is given the checker and
     the record of the walk right after it, as compile_program gives it."""
     body = reparsed(after, c.fs[edit.name], edit)
-    moved(c, edit)
+    below = moved(c.p, c.fs, edit)
+    for site in c.sites:  # and what the walk recorded of those functions: their sites, resources and roundings
+        if site["symbol"] in below:
+            site["start"], site["end"] = site["start"] + edit.moved, site["end"] + edit.moved
+    for name in below:
+        for record in [*c.resources.get(name, ()), *c.numerics.get(name, ())]:
+            record["line"] += edit.lines if record.get("line") else 0
     if not sites:
         c.sites.clear()
     c.capture_sites, c.refusals = sites, [] if every else None
     receipts = c.check(lambda c: walked(c, replayed(c, walk, edit, body)))
     layouts.settle(c)  # as compile_program does
     return receipts
+
+
+# A parse again -----------------------------------------------------------------------------------------------------
+
+
+def bodies(p: Program) -> dict[str, tuple[int, int, int, bool]]:
+    """Where each body of a parse is, as Walk.spans says it, and whether an edit of it alone is parsed in place:
+    every function with a body but an implementation and the reference it names, whose identities digest their
+    tokens (Parser.identities)."""
+    written = {f.name: f for f in p.functions}
+    named = set()
+    for f in p.functions:
+        if f.implements is not None:  # found as Parser.identities finds it
+            reference = f.implements.reference
+            found = written.get(f"{f.module}.{reference}" if f.module else reference) or written.get(reference)
+            named |= {found.name} if found else set()
+    return {f.name: (f.line, f.body_start, f.end, f.implements is None and f.name not in named)
+            for f in p.functions if not f.extern}  # fmt: skip
+
+
+def spliced(tree: Program, edit: Edit, after: str) -> Program:
+    """What `Parser(after).parse()` answers, from `tree`, the parse of the source `edit` edited: the edited body parsed
+    in place and every position below it moved."""
+    f = next(g for g in tree.functions if g.name == edit.name)
+    (f.body_start, f.body), f.end = reparsed(after, f, edit), edit.end + edit.moved
+    moved(tree, {g.name: g for g in tree.functions}, edit)
+    return tree

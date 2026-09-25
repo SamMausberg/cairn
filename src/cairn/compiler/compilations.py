@@ -102,6 +102,14 @@ class Refused:
         return Diagnostic.of(loads(self.data))
 
 
+class Parsed:
+    """A parse, pickled, and where its bodies are (incremental.bodies), which says whether another source differs from
+    this one in one body alone."""
+
+    def __init__(self, tree: Program, data: bytes):
+        self.data, self.spans, self.size = data, incremental.bodies(tree), len(data)
+
+
 class Pickled:
     """A stage's objects, pickled; a check keeps its sites apart, so a caller that wants none unpickles none."""
 
@@ -135,7 +143,7 @@ class Entry:
 
     def __init__(self, source: str) -> None:
         self.source = source
-        self.parse: Pickled | Refused | None = None  # the parse tree, before linking
+        self.parse: Parsed | Refused | None = None  # the parse tree, before linking
         self.checks: dict[tuple[bool, bool], Pickled | Refused] = {}  # by (sites, every)
         self.walked: Walked | None = None
         self.emission: Emitted | Refused | None = None
@@ -163,10 +171,10 @@ class Cache:
             self.held.move_to_end(key)
             return found
 
-    def walks(self) -> list[Entry]:
-        """The kept entries that hold a walk, the one used most recently first."""
+    def recent(self) -> list[Entry]:
+        """The kept entries, the one used most recently first."""
         with self.lock:
-            return [entry for entry in reversed(self.held.values()) if entry.walked is not None]
+            return list(reversed(self.held.values()))
 
     def settle(self, key: str, entry: Entry) -> None:
         """Keep `entry` as the one used most recently and count what it holds, then drop the sources used least
@@ -204,13 +212,14 @@ class Compilation:
         self.key = hashlib.sha256(f"{compiler()}\0{library()}\0{text}".encode()).hexdigest()
         self.held = self.cache.entry(self.key, source)  # this caller's, even once the cache drops it
         self.cached = True
-        self.edit = ""  # the function whose body was checked alone, when a kept walk answered the check
+        self.edit = ""  # the function whose body alone was checked or parsed, from a kept walk or parse
 
     def keep(self) -> None:
         self.cache.settle(self.key, self.held)
 
     def parsed(self) -> Program:
-        """What `Parser(source).parse()` answers."""
+        """What `Parser(source).parse()` answers. A source that differs in one body from one whose parse is kept is
+        parsed from that parse, the edited body alone (compiler/check/incremental.py)."""
         kept = self.held.parse
         if isinstance(kept, Refused):
             raise kept.raised()
@@ -218,15 +227,28 @@ class Compilation:
             return loads(kept.data)
         self.cached = False
         try:
-            tree = Parser(self.source).parse()
+            tree = self.spliced() or Parser(self.source).parse()
         except Diagnostic as error:
             self.held.parse = Refused(error)
             self.keep()
             raise
         if (data := dumps(tree)) is not None:
-            self.held.parse = Pickled(data)
+            self.held.parse = Parsed(tree, data)
             self.keep()
         return tree
+
+    def spliced(self) -> Program | None:
+        """The parse from a kept parse of a source this one differs from in one body, or None."""
+        for base in self.cache.recent():
+            found = base.parse
+            if isinstance(found, Parsed) and (edit := incremental.edited(base.source, self.source, found.spans)):
+                try:
+                    tree = incremental.spliced(loads(found.data), edit, self.source)
+                except Exception:  # a body that does not parse alone, which a whole parse reports where it is
+                    return None
+                self.edit = edit.name
+                return tree
+        return None
 
     def found(self) -> Pickled | Refused | None:
         """The kept check that answers this caller: one made as it asks, one that also captured sites, or, for an
@@ -273,7 +295,7 @@ class Compilation:
     def edited(self, walked: Callable[[Walked | None], None]) -> Checked | None:
         """The check from the kept walk of a source this one differs from in one body, if there is one and the edit is
         one it takes; None, and the whole check runs, otherwise."""
-        for base in self.cache.walks():
+        for base in self.cache.recent():
             found = base.walked
             if found is None or (self.sites and not found.sites):
                 continue
