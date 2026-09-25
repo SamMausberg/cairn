@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from ...compiler.syntax.lexing import RESERVED
-from ..new import guide
+from ..new import named, settled
 from ..project import ProjectError
 from ..target import parse
 from .mapping import DTYPES, LACKING, SPELLED
@@ -99,8 +99,7 @@ def create(destination: Path, definition: Path, device_target: str | None = None
     """Write the project; nothing is written when the definition cannot become one."""
     spec, workloads = load_problem(definition)
     target = parse(device_target or "sm_100a").name
-    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", destination.name):
-        raise ProjectError("Choose an ASCII project name of 1..64 characters.")
+    named(destination)
     function = name(re.sub(r"\W", "_", str(spec.get("op_type") or "reference")).lower() or "reference")
     axes = dict(spec["axes"])
     constants: list[str] = []
@@ -169,8 +168,7 @@ def create(destination: Path, definition: Path, device_target: str | None = None
     (destination / "harness.toml").write_text(mapping_file(spec, fixed, extents, arguments, notes), encoding="utf-8")
     policy = {"tolerance": notes_tolerance}
     (destination / "policy.json").write_text(json.dumps(policy, indent=2) + "\n", encoding="utf-8")
-    (destination / ".gitignore").write_text("build/\n")
-    guide(destination)
+    settled(destination)
     return {"status": "created", "project": str(destination.resolve()), "definition": spec["name"],
             "function": function, "device_target": target, "tolerance": notes_tolerance, "tolerance_source": source,
             "not_expressed": notes, "constraints_not_checked": list(spec.get("constraints") or []),

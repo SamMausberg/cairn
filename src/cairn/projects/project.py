@@ -20,6 +20,7 @@ from .target import parse
 from .toolchain import ARCHS, KINDS, LIBRARIES, TARGETS, ProjectError
 
 SEGMENT = re.compile(r"[A-Za-z0-9_.-]+")
+NAME = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,63}")  # a project's name, as a manifest and `cairn new` take it
 MAX_SOURCES = 1024  # source files one manifest lists; the bytes they hold together are held to MAX_SOURCE
 MAX_DEPENDENCIES = 64  # vendored projects one manifest names, each at most 4 deep
 FOREIGN_SUFFIXES = (".cpp", ".cc", ".cu")  # what a [foreign] table vendors: C++ sources and CUDA sources
@@ -246,7 +247,7 @@ def read_manifest(target: Path) -> Manifest:
     }:
         raise ProjectError("Unknown manifest option.")
     name = project.get("name")
-    if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", name):
+    if not isinstance(name, str) or not NAME.fullmatch(name):
         raise ProjectError("Project name must be an ASCII name of 1..64 characters.")
     sources, contracts = project.get("sources"), project.get("tests", [])
     for label, values, low, high in [("sources", sources, 1, MAX_SOURCES), ("tests", contracts, 0, 128)]:
