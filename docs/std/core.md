@@ -2,7 +2,7 @@
 
 # std.core
 
-The vocabulary every other module shares. Importing a name is explicit: import std.core (Option);
+The vocabulary every other module shares, and the limits of each integer type. Importing a name is explicit: import std.core (Option, U64_MAX);
 
 ```cairn
 pub enum Option[T] { Some(T); None; }
@@ -14,6 +14,23 @@ pub trait Ord { fn less(a:ro<Self>, b:ro<Self>) -> bool pure; }
 
 pub trait Eq { fn same(a:ro<Self>, b:ro<Self>) -> bool pure; }
 pub trait Hash { fn hash(value:ro<Self>) -> u64 pure; }
+
+// Each integer type's least and greatest value, so a bound is a name and not a literal of twenty digits: `if x >
+// U64_MAX - y { ... }` tests an add before it traps. The least of an unsigned type is 0.
+pub const U8_MAX:u8 = 255;
+
+pub const U16_MAX:u16 = 65535;
+pub const U32_MAX:u32 = 4294967295;
+pub const U64_MAX:u64 = 18446744073709551615;
+pub const USIZE_MAX:usize = 18446744073709551615;
+pub const I8_MIN:i8 = (-128);
+pub const I8_MAX:i8 = 127;
+pub const I16_MIN:i16 = (-32768);
+pub const I16_MAX:i16 = 32767;
+pub const I32_MIN:i32 = (-2147483648);
+pub const I32_MAX:i32 = 2147483647;
+pub const I64_MIN:i64 = (-9223372036854775808);
+pub const I64_MAX:i64 = 9223372036854775807;
 impl Eq for bool: fn same(a:ro<bool>, b:ro<bool>) -> bool pure  // effects: read:a, read:b
 impl Ord for T: fn less[T:integer](a:ro<T>, b:ro<T>) -> bool  // effects: read:a, read:b
 impl Eq for T: fn same[T:integer](a:ro<T>, b:ro<T>) -> bool  // effects: read:a, read:b

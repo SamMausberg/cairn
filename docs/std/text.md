@@ -2,11 +2,29 @@
 
 # std.text
 
-Numbers to bytes and back, and the searching a line protocol needs. A substring cannot be returned (a borrow is second class), so every search answers with an index into the input and the caller passes the part `s[lo..hi]` onwards. Cost: one pass per call; the write_* forms touch only the caller's storage and return the number of bytes used, or 0 when the value does not fit. The push_* forms grow a Vec.
+Numbers to bytes and back, the ASCII class of a byte, and the searching a line protocol needs. A substring cannot be returned (a borrow is second class), so every search answers with an index into the input and the caller passes the part `s[lo..hi]` onwards. Cost: one pass per call; the write_* forms touch only the caller's storage and return the number of bytes used, or 0 when the value does not fit. The push_* forms grow a Vec.
 
 ```cairn
 pub enum ParseError { Empty; Invalid(usize); Overflow(usize); }
 
+// One byte's ASCII class, as C's <ctype.h> answers it in the "C" locale: a byte above 127 is in none. Cost: a
+// comparison or two; nothing is read but the byte.
+pub fn is_digit(c:u8) -> bool  // effects: none
+
+pub fn is_upper(c:u8) -> bool  // effects: none
+pub fn is_lower(c:u8) -> bool  // effects: none
+pub fn is_alpha(c:u8) -> bool  // effects: none
+pub fn is_alnum(c:u8) -> bool  // effects: none
+
+// ' ' and the five controls from 9 to 13: '\t', '\n', vertical tab, form feed and '\r'.
+pub fn is_space(c:u8) -> bool  // effects: none
+
+// A letter in the other case, by its case bit; every other byte as it is.
+pub fn to_lower(c:u8) -> u8  // effects: none
+
+pub fn to_upper(c:u8) -> u8  // effects: none
+
+// Decimal digits and nothing else: no sign, no '+', no spaces around them.
 // effects: ffi_precondition, read:s, trap
 pub fn parse_u64(n:usize, s:ro<u8>[n]@host) -> std.core.Result[u64, std.text.ParseError]
 

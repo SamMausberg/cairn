@@ -1,4 +1,5 @@
-// The vocabulary every other module shares. Importing a name is explicit: import std.core (Option);
+// The vocabulary every other module shares, and the limits of each integer type. Importing a name is explicit:
+// import std.core (Option, U64_MAX);
 module std.core;
 
 pub enum Option[T] { Some(T); None; }
@@ -19,3 +20,19 @@ impl Eq for bool { fn same(a:ro<bool>, b:ro<bool>) -> bool = a == b; }
 impl[T:unsigned] Hash for T {
   fn hash(value:ro<T>) -> u64 = mul_wrap(u64(value), 11400714819323198485);
 }
+
+// Each integer type's least and greatest value, so a bound is a name and not a literal of twenty digits:
+// `if x > U64_MAX - y { ... }` tests an add before it traps. The least of an unsigned type is 0.
+pub const U8_MAX:u8 = 255;
+pub const U16_MAX:u16 = 65535;
+pub const U32_MAX:u32 = 4294967295;
+pub const U64_MAX:u64 = 18446744073709551615;
+pub const USIZE_MAX:usize = 18446744073709551615;
+pub const I8_MIN:i8 = -128;
+pub const I8_MAX:i8 = 127;
+pub const I16_MIN:i16 = -32768;
+pub const I16_MAX:i16 = 32767;
+pub const I32_MIN:i32 = -2147483648;
+pub const I32_MAX:i32 = 2147483647;
+pub const I64_MIN:i64 = -9223372036854775808;
+pub const I64_MAX:i64 = 9223372036854775807;
