@@ -9,7 +9,6 @@ says why (E-ENQUEUE). The generated library runs here against tests/runtime/gpu_
 call and every call a stream capture refuses; the CUDA build compiles for sm_120 and is not run here.
 """
 
-import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -18,10 +17,7 @@ import pytest
 
 from cairn.compiler.cairnc import compile_source
 from cairn.compiler.lower.header import binding, header
-from emitted import device_build, sanitized
-
-ROOT = Path(__file__).resolve().parents[2]
-RUNTIME, HOST = ROOT / "src/cairn/runtime", ROOT / "tests/runtime"
+from emitted import device_build, hosted_library, printed, sanitized
 
 LIBRARY = """
 // Two regions and a copy between device views: nothing the host reads before it returns.
@@ -114,26 +110,9 @@ int main() {
 """
 
 
-def built(tmp_path: Path, cxx: str) -> Path:
-    if not shutil.which(cxx):
-        pytest.skip(f"{cxx} unavailable")
-    declared, checks = header(LIBRARY, "lib", device=True)
-    cpp = compile_source(LIBRARY)[0] + "\n" + checks
-    (tmp_path / "lib.cpp").write_text(cpp.replace('#include "cairn_gpu.hpp"', '#include "coop_host.hpp"'))
-    (tmp_path / "lib.h").write_text(declared)
-    (tmp_path / "main.cpp").write_text(CALLER)
-    exe = tmp_path / "caller"
-    line = [cxx, *sanitized(cxx), "-pthread", f"-I{RUNTIME}", f"-I{HOST}", f"-I{tmp_path}", str(tmp_path / "lib.cpp"),
-            str(tmp_path / "main.cpp"), "-o", str(exe)]  # fmt: skip
-    done = subprocess.run(line, capture_output=True, text=True, timeout=300)
-    assert done.returncode == 0, done.stderr[-4000:]
-    return exe
-
-
-def steps(exe: Path) -> dict[str, dict]:
-    done = subprocess.run([str(exe)], capture_output=True, text=True, timeout=300)
-    assert done.returncode == 0, done.stdout[-3000:] + done.stderr[-3000:]
-    rows = [json.loads(line) for line in done.stdout.splitlines()]
+def steps(tmp_path: Path, cxx: str) -> dict[str, dict]:
+    """The library and its caller built with the sanitizers on the host stand-in and run; each step's counts."""
+    rows = printed(hosted_library(tmp_path, LIBRARY, CALLER, cxx, *sanitized(cxx), "-pthread"))
     assert rows[-1] == {"wrong": 0}
     return {r["what"]: r for r in rows[:-1]}
 
@@ -144,7 +123,7 @@ def moved(rows: dict[str, dict], before: str, after: str) -> dict[str, int]:
 
 @pytest.mark.parametrize("cxx", ["g++", "clang++"])
 def test_an_enqueued_call_waits_for_nothing_and_makes_nothing(tmp_path, cxx):
-    rows = steps(built(tmp_path, cxx))
+    rows = steps(tmp_path, cxx)
     first = moved(rows, "start", "enqueued blocked")
     assert first["refused"] == 0, first  # no wait, stream, event, allocation or release, on a fresh thread too
     assert first["stream_waits"] == first["event_waits"] == first["streams"] == first["events"] == 0, first
@@ -157,7 +136,7 @@ def test_an_enqueued_call_waits_for_nothing_and_makes_nothing(tmp_path, cxx):
 
 @pytest.mark.parametrize("cxx", ["g++", "clang++"])
 def test_a_held_body_waits_once_and_the_rest_wait_as_before(tmp_path, cxx):
-    rows = steps(built(tmp_path, cxx))
+    rows = steps(tmp_path, cxx)
     blocked = moved(rows, "enqueued on null", "checked blocked")
     assert blocked["stream_waits"] == 1 and blocked["launches"] == 2 and blocked["copies"] == 1, blocked
     assert not rows["checked blocked"]["on_mine"]  # the enqueued calls left the thread's own stream in place

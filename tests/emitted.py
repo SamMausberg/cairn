@@ -1,11 +1,14 @@
 """What a test does by hand with a CAIRN program: require that it is refused with one code, build the C++ it
 emits beside the runtime headers and run it, or build it as `cairn build` does and run that (`native`).
 
-The C++ helpers are for a test that names its compiler flags, a sanitizer or its own `main`.
+The C++ helpers are for a test that names its compiler flags, a sanitizer or its own `main`. Each can build the
+emitted code against a host stand-in for the CUDA runtime from tests/runtime, which runs device work on host threads
+and counts every CUDA call.
 """
 
 import contextlib
 import ctypes
+import json
 import os
 import shutil
 import subprocess
@@ -15,6 +18,7 @@ import pytest
 
 from cairn.compiler.cairnc import RUNTIME_FILES, Diagnostic, compile_source
 from cairn.compiler.lower.codegen import mangle
+from cairn.compiler.lower.header import header
 from cairn.projects.build import build as build_project
 from cairn.projects.project import load_project
 from cairn.projects.target import parse
@@ -26,6 +30,7 @@ from support import device_lock, device_reason
 NVCC_HOST = os.environ.get("CAIRN_TEST_NVCC_HOST", "g++")
 SANITIZED = ["-std=c++20", "-O1", "-g", "-fno-exceptions", "-fsanitize=address,undefined", "-fno-sanitize-recover=all"]
 WARNINGS = ["-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-Wno-unused-variable"]
+STAND_INS = Path(__file__).resolve().parent / "runtime"  # gpu_host.hpp, and coop_host.hpp that adds cooperative regions
 
 
 def refused(code: str, source: str, **options) -> dict:
@@ -48,23 +53,56 @@ def sanitized(cxx: str) -> list[str]:
     return SANITIZED if cxx == "clang++" else SANITIZED[:4]
 
 
-def emit(tmp_path: Path, cpp: str, entry: str | None = "main") -> tuple[str, str]:
+def emit(tmp_path: Path, cpp: str, entry: str | None = "main", beside=None, stand_in=None) -> tuple[str, str]:
     """Write `cpp`, a C++ `main` returning what the CAIRN `entry` returns, and every runtime header; the source
-    and executable paths. `entry=None` leaves `cpp` to bring its own `main`."""
+    and executable paths. `entry=None` leaves `cpp`, or a file `beside` it, to bring its own `main`.
+
+    `beside` maps more file names to their text, written next to `cpp`. With `stand_in`, a header in `STAND_INS`, each
+    of them includes it where it included cairn_gpu.hpp."""
     start = f"int main() {{ return static_cast<int>(cf_{mangle(entry)}()); }}\n" if entry else ""
-    (tmp_path / "p.cpp").write_text(cpp + start)
     for name, text in RUNTIME_FILES.items():
         (tmp_path / name).write_text(text)
+    for name in ("gpu_host.hpp", "coop_host.hpp") if stand_in else ():
+        shutil.copy(STAND_INS / name, tmp_path / name)
+    for name, text in {"p.cpp": cpp + start, **(beside or {})}.items():
+        hosted = text.replace('#include "cairn_gpu.hpp"', f'#include "{stand_in}"') if stand_in else text
+        (tmp_path / name).write_text(hosted)
     return str(tmp_path / "p.cpp"), str(tmp_path / "p")
 
 
-def build(tmp_path: Path, cpp: str, *flags: str, cxx: str = "clang++", entry: str | None = "main", timeout=180) -> str:
-    """`cpp` compiled by `cxx` with exactly `flags`, skipping the test when `cxx` is absent; the executable."""
+def units(tmp_path: Path, source: str, beside) -> list[str]:
+    """`source` and the C++ files `beside` it: every translation unit of one build."""
+    return [source, *(str(tmp_path / name) for name in beside or {} if name.endswith(".cpp"))]
+
+
+def build(tmp_path: Path, cpp: str, *flags: str, cxx: str = "clang++", entry: str | None = "main", timeout=180,
+          beside=None, stand_in=None) -> str:  # fmt: skip
+    """`cpp`, with the C++ files `beside` it, compiled by `cxx` with exactly `flags`, skipping the test when `cxx` is
+    absent; the executable."""
     if not shutil.which(cxx):
         pytest.skip(f"{cxx} unavailable")
-    source, executable = emit(tmp_path, cpp, entry)
-    subprocess.run([cxx, *flags, source, "-o", executable], check=True, timeout=timeout)
+    source, executable = emit(tmp_path, cpp, entry, beside, stand_in)
+    done = subprocess.run([cxx, *flags, *units(tmp_path, source, beside), "-o", executable], capture_output=True,
+                          text=True, timeout=timeout)  # fmt: skip
+    assert done.returncode == 0, done.stderr[-4000:]
     return executable
+
+
+def hosted_library(tmp_path: Path, source: str, caller: str, cxx: str, *flags: str, name="lib",
+                   stand_in="coop_host.hpp") -> str:  # fmt: skip
+    """A device library's C++ with its C header `NAME.h` (compiler/header.py) and a C++ `caller` of it, built by `build`
+    against `stand_in`; the executable."""
+    declared, checks = header(source, name, device=True)
+    beside = {f"{name}.h": declared, "main.cpp": caller}
+    cpp = compile_source(source)[0] + "\n" + checks
+    return build(tmp_path, cpp, *flags, cxx=cxx, entry=None, timeout=300, beside=beside, stand_in=stand_in)
+
+
+def printed(executable) -> list:
+    """Run `executable` once, which must exit 0; each line it printed, read as JSON."""
+    done = subprocess.run([str(executable)], capture_output=True, text=True, timeout=300)
+    assert done.returncode == 0, done.stdout[-3000:] + done.stderr[-4000:]
+    return [json.loads(line) for line in done.stdout.splitlines()]
 
 
 def run(tmp_path: Path, cpp: str, *flags: str, cxx="clang++", entry="main", timeout=180, env=None):
@@ -114,15 +152,18 @@ def native(tmp_path: Path, source: str, cxx="clang++", timeout=180):
 
 
 def contract(tmp_path: Path, cpp: str, cxx: str, *extra: str, cuda=False, timeout=240, env=None, under=(),
-             emulate=False):  # fmt: skip
-    """`cpp` built by the project's own command line for `cxx` plus `extra`, then run once `under` a wrapper. With
-    `emulate`, a device program is built for the host, its device work on host threads (projects/emulation.py)."""
+             emulate=False, entry: str | None = "main", beside=None, stand_in=None):  # fmt: skip
+    """`cpp`, with the C++ files `beside` it, built by the project's own command line for `cxx` plus `extra`, then run
+    once `under` a wrapper. With `emulate`, a device program is built for the host, its device work on host threads
+    (projects/emulation.py)."""
     if not shutil.which(cxx):
         pytest.skip(f"{cxx} unavailable")
     if cuda and not emulate and (reason := device_reason()):  # A device program runs inside `on_device` or not at all.
         pytest.skip(reason)
-    source, executable = emit(tmp_path, cpp)
+    source, executable = emit(tmp_path, cpp, entry, beside, stand_in)
     line = command(cxx, source, executable, kind="exe", cuda=cuda or emulate, emulate=emulate)
+    at = line.index(source)
+    line[at : at + 1] = units(tmp_path, source, beside)
     subprocess.run([*line, *extra], check=True, timeout=timeout)
     return subprocess.run([*under, executable], capture_output=True, text=True, timeout=timeout, env=env)
 
@@ -142,14 +183,14 @@ def device_build(tmp_path: Path, cpp: str, entry: str | None = None, ptx=False, 
     return Path(target)
 
 
-def watched(tmp_path: Path, cpp: str, cxx: str, sanitizer: str, emulate=False):
-    """The project's own build under `sanitizer`, with leak detection, run without address randomization, which
-    ThreadSanitizer needs on newer kernels; with `emulate`, a device program's emulated build."""
+def watched(tmp_path: Path, cpp: str, cxx: str, sanitizer: str, timeout=300, **options):
+    """`contract` under `sanitizer`, with leak detection and ThreadSanitizer halting at its first report, run without
+    address randomization, which ThreadSanitizer needs on newer kernels."""
     if not shutil.which(cxx) or not shutil.which("setarch"):
         pytest.skip(f"needs {cxx} and setarch")
-    env = {**os.environ, "ASAN_OPTIONS": "detect_leaks=1"}
-    return contract(tmp_path, cpp, cxx, "-g", f"-fsanitize={sanitizer}", timeout=300, env=env, under=("setarch", "-R"),
-                    emulate=emulate)  # fmt: skip
+    env = {**os.environ, "ASAN_OPTIONS": "detect_leaks=1", "TSAN_OPTIONS": "halt_on_error=1"}
+    return contract(tmp_path, cpp, cxx, "-g", f"-fsanitize={sanitizer}", timeout=timeout, env=env,
+                    under=("setarch", "-R"), **options)  # fmt: skip
 
 
 @contextlib.contextmanager
