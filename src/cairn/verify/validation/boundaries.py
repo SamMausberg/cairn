@@ -25,6 +25,7 @@ CUTOFF = 16384  # runtime/cairn_parallel.hpp lanes::CUTOFF: below it a host regi
 GRAIN = 8192  # lanes::GRAIN: indices a lane is engaged for
 SCALARS = {"bool", *BITS, *FLOAT}
 PATTERNS = ("zeros", "ones", "ascending", "largest", "alternating", "random")
+LARGEST = 4096  # the largest extent a domain admits where it names none
 
 
 class Unsupported(Exception):
@@ -181,6 +182,12 @@ def clamp(v: Any, lo: Any, hi: Any, ty: str) -> Any:
     return float(v) if ty in FLOAT else v
 
 
+def admitted(domain: dict[str, Any], name: str) -> tuple[Any, Any]:
+    """The least and greatest value a domain admits for the extent `name`: its own range, else 0 to its largest."""
+    lo, hi = domain.get("extents", {}).get(name, [0, domain.get("largest_extent", LARGEST)])
+    return lo, hi
+
+
 def generate(f: Function, found: dict[int, str], domain: dict[str, Any], budget: int = 256, seed: int = 0,
              device: bool = False) -> list[Case]:  # fmt: skip
     """Cases for `f`: every extent size with each view pattern, the scalar parameters' edges crossed with one another
@@ -189,9 +196,7 @@ def generate(f: Function, found: dict[int, str], domain: dict[str, Any], budget:
     params = signature(f, device)
     rng = random.Random(seed)
     extents = [p for p in params if p.kind == "extent"]
-    bounds = domain.get("extents", {})
-    ranges = {p.name: bounds.get(p.name, [0, domain.get("largest_extent", 4096)]) for p in extents}
-    per = {p.name: sizes(found, int(ranges[p.name][0]), int(ranges[p.name][1])) for p in extents}
+    per = {p.name: sizes(found, *(int(v) for v in admitted(domain, p.name))) for p in extents}
     values = domain.get("values", {})
     scalars = {p.name: edges(p.ty, *values.get(p.name, [None, None])) for p in params if p.kind == "scalar"}
     width = math.prod(len(v) for v in scalars.values())

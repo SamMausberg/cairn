@@ -18,6 +18,7 @@ from cairn.perf.tuning.resources import Inspector
 from cairn.perf.tuning.search import Budget, Candidate, shaped, space
 from cairn.perf.tuning.tune import tune
 from cairn.projects.target import parse
+from cairn.verify.validation.validation import REGRESSIONS, Policy
 from emitted import code_of
 
 BLUR = """fn blur(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) {
@@ -177,11 +178,12 @@ def test_an_implementation_is_searched_and_chosen_only_while_its_validation_hold
     from cairn.agent.hosts.implementations import PROTOCOL, ImplementationHost
 
     host = ImplementationHost(records=tmp_path)
-    host.open(TOTAL, "total", {"tolerance": {"absolute": 0.0, "relative": 0.0}, "domain": {"largest_extent": 48}})
+    policy = {"tolerance": {"absolute": 0.0, "relative": 0.0}, "domain": {"largest_extent": 48}}
+    host.open(TOTAL, "total", policy)
     answer = host.respond({"protocol": PROTOCOL, "handle": "i1", "kind": "submit", "source": BY4})
     assert answer["status"] == "validated"
     source = host.source("i1") + "\n" + PAIRS + "\n"
-    result = tune(source, "total", [{"n": 1e6}], MACHINE, history=tmp_path)
+    result = tune(source, "total", [{"n": 1e6}], MACHINE, history=tmp_path, pinned=policy)
     rows = {row.get("use"): row for row in result["candidates"]}
     assert set(rows) == {None, "total_by4", "total_pairs"} and result["implementations"] == ["total_by4", "total_pairs"]
     assert rows["total_by4"]["validated"]["evidence"] == "finite-tested"
@@ -192,7 +194,7 @@ def test_an_implementation_is_searched_and_chosen_only_while_its_validation_hold
     assert all(isinstance(row["validated"], str) for row in unkept["candidates"] if row.get("use"))
     assert "use" not in unkept["chosen"]  # without a history, only the reference is chosen
     edited = source.replace("a += xs[4 * k] + xs[4 * k + 1];", "a += xs[4 * k + 1] + xs[4 * k];")
-    moved = tune(edited, "total", [{"n": 1e6}], MACHINE, history=tmp_path)
+    moved = tune(edited, "total", [{"n": 1e6}], MACHINE, history=tmp_path, pinned=policy)
     assert isinstance(next(r for r in moved["candidates"] if r.get("use") == "total_by4")["validated"], str)
 
 
@@ -204,12 +206,19 @@ def test_the_command_writes_the_selection_of_the_validated_implementation_it_cho
     lanes = ("fn total_lanes(n:usize, xs:ro<u64>[n]) -> u64 implements total when n % 4 == 0 {\n"
              "  let s = reduce + parallel i in n yield xs[i];\n  return s;\n}")  # fmt: skip
     host = ImplementationHost(records=tmp_path / "history")
-    host.open(total, "total", {"tolerance": {"absolute": 0.0, "relative": 0.0}, "domain": {"largest_extent": 48}})
+    policy = {"tolerance": {"absolute": 0.0, "relative": 0.0}, "domain": {"largest_extent": 48}}
+    host.open(total, "total", policy)
     assert host.respond({"protocol": PROTOCOL, "handle": "i1", "kind": "submit", "source": lanes})["status"] == (
         "validated")  # fmt: skip
     source = tmp_path / "total.cairn"
     source.write_text(host.source("i1"))
     ask = ["tune", str(source), "--symbol", "total", "--at", "n=1e7", "--history", str(tmp_path / "history")]
+    assert main([*ask, "--format", "json"]) == 0  # the reference's policy is the defaults: 4096, not 48
+    [row] = [r for r in json.loads(capsys.readouterr().out)["candidates"] if r.get("use") == "total_lanes"]
+    assert "it admits extents up to 48, where the reference's policy admits 4096" in row["validated"]
+    (tmp_path / "regressions").mkdir()  # the project pins the policy the session validated under
+    pinned = {"schema": REGRESSIONS, "reference": "total", "policy": Policy.of(policy).record(), "cases": []}
+    (tmp_path / "regressions/total.json").write_text(json.dumps(pinned))
     assert main([*ask, "--write", "--format", "json"]) == 0
     answer = json.loads(capsys.readouterr().out)
     assert answer["chosen"]["use"] == "total_lanes" and answer["chosen"]["validated"]["evidence"] == "finite-tested"

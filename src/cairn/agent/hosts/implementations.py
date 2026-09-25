@@ -75,16 +75,16 @@ def remember(where: Path, base: str, reference: str, entry: dict[str, Any]) -> d
     as written (`base`, history.as_written), the implementation's own identity with everything it calls
     (`variant`, history.selectable), or the submission's digest when it has none, the pinned contract with the
     numerical policy, and where validation ran: the host, or the host emulation of a device target. The detail keeps
-    the numerical policy and the native compiler a validation was made under, which `history.unheld` reads. The
-    candidate is named `plan f use g;`, as `cairn tune` names the same selection, so one implementation has one name
-    in the history."""
+    the numerical policy and the native compiler a validation was made under, which `history.unheld` reads, and the
+    validation policy, which `cairn tune` holds to the reference's (`Policy.weaker`). The candidate is named
+    `plan f use g;`, as `cairn tune` names the same selection, so one implementation has one name in the history."""
     from ...perf.tuning.plan_source import selecting
     from .. import history
 
     contract = {k: entry[k] for k in CONTRACT}
     variant = entry.get("variant") or entry.get("identity")
     who = history.identity(base, variant or entry["submission_sha256"], contract, entry.get("target", "host"))
-    made: dict[str, Any] = {k: entry[k] for k in ("agreement", "compiler") if k in entry}
+    made: dict[str, Any] = {k: entry[k] for k in ("agreement", "compiler", "policy") if k in entry}
     if entry["status"] == "validated":  # the evidence class the validation established: emulated runs say so
         kind, detail = "validation", {"evidence": entry.get("evidence", "finite-tested"), "finite": entry["finite"],
                                       "smt": entry["smt"], **made}  # fmt: skip

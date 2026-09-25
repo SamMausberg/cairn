@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from ...compiler.cairnc import Function, Parser
-from .boundaries import Case, Param
+from .boundaries import LARGEST, Case, Param, admitted
 from .isolated_calls import Calls
 
 
@@ -39,7 +39,7 @@ def smt(base: str, reference: str, implementation: str, impl: Function, policy: 
     where = [format_expr(fixed(impl.implements.when))] if impl.implements and impl.implements.when is not None else []
     views = {t.extent for _, t in ref.params if t.extent}
     for name in (n for n, t in ref.params if n in views and t.name == "usize"):
-        lo, hi = policy.domain.get("extents", {}).get(name, [0, policy.domain.get("largest_extent", 4096)])
+        lo, hi = admitted(policy.domain, name)
         where.append(f"{name} >= {int(lo)} && {name} <= {int(hi)}")
     assume = " && ".join(f"({w})" for w in where) or "true"
 
@@ -48,7 +48,7 @@ def smt(base: str, reference: str, implementation: str, impl: Function, policy: 
                                            timeout_ms=timeout_ms), 3 * timeout_ms / 1000 + 5)  # fmt: skip
 
     counts = [n for n, t in ref.params if t.name == "usize" and t.mode == "value"]
-    largest = policy.domain.get("largest_extent", 4096)
+    largest = policy.domain.get("largest_extent", LARGEST)
     widest = max([largest, *(hi for _, hi in policy.domain.get("extents", {}).values())])
     if counts and widest > MAX_UNROLL:  # a loop over an extent past the unrolling budget is never decided whole
         bounded = " && ".join([f"({assume})", *(f"{n} <= {MAX_UNROLL}" for n in counts)])
@@ -70,13 +70,13 @@ def summary(r: dict[str, Any], where: str, bounded: bool = False) -> dict[str, A
 
 def outside(params: list[Param], inputs: dict[str, Any], domain: dict[str, Any]) -> str | None:
     """Why `inputs` lie outside the domain the policy admits, or None when they lie inside it."""
-    extents, values = domain.get("extents", {}), domain.get("values", {})
+    values = domain.get("values", {})
     for p in params:
         if p.name not in inputs:
             return f"they give no value for {p.name}"
         given = inputs[p.name]
         if p.kind == "extent":
-            lo, hi = extents.get(p.name, [0, domain.get("largest_extent", 4096)])
+            lo, hi = admitted(domain, p.name)
             if not lo <= given <= hi:
                 return f"{p.name} = {given} is outside the admitted extents {lo}..{hi}"
         elif p.name in values:
