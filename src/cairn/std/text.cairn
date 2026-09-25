@@ -29,10 +29,12 @@ pub fn to_upper(c:u8) -> u8 {
   return c;
 }
 
-// The decimal digits of s[start..n] as a value no larger than `limit`, or the offset of the byte at fault.
-fn digits(n:usize, s:ro<u8>[n], start:usize, limit:u64) -> Result[u64, ParseError] {
+// The decimal digits of s[start..n], all but the byte at `skip`, as a value no larger than `limit`, or the
+// offset of the byte at fault.
+fn digits(n:usize, s:ro<u8>[n], start:usize, skip:usize, limit:u64) -> Result[u64, ParseError] {
   let mut value = 0;
   for i in start..n {
+    if i == skip { continue; }
     let byte = s[i];
     if byte < 48 || byte > 57 { return Err(Invalid(i)); }
     let digit = u64(byte - 48);
@@ -45,7 +47,7 @@ fn digits(n:usize, s:ro<u8>[n], start:usize, limit:u64) -> Result[u64, ParseErro
 // Decimal digits and nothing else: no sign, no '+', no spaces around them.
 pub fn parse_u64(n:usize, s:ro<u8>[n]) -> Result[u64, ParseError] {
   if n == 0 { return Err(Empty); }
-  return digits(s, 0, U64_MAX);
+  return digits(s, 0, n, U64_MAX);
 }
 
 // Signed decimal: an optional leading '-', then digits. The magnitude may reach 2^63 only when
@@ -58,11 +60,78 @@ pub fn parse_i64(n:usize, s:ro<u8>[n]) -> Result[i64, ParseError] {
   if start == n { return Err(Invalid(start)); }
   let mut limit:u64 = 9223372036854775807;
   if negative { limit = 9223372036854775808; }
-  let value = try digits(s, start, limit);
+  let value = try digits(s, start, n, limit);
   if !negative { return Ok(i64(value)); }
   if value == 0 { return Ok(0); }
   let below = i64(value - 1); // value - 1 fits an i64 even when value is 2^63
   return Ok(-below - 1);
+}
+
+// A place in a view that next_line, next_word and next_field move forward. Each finds the next piece at
+// or after `at`, sets `lo..hi` to its bounds and moves `at` past it, so the piece is the part s[c.lo..c.hi]
+// and nothing is copied: `let mut w = text.cursor(); while text.next_word(input, w) { ... }`.
+pub struct Cursor { at:usize; lo:usize; hi:usize; }
+
+pub fn cursor() -> Cursor = Cursor(0, 0, 0);
+
+// The next line, without its "\n" or "\r\n". A last line without "\n" counts, and an empty view has none.
+// Cost: one pass over the line.
+pub fn next_line(n:usize, s:ro<u8>[n], c:rw<Cursor>) -> bool {
+  if c.at >= n { return false; }
+  c.lo = c.at;
+  let mut i = c.at;
+  while i < n && s[i] != '\n' { i += 1; }
+  c.at = i + 1;
+  if i < n && i > c.lo && s[i - 1] == '\r' { i -= 1; }
+  c.hi = i;
+  return true;
+}
+
+// The next word: a run of bytes that are not is_space, which separates words and is skipped.
+// Cost: one pass over the word and the space before it.
+pub fn next_word(n:usize, s:ro<u8>[n], c:rw<Cursor>) -> bool {
+  let mut i = c.at;
+  while i < n && is_space(s[i]) { i += 1; }
+  if i >= n {
+    c.at = i;
+    return false;
+  }
+  c.lo = i;
+  while i < n && !is_space(s[i]) { i += 1; }
+  c.hi = i;
+  c.at = i;
+  return true;
+}
+
+// The next field of a view split at every `sep`, as a line of comma-separated values is: "a,,b" has three
+// fields, the second empty, and an empty view has one, which is empty.
+// Cost: one pass over the field.
+pub fn next_field(n:usize, s:ro<u8>[n], sep:u8, c:rw<Cursor>) -> bool {
+  if c.at > n { return false; }
+  c.lo = c.at;
+  let mut i = c.at;
+  while i < n && s[i] != sep { i += 1; }
+  c.hi = i;
+  c.at = i + 1;
+  return true;
+}
+
+// A decimal with at most `places` digits after an optional '.', as a count of units of 10^-places: with
+// two places "12.5" and "12.50" are 1250 and "12" is 1200. Digits only, as parse_u64 takes them, with one
+// or more on each side of a point; a digit past `places` is Invalid, and a value past U64_MAX is Overflow.
+// Cost: one pass; `places` less the digits written must be at most 19, or the scale traps.
+pub fn parse_fixed(n:usize, s:ro<u8>[n], places:usize) -> Result[u64, ParseError] {
+  if n == 0 { return Err(Empty); }
+  let mut point = n;
+  match find_byte(n, s, '.', 0) { Some(at) => point = at; None => {} }
+  if point == 0 || point + 1 == n { return Err(Invalid(point)); }
+  let raw = try digits(s, 0, point, U64_MAX);
+  let shown = n - min(n, point + 1);
+  if shown > places { return Err(Invalid(point + 1 + places)); }
+  let mut unit:u64 = 1;
+  for _ in shown..places { unit *= 10; }
+  if raw > U64_MAX / unit { return Err(Overflow(n - 1)); }
+  return Ok(raw * unit);
 }
 
 // Decimal, most significant digit first. The digits are produced backwards into fixed storage,
