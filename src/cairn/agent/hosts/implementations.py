@@ -36,7 +36,7 @@ from ...verify.validation.validation import EMULATED, FINITE, Policy, failure, h
 from ..diagnostics import explain, located
 from ..projection import local, signature
 from ..state import delta, state
-from ..teaching import select_cards
+from ..teaching import select_cards, unsent
 from .edits import digest, load_json_strict, named, stable_json
 
 PROTOCOL = "cairn.implementation/1"
@@ -212,7 +212,8 @@ class ImplementationSession:
 
 
 class ImplementationHost:
-    """The implementation sessions of one conversation, named by handles, and every submission they took."""
+    """The implementation sessions of one conversation, named by handles, and every submission they took. Each rule
+    card is sent once; a later packet lists the cards it leaves out under `sent_before`."""
 
     def __init__(self, regressions: Path | None = None, history: Callable[[dict[str, Any]], None] | None = None,
                  cxx: str = "clang++", records: Path | None = None):  # fmt: skip
@@ -220,6 +221,7 @@ class ImplementationHost:
         self.regressions, self.history, self.cxx, self.records = regressions, history, cxx, records
         self.submissions: list[dict[str, Any]] = []
         self.bases: dict[str, str] = {}  # a session's source digest -> its reference as written (history.as_written)
+        self.sent: set[str] = set()  # the cards this host's reader was sent; `cairn mcp` shares it with its edit host
 
     def open(self, source: str, reference: str, policy: dict[str, Any] | None = None,
              emulate: DeviceTarget | None = None) -> dict[str, Any]:  # fmt: skip
@@ -228,7 +230,9 @@ class ImplementationHost:
         handle = f"i{len(self.sessions) + 1}"
         self.sessions[handle] = ImplementationSession(source, reference, policy, self.regressions, self.cxx, emulate)
         packet = self.sessions[handle].packet()
-        return {**packet, "handle": handle, "reply": {**packet["reply"], "handle": handle}}
+        packet["rule_cards"], earlier = unsent(packet["rule_cards"], self.sent)
+        return {**packet, **({"sent_before": earlier} if earlier else {}), "handle": handle,
+                "reply": {**packet["reply"], "handle": handle}}  # fmt: skip
 
     def source(self, handle: str) -> str:
         return self.session(handle).source
