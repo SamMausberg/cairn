@@ -56,18 +56,22 @@ LEAST = {"strided": (1, 1, 0, 0), "pad": (0,), "swizzle": (1, 0, 0)}  # the leas
 def value(c: Checker, name: str, pending: tuple[str, ...] = ()) -> Value:
     """The layout a declaration names, evaluated once and kept among the checker's folded constants."""
     if name not in c.folded:
-        if name in pending:
-            fail("E-LAYOUT", f"{name} is defined in terms of itself.", c.p.layouts[name])
-        written = c.p.layouts[name]
-        with c.within(c.p.modules.get(name, "")):
-            made = evaluate(c, written, (*pending, name))
-        if isinstance(made, Spread):  # A declared spread gives every element of its tile one holder,
-            distinct(made.tile, written, "A spread's tile")  # and every declared layout gives each element
-            exactly_once(made, written, "a spread")  # its own offset: writes through either never collide.
-        else:
-            distinct(made, written, "A storage layout")
-        c.folded[name] = made
+        c.made("folded", name, lambda: folded(c, name, pending))
     return c.folded[name]
+
+
+def folded(c: Checker, name: str, pending: tuple[str, ...]) -> None:
+    if name in pending:
+        fail("E-LAYOUT", f"{name} is defined in terms of itself.", c.p.layouts[name])
+    written = c.p.layouts[name]
+    with c.within(c.p.modules.get(name, "")):
+        made = evaluate(c, written, (*pending, name))
+    if isinstance(made, Spread):  # A declared spread gives every element of its tile one holder,
+        distinct(made.tile, written, "A spread's tile")  # and every declared layout gives each element
+        exactly_once(made, written, "a spread")  # its own offset: writes through either never collide.
+    else:
+        distinct(made, written, "A storage layout")
+    c.folded[name] = made
 
 
 def named(c: Checker, e: Expr) -> str | None:

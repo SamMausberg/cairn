@@ -2,9 +2,11 @@
 
 The walk over the bodies (`Checker.bodies`) checks each concrete function in program order, and each check adds to the
 program-wide tables refusals.py names (TABLES, LISTS), appends the generic instances it makes to the program, takes
-the addresses of functions and counts nodes and unique places. `recorded` walks as `bodies` does and notes after each
-function how far each of them had grown, so that what one function's check added can be read back from the checker as
-the walk left it, which the caller pickles right then, before implementations, plans and the judge change it.
+the addresses of functions and counts nodes and unique places. What a check reads of another function's check is only
+what it makes on first use through `Checker.made` (MEMOS: generic instances, layouts of generic types,
+implementations, folded layouts), and every rule that reads rows runs after the walk. `recorded` walks as `bodies`
+does and notes how far each table had grown after each function and around each first making, so what one check
+added can be read back from the checker as the walk left it, which the caller pickles right then.
 
 `edited` compares a new source with the one a walk was recorded for. It takes an edit that changes the text of one
 function's body and nothing else, so every declaration and every other body reads byte for byte as before, and it
@@ -12,13 +14,14 @@ never reads a caller's claim about what changed.
 
 `replayed` checks the new source from that pickle: every position after the edited body moves by what the edit
 added, the new body is parsed in place, and the walk runs again in program order, where every other function's
-additions are put back as its check made them and only the edited function is checked. That is what a whole check
-of the new source answers when three things hold, and where one does not `replayed` raises Fallback and the caller
-checks the whole program:
+additions are put back as its check made them and only the edited body is checked. Where the edited body's check asks
+for something the walk made first in that body, it is put back as it was made, so a later body that reads it reads the
+same object. That is what a whole check of the new source answers when these hold, and where one does not `replayed`
+raises Fallback and the caller checks the whole program:
 
-- the edited function's earlier check made first nothing a later check may have read: no generic instance, layout of
-  a generic type, implementation or folded layout (MEMOS), and no function's address its new check does not take;
-- its new check makes nothing that the check of a later function made in the walk, so none of those finds it made;
+- everything the edited body made first in the walk is put back while it is checked again, and every address it took
+  first is taken again, so no later check reads anything the walk had and this one has not;
+- its new check makes nothing that the check of a later function made, so none of those finds it made;
 - it names as many unknown places as before (`Checker.unique`, which extents carry), or no later check names one;
 - the program stays inside the node and function limits a whole check holds it to.
 
@@ -44,6 +47,9 @@ if TYPE_CHECKING:
     from .checking import Checker
 
 MEMOS = ("fs", "layouts", "impls", "folded", "bounds")  # what a body's check reads, and makes on first use
+FUNCTIONS = len(TABLES) + len(LISTS)  # where a mark holds the program's functions; its nodes and unique places follow
+Mark = tuple[int, ...]  # the sizes of TABLES and LISTS, the functions, the nodes and the unique places
+Made = tuple[Mark, Mark, set[str]]  # a first making: the marks before and after it, and the addresses it took first
 
 
 class Fallback(Exception):
@@ -52,43 +58,119 @@ class Fallback(Exception):
 
 @dataclass
 class Walk:
-    """How far each table had grown after the declarations were prepared and after each function's body."""
+    """How far each table had grown after the declarations were prepared and after each function's body, and what
+    each body's check made first."""
 
-    prepared: tuple
+    prepared: Mark
     names: list[str] = field(default_factory=list)  # the concrete functions, in the order the walk checks them
-    marks: list[tuple] = field(default_factory=list)  # after each of them
+    marks: list[Mark] = field(default_factory=list)  # after each of them
     taken: list[set[str]] = field(default_factory=list)  # the functions whose address each one's check took first
-    signed: list[set[str]] = field(default_factory=list)  # the signatures each one's check resolved first
+    made: list[dict[tuple[str, Any], Made]] = field(default_factory=list)  # what each one's check made first
     spans: dict[str, tuple[int, int, int, bool]] = field(default_factory=dict)  # (line, body_start, end, editable)
 
-    def before(self, k: int) -> tuple:
+    def before(self, k: int) -> Mark:
         return self.marks[k - 1] if k else self.prepared
 
 
-def mark(c: Checker) -> tuple:
-    return (tuple(len(getattr(c, n)) for n in TABLES), tuple(len(getattr(c, n)) for n in LISTS), len(c.p.functions),
-            c.nodes, c.unique)  # fmt: skip
+def mark(c: Checker) -> Mark:
+    return (*(len(getattr(c, n)) for n in TABLES), *(len(getattr(c, n)) for n in LISTS), len(c.p.functions), c.nodes,
+            c.unique)  # fmt: skip
 
 
-def grown(c: Checker, walk: Walk, taken: set[str], signed: set[str]) -> None:
-    """Note what the function just checked added: the tables' sizes and the names its check added to two sets."""
+def shifted(made: Made, by: Mark) -> Made:
+    before, after, taken = made
+    return (
+        tuple(a + d for a, d in zip(before, by, strict=True)),
+        tuple(a + d for a, d in zip(after, by, strict=True)),
+        taken,
+    )
+
+
+def grown(c: Checker, walk: Walk, taken: set[str], made: dict[tuple[str, Any], Made]) -> None:
+    """Note what the function just checked added: the tables' sizes, the addresses it took first, what it made."""
     walk.marks.append(mark(c))
-    walk.taken.append(c.address_taken - taken)
-    walk.signed.append(c.signed - signed)
+    walk.taken.append(c.address_taken - taken if len(c.address_taken) != len(taken) else set())
+    walk.made.append(made)
     taken |= walk.taken[-1]
-    signed |= walk.signed[-1]
+
+
+class Making:
+    """What `Checker.made` does while a walk is recorded: make what is asked, and note what making it added. While the
+    edited body is checked again, a key the recorded walk made in that body is put back as it was made instead, when
+    the check would make it the same: everything that body made before it is back, and nothing it made exists yet."""
+
+    def __init__(self, kept: Kept | None = None, start: Mark = (), base: dict[tuple[str, Any], Made] | None = None):
+        self.kept, self.start, self.base = kept, start, base or {}
+        self.made: dict[tuple[str, Any], Made] = {}  # in this walk's marks
+        self.back: set[tuple[str, Any]] = set()  # what was put back
+
+    def __call__(self, c: Checker, key: tuple[str, Any], make: Callable[[], Any]) -> None:
+        before, taken = mark(c), set(c.address_taken)
+        found = self.base.get(key)
+        if self.kept is not None and found is not None and self.fits(c, found):
+            self.kept.put(c, found[0], found[1], found[2])
+            self.back |= self.kept.keys(found[0], found[1])
+            by = tuple(a - b for a, b in zip(before, found[0], strict=True))
+            self.made |= {k: shifted(m, by) for k, m in self.base.items() if found[0] <= m[0] and m[1] <= found[1]}
+        else:
+            make()
+        self.made[key] = (before, mark(c), c.address_taken - taken)
+
+    def fits(self, c: Checker, made: Made) -> bool:
+        before, after, _ = made
+        assert self.kept is not None
+        if not self.kept.keys(self.start, before) <= self.back or c.unique != before[-1] != after[-1]:
+            return False
+        if len(c.p.functions) + after[FUNCTIONS] - before[FUNCTIONS] > MAX_FUNCTIONS:
+            return False  # making it again reports the limit where a whole check does
+        return not any(key in getattr(c, n) for n, key in self.kept.keys(before, after))
+
+
+@dataclass
+class Kept:
+    """What a recorded walk left in the program-wide tables, read back while its bodies are put back."""
+
+    tables: dict[str, list[tuple[Any, Any]]]
+    lists: dict[str, list[Any]]
+    functions: list[Function]
+
+    @classmethod
+    def of(cls, c: Checker) -> Kept:
+        return cls({n: list(getattr(c, n).items()) for n in TABLES}, {n: list(getattr(c, n)) for n in LISTS},
+                   list(c.p.functions))  # fmt: skip
+
+    def keys(self, a: Mark, b: Mark) -> set[tuple[str, Any]]:
+        """What the walk made first between two marks, in the memos a body's check reads."""
+        return {(n, key) for n in MEMOS for key, _ in self.tables[n][a[TABLES.index(n)] : b[TABLES.index(n)]]}
+
+    def put(self, c: Checker, a: Mark, b: Mark, taken: set[str]) -> None:
+        """Put back what the walk added between two marks: every table's and list's additions, the instances, their
+        signatures, the addresses taken first and the counts."""
+        for i, n in enumerate(TABLES):
+            getattr(c, n).update(self.tables[n][a[i] : b[i]])
+        for j, n in enumerate(LISTS, len(TABLES)):
+            getattr(c, n).extend(self.lists[n][a[j] : b[j]])
+        c.p.functions.extend(self.functions[a[FUNCTIONS] : b[FUNCTIONS]])
+        fs = TABLES.index("fs")
+        c.signed |= {name for name, _ in self.tables["fs"][a[fs] : b[fs]]}  # a body's check signs only its instances
+        c.address_taken |= taken
+        c.nodes, c.unique = c.nodes + b[-2] - a[-2], c.unique + b[-1] - a[-1]
 
 
 def recorded(c: Checker) -> Walk:
-    """`Checker.bodies`, noting how far every table grew after each function. The caller pickles the checker as the
-    walk leaves it, with this record, when the check is accepted."""
+    """`Checker.bodies`, noting how far every table grew after each function and what each check made first. The
+    caller pickles the checker as the walk leaves it, with this record, when the check is accepted."""
     concrete = c.prepare()
-    walk = Walk(mark(c))
-    taken, signed = set(c.address_taken), set(c.signed)
-    for f in concrete:
-        c.body(f)
-        walk.names.append(f.name)
-        grown(c, walk, taken, signed)
+    walk, taken = Walk(mark(c)), set(c.address_taken)
+    c.making = making = Making()
+    try:
+        for f in concrete:
+            making.made = {}
+            c.body(f)
+            walk.names.append(f.name)
+            grown(c, walk, taken, making.made)
+    finally:
+        c.making = None
     described(c, walk)
     return walk
 
@@ -341,53 +423,43 @@ def replayed(c: Checker, walk: Walk, edit: Edit, body: tuple[int, list[Stmt]]) -
     record of this walk, for the next edit."""
     k = walk.names.index(edit.name)
     lo, hi, last = walk.before(k), walk.marks[k], walk.marks[-1]
-    made = [n for n in MEMOS if lo[0][TABLES.index(n)] != hi[0][TABLES.index(n)]]
-    if made or lo[2] != hi[2] or walk.signed[k]:
-        raise Fallback(f"{edit.name} made {made[0] if made else 'an instance'} first, which a later check may read")
-    tables = {n: list(getattr(c, n).items()) for n in TABLES}
-    lists = {n: list(getattr(c, n)) for n in LISTS}
-    functions, borrowed = list(c.p.functions), c.borrowed
-    taken = c.address_taken.difference(*walk.taken[k:])
-    signed = c.signed.difference(*walk.signed[k:])
-    for n, count in zip(TABLES, lo[0], strict=True):
+    kept, borrowed = Kept.of(c), c.borrowed
+    for i, n in enumerate(TABLES):
         table = getattr(c, n)
         table.clear()
-        table.update(tables[n][:count])
-    for n, count in zip(LISTS, lo[1], strict=True):
-        del getattr(c, n)[count:]
-    del c.p.functions[lo[2] :]
-    c.address_taken, c.signed, c.nodes, c.unique = set(taken), set(signed), lo[3], lo[4]
-    again = Walk(
-        walk.prepared,
-        list(walk.names),
-        walk.marks[:k],
-        [set(s) for s in walk.taken[:k]],
-        [set(s) for s in walk.signed[:k]],
-    )
+        table.update(kept.tables[n][: lo[i]])
+    for j, n in enumerate(LISTS, len(TABLES)):
+        del getattr(c, n)[lo[j] :]
+    del c.p.functions[lo[FUNCTIONS] :]
+    c.address_taken.difference_update(*walk.taken[k:])
+    c.signed -= {name for name, _ in kept.tables["fs"][lo[TABLES.index("fs")] :]}
+    c.nodes, c.unique = lo[-2], lo[-1]
+    taken = set(c.address_taken)
+    again = Walk(walk.prepared, list(walk.names), walk.marks[:k], [set(s) for s in walk.taken[:k]], walk.made[:k])
     f = c.fs[edit.name]
     (f.body_start, f.body), f.end = body, edit.end + edit.moved
-    c.body(f)
-    grown(c, again, taken, signed)
+    c.making = making = Making(kept, lo, walk.made[k])
+    try:
+        c.body(f)
+    finally:
+        c.making = None
+    grown(c, again, taken, making.made)
+    now = again.marks[-1]
+    present = {key for key in making.back if key[1] in getattr(c, key[0])}  # a refusal takes back what it put back
+    if lost := kept.keys(lo, hi) - present:
+        raise Fallback(f"{edit.name} no longer makes {min(map(str, lost))} first as the walk did")
+    later = kept.keys(hi, last)
+    if clash := {(n, key) for n in MEMOS for key in list(getattr(c, n))[lo[TABLES.index(n)] :]} & later:
+        raise Fallback(f"{edit.name} now makes {min(map(str, clash))} first, which a later check made")
     if not walk.taken[k] <= again.taken[-1]:
         raise Fallback(f"{edit.name} no longer takes first the address it took")
-    for n in MEMOS:
-        at = TABLES.index(n)
-        later = {key for key, _ in tables[n][hi[0][at] :]}
-        if clash := [key for key in list(getattr(c, n))[lo[0][at] :] if key in later]:
-            raise Fallback(f"{edit.name} now makes {clash[0]} first, which a later check made")
-    if again.marks[-1][4] - lo[4] != hi[4] - lo[4] and last[4] != hi[4]:
+    if now[-1] - lo[-1] != hi[-1] - lo[-1] and last[-1] != hi[-1]:
         raise Fallback("the edited body names another number of unknown places, which later extents count")
     for i in range(k + 1, len(walk.names)):
         start, stop = walk.marks[i - 1], walk.marks[i]
-        for n, a, b in zip(TABLES, start[0], stop[0], strict=True):
-            getattr(c, n).update(tables[n][a:b])
-        for n, a, b in zip(LISTS, start[1], stop[1], strict=True):
-            getattr(c, n).extend(lists[n][a:b])
-        c.p.functions.extend(functions[start[2] : stop[2]])
-        c.address_taken |= walk.taken[i]
-        c.signed |= walk.signed[i]
-        c.nodes, c.unique = c.nodes + stop[3] - start[3], c.unique + stop[4] - start[4]
-        grown(c, again, taken, signed)
+        by = tuple(a - b for a, b in zip(mark(c), start, strict=True))
+        kept.put(c, start, stop, walk.taken[i])
+        grown(c, again, taken, {key: shifted(made, by) for key, made in walk.made[i].items()})
     if c.nodes > MAX_NODES or len(c.p.functions) > MAX_FUNCTIONS:
         raise Fallback("the edited program passes a limit a whole check reports")
     if k + 1 < len(walk.names):

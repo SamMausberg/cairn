@@ -176,6 +176,7 @@ class Checker:
         self.reaching = 0  # Depth inside a field path: its base is reached, not read whole.
         self.alternatives: dict[str, list[str]] = {}  # reference -> its implementations (implementations.py)
         self.selected: dict[str, str] = {}  # reference -> the implementation a plan runs
+        self.making: Callable[[Checker, tuple[str, Any], Callable[[], None]], None] | None = None  # (incremental.py)
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         """A copy of a finished check (compiler/compilations.py) keys what was typed ahead by the copied expressions."""
@@ -278,10 +279,21 @@ class Checker:
             return constant(self, const, [])
         return argument if isinstance(argument, int) else self.resolve(argument, node)
 
+    def made(self, table: str, key: Any, make: Callable[[], Any]) -> None:
+        """Make what the first check to ask for `key` of the memo `table` makes: a generic instance, a type's layout, an
+        implementation or a folded layout. A walk from a recorded one may put back what the recorded walk's check made
+        instead (compiler/check/incremental.py)."""
+        if self.making is None:
+            make()
+        else:
+            self.making(self, (table, key), make)
+
     def define(self, ty: Type, node=None):
         """Validate a concrete record or sum once, after the layouts it contains by value."""
-        if ty in self.layouts or ty.name not in self.types:
-            return
+        if ty not in self.layouts and ty.name in self.types:
+            self.made("layouts", ty, lambda: self.laid_out(ty, node))
+
+    def laid_out(self, ty: Type, node=None):
         self.layouts[ty] = None
         generics = (n for n, _ in self.p.generics.get(ty.name, []))
         with self.within(self.p.modules.get(ty.name, ""), dict(zip(generics, ty.args, strict=True))):

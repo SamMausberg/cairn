@@ -85,26 +85,27 @@ def instantiate(c: Checker, template: Function, bound: dict[str, Any], node: Any
 
         admitted(template, bound, node)
     if name not in c.fs:
-        for (g, constraint), value in zip(template.generics, values, strict=True):
-            if (constraint == "nat") != isinstance(value, int):
-                fail(
-                    "E-GENERIC-KIND",
-                    f"{g} of {template.name} is a {'natural' if constraint == 'nat' else 'type'}.",
-                    node,
-                )
-            for wanted in constraint.split("+") if constraint not in {"nat", "type"} else []:
-                broken = satisfies(c, value, wanted, template.module, node)
-                if broken:  # The caller learns which promise failed, not which line of the body did.
-                    code = "E-TRAIT-IMPL" if broken.startswith("does not implement") else "E-BOUND"
-                    fail(code, f"{value.display()} {broken}; {template.name} needs [{g}:{constraint}].", node)
-        if len(c.p.functions) >= MAX_FUNCTIONS:
-            fail("E-EXPANSION-LIMIT", f"Expanded program exceeds {MAX_FUNCTIONS} functions.", node)
-        f = clone(template)
-        f.name, f.bindings = (name, dict(zip((g for g, _ in template.generics), values, strict=True)))
-        c.fs[name] = f
-        c.p.functions.append(f)
-        c.function(f)
+        c.made("fs", name, lambda: instance(c, template, name, values, node))
     return c.fs[name]
+
+
+def instance(c: Checker, template: Function, name: str, values: list[Any], node: Any) -> None:
+    """The instance `name` of `template`, held to its bounds, added to the program and checked."""
+    for (g, constraint), value in zip(template.generics, values, strict=True):
+        if (constraint == "nat") != isinstance(value, int):
+            fail("E-GENERIC-KIND", f"{g} of {template.name} is a {'natural' if constraint == 'nat' else 'type'}.", node)
+        for wanted in constraint.split("+") if constraint not in {"nat", "type"} else []:
+            broken = satisfies(c, value, wanted, template.module, node)
+            if broken:  # The caller learns which promise failed, not which line of the body did.
+                code = "E-TRAIT-IMPL" if broken.startswith("does not implement") else "E-BOUND"
+                fail(code, f"{value.display()} {broken}; {template.name} needs [{g}:{constraint}].", node)
+    if len(c.p.functions) >= MAX_FUNCTIONS:
+        fail("E-EXPANSION-LIMIT", f"Expanded program exceeds {MAX_FUNCTIONS} functions.", node)
+    f = clone(template)
+    f.name, f.bindings = (name, dict(zip((g for g, _ in template.generics), values, strict=True)))
+    c.fs[name] = f
+    c.p.functions.append(f)
+    c.function(f)
 
 
 def infer(c: Checker, f: Function, args: list[Expr], targs: tuple, expected: Type | None, node: Any) -> dict:
@@ -183,48 +184,53 @@ def implemented(c: Checker, trait: str, target: Type, node: Any = None) -> dict[
         fail("E-TRAIT-OVERLAP", f"Whether {target.display()} implements {trait} depends on itself: the bound of a "
              "generic impl asks the question that impl answers.", node)  # fmt: skip
     if (trait, target) not in c.impls:
-        c.impls[trait, target] = PENDING
-        matches: dict[str, tuple[Function, dict[str, Any]]] = {}
-        for f in [f for f in list(c.fs.values()) if f.owner and not f.bindings]:
-            bound: dict[str, Any] = {}
-            with c.within(f.module):
-                if c.qualify(f.owner[0], c.p.traits) != trait:
-                    continue
-                if not unify(c, f.owner[1], target, bound, {g for g, _ in f.generics}):
-                    continue
-            promises = [
-                (bound[g], w) for g, c in f.generics if g in bound and c not in {"nat", "type"} for w in c.split("+")
-            ]
-            if any(satisfies(c, value, wanted, f.module, node) for value, wanted in promises):
-                continue  # `impl[T:integer] Ord for T` is an impl for the integers, not for everything.
-            if any(other.block != f.block for other, _ in matches.values()):
-                fail("E-TRAIT-OVERLAP", f"Two impls of {trait} match {target.display()}: one Self type means "
-                     "one implementation.", node)  # fmt: skip
-            matches[f.name.rsplit(".", 1)[1]] = (f, bound)
-        # A member whose body uses its own trait on its own type finds the template while its instance is made.
-        c.impls[trait, target] = {short: f for short, (f, _) in matches.items()} or None
-        found = {short: instantiate(c, f, bound, node) if f.generics and set(bound) == {g for g, _ in f.generics}
-                 else f for short, (f, bound) in matches.items()}  # fmt: skip
-        declared = {m.name: m for m in c.p.traits[trait]}
-        if found and set(found) != set(declared):
-            fail("E-TRAIT-IMPL", f"impl {trait} for {target.display()} defines {', '.join(sorted(found))}; "
-                 f"the trait declares {', '.join(sorted(declared))}.", next(iter(found.values())))  # fmt: skip
-        for short, f in found.items():
-            if not f.generics or f.bindings:
-                c.signature(f)
-                rename = dict(zip((n for n, _ in f.params), (n for n, _ in declared[short].params), strict=False))
-                got = [Type(t.name, t.mode, rename.get(t.extent, t.extent), t.args, t.place) for _, t in f.params]
-                with c.within(c.p.modules.get(trait, ""), {"Self": target}):
-                    want = [c.resolve(t, f) for _, t in declared[short].params]
-                    if [*got, f.ret] != [*want, c.resolve(declared[short].ret, f)]:
-                        fail("E-TRAIT-IMPL", f"{f.name} does not match {trait}.{short}"
-                             f"({', '.join(t.display() for t in want)}).", f)  # fmt: skip
-                ceiling = declared[short].effects  # A member's ceiling is part of what a bound on its trait promises.
-                if ceiling is not None and f.effects is not None and not allowed(f.effects) <= allowed(ceiling):
-                    fail("E-TRAIT-IMPL", f"{f.name} declares effects that {trait}.{short} does not allow.", f)
-                f.effects = ceiling if f.effects is None else f.effects
-        c.impls[trait, target] = found or None
+        c.made("impls", (trait, target), lambda: decided(c, trait, target, node))
     return c.impls[trait, target]
+
+
+def decided(c: Checker, trait: str, target: Type, node: Any) -> None:
+    """Which impl of `trait` matches `target`, held to the trait, its generic members instantiated: decided once."""
+    c.impls[trait, target] = PENDING
+    matches: dict[str, tuple[Function, dict[str, Any]]] = {}
+    for f in [f for f in list(c.fs.values()) if f.owner and not f.bindings]:
+        bound: dict[str, Any] = {}
+        with c.within(f.module):
+            if c.qualify(f.owner[0], c.p.traits) != trait:
+                continue
+            if not unify(c, f.owner[1], target, bound, {g for g, _ in f.generics}):
+                continue
+        promises = [
+            (bound[g], w) for g, c in f.generics if g in bound and c not in {"nat", "type"} for w in c.split("+")
+        ]
+        if any(satisfies(c, value, wanted, f.module, node) for value, wanted in promises):
+            continue  # `impl[T:integer] Ord for T` is an impl for the integers, not for everything.
+        if any(other.block != f.block for other, _ in matches.values()):
+            fail("E-TRAIT-OVERLAP", f"Two impls of {trait} match {target.display()}: one Self type means "
+                 "one implementation.", node)  # fmt: skip
+        matches[f.name.rsplit(".", 1)[1]] = (f, bound)
+    # A member whose body uses its own trait on its own type finds the template while its instance is made.
+    c.impls[trait, target] = {short: f for short, (f, _) in matches.items()} or None
+    found = {short: instantiate(c, f, bound, node) if f.generics and set(bound) == {g for g, _ in f.generics}
+             else f for short, (f, bound) in matches.items()}  # fmt: skip
+    declared = {m.name: m for m in c.p.traits[trait]}
+    if found and set(found) != set(declared):
+        fail("E-TRAIT-IMPL", f"impl {trait} for {target.display()} defines {', '.join(sorted(found))}; "
+             f"the trait declares {', '.join(sorted(declared))}.", next(iter(found.values())))  # fmt: skip
+    for short, f in found.items():
+        if not f.generics or f.bindings:
+            c.signature(f)
+            rename = dict(zip((n for n, _ in f.params), (n for n, _ in declared[short].params), strict=False))
+            got = [Type(t.name, t.mode, rename.get(t.extent, t.extent), t.args, t.place) for _, t in f.params]
+            with c.within(c.p.modules.get(trait, ""), {"Self": target}):
+                want = [c.resolve(t, f) for _, t in declared[short].params]
+                if [*got, f.ret] != [*want, c.resolve(declared[short].ret, f)]:
+                    fail("E-TRAIT-IMPL", f"{f.name} does not match {trait}.{short}"
+                         f"({', '.join(t.display() for t in want)}).", f)  # fmt: skip
+            ceiling = declared[short].effects  # A member's ceiling is part of what a bound on its trait promises.
+            if ceiling is not None and f.effects is not None and not allowed(f.effects) <= allowed(ceiling):
+                fail("E-TRAIT-IMPL", f"{f.name} declares effects that {trait}.{short} does not allow.", f)
+            f.effects = ceiling if f.effects is None else f.effects
+    c.impls[trait, target] = found or None
 
 
 def selfless(t: Any) -> bool:
