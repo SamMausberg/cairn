@@ -4,7 +4,7 @@ An agent edits CAIRN through a host, which holds the program, shows the agent a 
 
 ## The rule cards
 
-`src/cairn/agent/teaching.py` holds thirty-one rule cards, one per part of the language, named in `CARDS`, and six in `TOOL_CARDS` for what the hosts, the command line and the compiler's own limits refuse. Each card states what its part accepts and refuses and names the diagnostic code of each rule. `CODES` gives every code exactly one card, so a refusal leads back to the rule behind it, and `tests/agent/test_cards.py` fails on a code the package can emit that no card owns. `base`, `integers` and `calls` go with every packet, and the other language cards are picked by the lexical tokens of the source at hand, so a packet carries only what its program uses. No source picks a tool card.
+`src/cairn/agent/teaching.py` holds the rule cards: one per part of the language, named in `CARDS`, and in `TOOL_CARDS` one for each kind of refusal the hosts, the command line and the compiler's own limits give. Each card states what its part accepts and refuses and names the diagnostic code of each rule. `CODES` gives every code exactly one card, so a refusal leads back to the rule behind it, and `tests/agent/test_cards.py` fails on a code the package can emit that no card owns. `base`, `integers` and `calls` go with every packet, and the other language cards are picked by the lexical tokens of the source at hand, so a packet carries only what its program uses. No source picks a tool card.
 
 ## Packets
 

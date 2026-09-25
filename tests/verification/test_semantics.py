@@ -431,3 +431,12 @@ def test_the_receipt_is_pinned_to_every_file_that_decides_what_a_program_means()
     compiler = {f.relative_to(package).as_posix() for f in (package / "compiler").rglob("*.py")}
     assert compiler <= set(pinned) and {"compiler/primitives/builtins.py", "compiler/syntax/parser.py"} <= compiler
     assert set(semantics.SEMANTIC) <= set(pinned) and pinned == sorted(pinned)
+
+
+def test_a_writing_call_as_a_conversion_s_operand_is_the_call_bound_first():
+    """`usize(next(inp))` runs the call, writes inp, then converts: what binding the call first does."""
+    head = "struct Input { at:u64; }\nfn next(inp:rw<Input>) -> u64 { inp.at += 1; return inp.at; }\n"
+    bound = head + "fn f(inp:rw<Input>) -> usize { let v = next(inp); return usize(v); }\n"
+    check(bound, head + "fn f(inp:rw<Input>) -> usize { return usize(next(inp)); }\n", allow_reference_traps=True)
+    twice = head + "fn f(inp:rw<Input>) -> usize { let v = next(inp); return usize(next(inp)); }\n"
+    check(bound, twice, "counterexample", allow_reference_traps=True)

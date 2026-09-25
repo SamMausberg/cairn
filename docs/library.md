@@ -548,7 +548,7 @@ struct Step { cost:u64; needs:vec.Vec[arena.Handle]; }   // a cycle of handles, 
 
 fn main() -> i32 {
   let mut plan = arena.new[Step]();
-  let no_needs = vec.new[arena.Handle]();     // a call that allocates cannot be a nested operand
+  let no_needs = vec.new[arena.Handle]();     // a call that allocates is not an operand beside another
   let fetch = arena.insert(plan, Step(3, no_needs));
   let empty = vec.new[arena.Handle]();
   let parse = arena.insert(plan, Step(5, empty));
