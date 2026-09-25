@@ -22,6 +22,7 @@ from ...compiler import compilations
 from ...compiler.cairnc import Diagnostic, fail
 from ...projects.project import ProjectError
 from ..diagnostics import declared, explain
+from ..history import beside
 from ..hosts.edits import EditHost, load_json_strict
 from ..hosts.implementations import ImplementationHost
 from ..hosts.plans import PlanHost
@@ -259,7 +260,7 @@ class Tools:
         base = session.source if session is not None else None
         if files is not None and base is not None:
             files.current(base)
-        self.implementations.records = files.project.root / ".cairn" / "history" if files is not None else None
+        self.implementations.records = beside(files.project.root) if files is not None else None
         try:
             answer = self.implementations.respond(request)
         except Diagnostic as error:
@@ -293,20 +294,11 @@ class Tools:
             self.states[now["digest"]] = now
             self.last |= {where: now["digest"]} if where else {}
             return (delta(earlier, now) if earlier else now), now["status"] != "typed"
-        from ...perf.tuning.resources import device_identity, host_target
-        from ...projects.target import resolve
-        from ...projects.toolchain import resolve_arch
-        from ..history import vendored
-
         if files is None:
             fail(
                 "E-REQUEST", "An investigation reads the candidate history beside a project's manifest: give its path."
             )
-        project = files.project
-        device = resolve(None, project.device_target, required=False)
-        targets = {"host": host_target(resolve_arch(project.arch), "clang++"), "device": device_identity(device)}
-        history = project.root / ".cairn" / "history"
-        packet = investigation.investigation(source, text(a, "symbol"), history, targets, vendored(project))
+        packet = investigation.of_project(files.project, text(a, "symbol"))
         self.states[packet["digest"]] = packet
         self.last |= {where: packet["digest"]} if where else {}
         return (investigation.delta(earlier, packet) if earlier else packet), False

@@ -356,14 +356,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if a.command == "state" and a.symbol:  # one function's investigation, from its candidate history
             from .agent import investigation
-            from .agent.history import vendored
-            from .perf.tuning.resources import device_identity, host_target
 
-            where = a.history or project.root / ".cairn" / "history"
-            device = resolve_device(a.device_target, project.device_target, required=False)
-            targets = {"host": host_target(resolve_arch(a.arch or project.arch), a.cxx),
-                       "device": device_identity(device)}  # fmt: skip
-            packet = investigation.investigation(project.source, a.symbol, where, targets, vendored(project))
+            packet = investigation.of_project(project, a.symbol, a.history, a.cxx, a.arch, a.device_target)
             earlier = json.loads(read_text(a.since, 16_000_000)) if a.since else None
             report(investigation.delta(earlier, packet) if earlier else packet)
             return 0
@@ -413,7 +407,7 @@ def main(argv: list[str] | None = None) -> int:
             print(priced.lines(answer)) if terminal.human(FORMAT) else report(answer)
             return 0
         if a.command == "tune":
-            from .agent.history import vendored
+            from .agent.history import beside, vendored
             from .perf import report as priced
             from .perf.profile import Profile
             from .perf.tuning.plan_source import KEEP, write_plan
@@ -426,7 +420,7 @@ def main(argv: list[str] | None = None) -> int:
             arch = resolve_arch(a.arch or project.arch)
             device = resolve_device(a.device_target, project.device_target, required=False, card=card)
             budget = Budget(a.budget_compiles, a.budget_seconds, a.budget_runs)
-            kept = None if a.no_history else a.history or project.root / ".cairn" / "history"
+            kept = None if a.no_history else a.history or beside(project.root)
             sizes = priced.parse_sizes(a.at)
             weights = [1.0] * len(sizes)
             if a.shapes:  # after the --at sizes, each with its weight

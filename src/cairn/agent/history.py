@@ -59,6 +59,11 @@ REQUIRED = {
 MAX_RECORD = 64_000  # bytes of one record: a record names its artifacts, it does not hold them
 
 
+def beside(root: Path) -> Path:
+    """The candidate history beside a project's manifest, which `cairn tune`, `cairn state` and `cairn mcp` keep."""
+    return root / ".cairn" / "history"
+
+
 def digest(value: Any) -> str:
     """The sha256 of a JSON value, keys sorted, or of text as it is."""
     text = value if isinstance(value, str) else json.dumps(value, sort_keys=True, separators=(",", ":"))
