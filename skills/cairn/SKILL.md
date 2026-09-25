@@ -34,7 +34,7 @@ No inheritance, overloading, exceptions or hidden allocation; indentation is ins
 ```
 
 ```text
-Types: bool, u8/u16/u32/u64, usize (64-bit), i8/i16/i32/i64. +,-,* and x += e trap on overflow in every build; add_wrap/sub_wrap/mul_wrap are unsigned and modular, so x+1 and add_wrap(x,1) differ at the maximum. /,% trap on zero or signed min/-1; signed remainder truncates toward zero, unlike Python. shl_wrap(x,k), shr(x,k): unsigned x, usize k below the width. &,|,^,~ are unsigned; min/max integer-only. Conversions are explicit calls, u64(x), range checked: narrowing traps outside the target; float to integer truncates toward zero, trapping on NaN or out of range. Literals take the expected type, else u64/f64; -128 is one i8 constant, so a signed minimum is a literal (const MIN:i64 = -9223372036854775808;), and -1 alone is an i64. const K:u64 = 4 * 1024; folds at compile time. Never weaken arithmetic or the trap/domain policy to pass a check.
+Types: bool, u8/u16/u32/u64, usize (64-bit), i8/i16/i32/i64. +,-,* and x += e trap on overflow in every build; add_wrap/sub_wrap/mul_wrap are unsigned and modular. /,% trap on zero or signed min/-1; signed remainder truncates toward zero. shl_wrap(x,k), shr(x,k): unsigned x, usize k below the width. &,|,^,~ are unsigned; min/max integer-only. Conversions are explicit calls, u64(x), range checked: narrowing traps outside the target; float to integer truncates toward zero, trapping on NaN or out of range. Literals take the expected type, else u64/f64, and -1 alone is an i64; a signed minimum is a literal, -9223372036854775808. const K:u64 = 4 * 1024; folds at compile time. Never weaken arithmetic or the trap/domain policy to pass a check.
 ```
 
 ```text
