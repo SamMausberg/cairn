@@ -19,6 +19,9 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))  # holds no cairn package, so SRC still wins
+from sources import cairn_sources
+
 GUARDS = {
     "bounds": r"\bcr::at\(",
     "overflow": r"\bcr::(?:add|sub|mul)<",
@@ -40,7 +43,7 @@ def main() -> int:
     from cairn.projects.project import load_project
 
     root = a.corpus.resolve()
-    paths = [*root.glob("examples/**/cairn.toml"), *root.glob("examples/basics/*.cairn"),
+    paths = [*root.glob("examples/**/cairn.toml"), *cairn_sources(root / "examples/basics"),
              *root.glob("bench/suite/kernels/*/kernel.cairn")]  # fmt: skip
     rows = {}
     for path in sorted(paths):

@@ -21,9 +21,10 @@ from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "src"))
+sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
 from cairn.compiler.cairnc import Emitter, compile_program
 from cairn.projects.project import load_project
+from sources import cairn_sources
 
 GUARDS = {
     "bounds": r"\bcr::at\(",
@@ -64,7 +65,7 @@ def sources() -> list[tuple[str, str]]:
     found = []
     paths = [
         *ROOT.glob("examples/**/cairn.toml"),
-        *ROOT.glob("examples/basics/*.cairn"),
+        *cairn_sources(ROOT / "examples/basics"),
         *ROOT.glob("bench/suite/kernels/*/kernel.cairn"),
     ]
     for path in sorted(paths):

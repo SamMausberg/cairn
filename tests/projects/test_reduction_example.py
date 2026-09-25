@@ -17,6 +17,7 @@ import pytest
 from cairn.compiler.cairnc import compile_source
 from cairn.projects.project import load_project
 from emitted import contract, device_build, on_device, watched
+from sources import cairn_sources
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE = ROOT / "examples" / "reduction"
@@ -38,7 +39,7 @@ def test_the_device_kernels_are_the_host_kernels_on_device_views():
 
 
 def test_nothing_in_the_example_is_unsafe():
-    for path in (EXAMPLE / "src").glob("*.cairn"):
+    for path in cairn_sources(EXAMPLE / "src"):
         code = re.sub(r"//[^\n]*", "", path.read_text())  # its comments may say so
         assert not re.search(r"\b(unsafe|asm|extern)\b", code), path.name
 

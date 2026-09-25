@@ -21,7 +21,7 @@ from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "src"))
+sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
 
 from cairn.compiler.cairnc import compile_source
 from cairn.compiler.tree import Diagnostic
@@ -30,6 +30,7 @@ from cairn.projects.foreign import cuda
 from cairn.projects.project import load_project
 from cairn.projects.target import parse, toolkit, toolkit_record
 from cairn.projects.toolchain import find, version
+from sources import cairn_sources
 
 TARGETS = ("sm_80", "sm_90a", "sm_100a", "sm_120")
 PLACES = ("examples", "demos")
@@ -54,7 +55,7 @@ def discover() -> list[str]:
         covered |= {(project.root / unit.path).resolve() for unit in project.units}
         if device_program(project.source, project.foreign):
             found.append(manifest)
-    for single in sorted(p for place in PLACES for p in (ROOT / place).rglob("*.cairn")):
+    for single in [p for place in PLACES for p in cairn_sources(ROOT / place)]:
         if single.resolve() not in covered and device_program(single.read_text(encoding="utf-8")):
             found.append(single)
     return [str(path.relative_to(ROOT)) for path in found]

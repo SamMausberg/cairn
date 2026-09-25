@@ -29,10 +29,11 @@ from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "src"))
+sys.path[:0] = [str(ROOT / "src"), str(ROOT / "tools")]
 from cairn.compiler.cairnc import Diagnostic, compile_source
 from cairn.projects.project import ProjectError, load_project
 from cairn.verify.emission import NORMALIZE, UNGUARDED, arguments, guard_count  # the identities live in the package
+from sources import cairn_sources
 
 __all__ = ["NORMALIZE", "UNGUARDED", "arguments", "guard_count"]
 
@@ -47,7 +48,7 @@ def programs() -> dict[str, str]:
         except ProjectError as e:
             out["project:" + str(manifest.relative_to(ROOT))] = "unloadable: " + str(e)
     projects = {m.parent for m in (ROOT / "examples").rglob("cairn.toml")}
-    for f in sorted((ROOT / "examples").rglob("*.cairn")):
+    for f in cairn_sources(ROOT / "examples"):
         if not projects & set(f.parents):
             out["file:" + str(f.relative_to(ROOT))] = f.read_text(encoding="utf-8")
     std = sorted("std." + p.stem for p in (ROOT / "src/cairn/std").glob("*.cairn"))

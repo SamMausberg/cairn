@@ -17,6 +17,7 @@ from cairn.compiler.cairnc import compile_source
 from cairn.editor.formatting import format_source
 from cairn.perf.plan_source import write_plan
 from cairn.projects.project import load_project
+from sources import cairn_sources
 
 ROOT = Path(__file__).resolve().parents[2]
 MARK = b"\xef\xbb\xbf"
@@ -129,7 +130,7 @@ def test_an_edit_session_writes_into_a_crlf_or_marked_file(tmp_path, name):
 def test_an_implementation_session_writes_into_a_crlf_and_marked_file(tmp_path):
     shutil.copytree(ROOT / "examples/implementations", tmp_path / "impl")
     root = tmp_path / "impl"
-    for path in (root / "src").glob("*.cairn"):
+    for path in cairn_sources(root / "src"):
         path.write_bytes(form(path.read_text(), True, True))
     tools = Tools(root)
     packet, failed = tools.call("implementation_open", {"path": ".", "reference": "prefix"})

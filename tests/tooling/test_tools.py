@@ -345,6 +345,20 @@ def test_drift_ignores_only_what_records_a_run(tmp_path):
     ]
 
 
+def test_a_walk_for_sources_skips_tool_state_and_generated_output(tmp_path):
+    from sources import cairn_sources
+
+    kept = ["a.cairn", "src/b.cairn"]
+    skipped = [".cairn/history/records.jsonl", ".cairn/history/c.cairn", ".claude/d.cairn", "results/e.cairn",
+               "build/f.cairn", "dist/g.cairn", "src/notes.txt"]  # fmt: skip
+    for name in kept + skipped:
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text("")
+    (tmp_path / "src/.cairn/history").mkdir(parents=True)  # `cairn tune src/b.cairn` keeps its history beside it
+    assert cairn_sources(tmp_path) == [tmp_path / name for name in kept]
+    assert cairn_sources(tmp_path / "src") == [tmp_path / "src/b.cairn"]
+
+
 @needs_clang
 @needs_gcc
 def test_curriculum_verify():

@@ -15,6 +15,7 @@ from cairn.cli import main
 from cairn.compiler.lexing import TOKEN, lex
 from cairn.compiler.tree import Diagnostic
 from cairn.editor.formatting import comments, format_report, format_source
+from sources import cairn_sources
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -32,11 +33,7 @@ def lexable(text):
 
 
 def repository_sources():
-    return sorted(  # files only: the .cairn directory cairn tune and cairn mcp keep beside a manifest matches too
-        p
-        for p in ROOT.rglob("*.cairn")
-        if p.is_file() and not {".venv", ".claude", "build", "results"} & set(p.relative_to(ROOT).parts)
-    )
+    return cairn_sources(ROOT)
 
 
 def embedded_programs():
