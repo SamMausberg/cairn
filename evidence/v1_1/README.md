@@ -10,6 +10,7 @@ Each directory is one record of the work after `v1.0.0`, taken as it landed. Its
 | `device_perf/` | CAIRN kernels timed beside hand-written CUDA on one GPU: how much of the gap was kernel time and how much host synchronization, and what the fixes changed. |
 | `diagnostics/` | `cairn check` reporting every independent refusal: the first refusal unchanged, accepted programs emitting the same C++, and checking no slower. |
 | `emulation/` | Device programs judged against `sm_120` and run under `--emulate`, their device work on host threads. |
+| `friction/` | Where the 1.1 evaluation's CAIRN tokens went, taken apart from the subjects' transcripts: what each request carried, each refusal and its cost, and the causes; no model ran. |
 | `harness/` | What `cairn export --harness` wrote for each benchmark and how far each submission got without a GPU. |
 | `kernels/` | Wide loads and stores, atomic updates, a cooperative region's finish and shared arrays nobody zeroes, and `examples/reduction` rewritten without `unsafe`. |
 | `review/` | An adversarial review of what landed after 1.0.0: the attacks, and which held. |
