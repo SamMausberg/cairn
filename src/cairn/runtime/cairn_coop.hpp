@@ -199,9 +199,11 @@ template<class F> inline pthread_t start(F* f) noexcept {
   return id;
 }
 
-// One warp's exchange: each thread's slot, and the barrier its 32 threads meet at around a read of the slots.
+// One warp's exchange: two banks of each thread's slot, which its exchanges use in turn, and the barrier its 32
+// threads meet at once each has published. A thread writes a bank again two exchanges later, past the barrier of the
+// exchange between, which no thread reaches before it has read that bank: so one barrier an exchange is enough.
 struct Warp {
-  std::uint64_t slot[WARP] = {};
+  std::uint64_t slot[2][WARP] = {};
   std::barrier<> gate{WARP};
 };
 
@@ -209,15 +211,17 @@ class Host {
   std::barrier<>& gate_;
   Warp* warps_;
   std::size_t t_, count_;
+  unsigned bank_ = 0;  // the bank this thread's last exchange used; the warp's threads exchange in step
 
-  template<class T> T exchange(T v, std::size_t from) noexcept {
+  // `word` published as this thread's slot, once every thread of the warp has published its own: that bank.
+  const std::uint64_t* published(std::uint64_t word) noexcept {
     Warp& w = warps_[t_ / WARP];
-    w.slot[t_ % WARP] = bits(v);
-    w.gate.arrive_and_wait();  // every thread of the warp has published
-    const T got = unbits<T>(w.slot[from]);
-    w.gate.arrive_and_wait();  // every thread has read before any slot changes again
-    return got;
+    bank_ ^= 1;
+    w.slot[bank_][t_ % WARP] = word;
+    w.gate.arrive_and_wait();
+    return w.slot[bank_];
   }
+  template<class T> T exchange(T v, std::size_t from) noexcept { return unbits<T>(published(bits(v))[from]); }
 
 public:
   unsigned char* const shared;
@@ -248,18 +252,24 @@ public:
     if(delta >= WARP) trap();
     return exchange(v, lane() >= delta ? lane() - delta : lane());
   }
+  // The butterfly the device runs, five shuffles of v = op(v, partner's v), worked out by each thread for every lane
+  // from one exchange of the starting values: the same operations in the same order, so the same bits, and one
+  // barrier in place of five.
   template<class T, class Op> T reduce(T v, Op op) noexcept {
-    for(unsigned m = WARP / 2; m; m /= 2) v = op(v, exchange(v, lane() ^ m));
-    return v;
+    const std::uint64_t* slots = published(bits(v));
+    T lanes[WARP], next[WARP];
+    for(unsigned l = 0; l < WARP; ++l) lanes[l] = unbits<T>(slots[l]);
+    for(unsigned m = WARP / 2; m; m /= 2) {
+      for(unsigned l = 0; l < WARP; ++l) next[l] = op(lanes[l], lanes[l ^ m]);
+      for(unsigned l = 0; l < WARP; ++l) lanes[l] = next[l];
+    }
+    return lanes[lane()];
   }
   // A vote: every thread of the warp publishes a word and reads all 32, and bit l of the answer is `same(lane l's)`.
   template<class Same> std::uint32_t gather(std::uint64_t mine, Same same) noexcept {
-    Warp& w = warps_[t_ / WARP];
-    w.slot[t_ % WARP] = mine;
-    w.gate.arrive_and_wait();
+    const std::uint64_t* slots = published(mine);
     std::uint32_t found = 0;
-    for(unsigned l = 0; l < WARP; ++l) found |= std::uint32_t(same(w.slot[l])) << l;
-    w.gate.arrive_and_wait();
+    for(unsigned l = 0; l < WARP; ++l) found |= std::uint32_t(same(slots[l])) << l;
     return found;
   }
   std::uint32_t warp_ballot(bool c) noexcept { return gather(c, [](std::uint64_t s) { return s != 0; }); }

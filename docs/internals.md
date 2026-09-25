@@ -110,7 +110,7 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::run`, i
 | `cairn_access.hpp` | wide loads and stores with their two guards and the cache operator a hint names, and atomic updates of one element: one instruction on the device, K plain accesses or a `std::atomic_ref` on the host |
 | `cairn_float.hpp` | the storage floats `f16 bf16 f8e4m3 f8e5m2`: one integer routine that rounds on the host and in a device lane alike, `quantize` and `quantize_stochastic` |
 | `cairn_tensor.hpp` | `mma_unordered`: the reference loop on the host, and on the device 64 x 64 tensor-core tiles over two shared-memory stages, written once against the operations a tile is given so a host test runs every thread's phases |
-| `cairn_coop.hpp` | cooperative regions: on the host each block's threads as real threads at a `std::barrier`, two blocks at a time, with warp exchanges through per-warp slots; on the device one launch with static shared memory, `__syncthreads` and `__shfl_*_sync` |
+| `cairn_coop.hpp` | cooperative regions: on the host each block's threads as real threads at a `std::barrier`, two blocks at a time, with each warp exchange one barrier over two banks of per-warp slots, and a warp reduce's butterfly worked out by each thread from one exchange; on the device one launch with static shared memory, `__syncthreads` and `__shfl_*_sync` |
 | `cairn_print.hpp` | `print` and `format`: one 4096-byte stack buffer, shortest round-trip floats through `std::to_chars`, a byte record grown as `std.vec` grows |
 | `cairn_assert.hpp` | `assert`: the message a failed one prints, on standard error, through the device's printf in a lane, or not at all in an image, before the trap |
 
