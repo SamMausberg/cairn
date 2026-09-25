@@ -49,7 +49,7 @@ The timings in [evidence/v1_0/demos](../../evidence/v1_0/demos/README.md) come f
 
 ## The device
 
-The device configuration compiles for sm_120 with `nvcc -Werror`, which `tests/projects/test_demos.py` checks. It runs only under the owner's `make gpu`, which checks that the device plate has the host's fingerprint and keeps the contract, and writes its output and times to `results/demos/numeric/device.json`. That has not run, so no device number for this plate exists.
+The device configuration compiles for sm_120 with `nvcc -Werror`, which `tests/projects/test_demos.py` checks. It runs only under the owner's `make gpu`, which checks that the device plate has the host's fingerprint and keeps the contract, and writes its output and times to `results/demos/numeric/device.json`. It ran once, in the 1.1.0 release session on an RTX 5070 Ti: the device plate had the host's bits, and 200 sweeps took 7.2 ms on the device, 11.3 ms with both transfers, against 60.2 ms on host lanes, one run on one machine ([evidence/v1_1/gpu](../../evidence/v1_1/gpu/README.md)).
 
 The closest measured evidence is a different kernel, `evidence/v0_8_3/gpu/benchmark.json` from one RTX 5070 Ti: an elementwise f32 `saxpy` whose host and device results agreed bit for bit. Its kernel was 25 times as fast as the sequential host at 10^8 elements, and the whole run, transfers included, 0.47 times as fast.
 

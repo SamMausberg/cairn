@@ -1,0 +1,5 @@
+{
+  "exit_code": 0,
+  "stdout": "plate on the device: 1024 x 1024 cells, 200 sweeps\ndevice sweeps 7161 us, with both transfers 11291 us\nhost lanes 60220 us\ndevice bits equal host bits: true\nlargest distance from the f64 reference 0.000014842041622387114, contract 0.00476837158203125\n",
+  "stderr": ""
+}

@@ -75,7 +75,7 @@ def main() -> int:
         "gates": gates,
         "tests": {"passed": int(counted.group(1)) if counted else None, "skipped": int(counted.group(2) or 0) if counted else None},
         "source_lines": {
-            "compiler_core": lines("src/cairn/compiler/*.py", "src/cairn/projects/*.py"),
+            "compiler_core": lines("src/cairn/compiler/**/*.py", "src/cairn/projects/**/*.py"),
             "compiler_package": lines("src/cairn/**/*.py"),
             "runtime_headers": lines("src/cairn/runtime/*.hpp"),
             "standard_library_cairn": lines("src/cairn/std/*.cairn"),

@@ -1,0 +1,3 @@
+# The 1.1.0 Lean build
+
+`tools/release/collect_lean_evidence.py --release v1_1` at commit `ec0a1dd`, right after the release gates: the build directory of `proofs/` removed, then `lake build` from scratch and `#print axioms` over every declaration. 21 modules built in 6.3 s; 112 declarations audited depend on `propext` and `Quot.sound` and nothing else, with no `sorry`. `lake-build.log` and `print-axioms.txt` are the tools' own output, `toolchain.txt` the Lean, Lake and elan versions, and `summary.json` the collector's record. The proofs cover the hand-written models `docs/verification.md` lists, not the compiler's Python.

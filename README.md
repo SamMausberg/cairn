@@ -149,7 +149,7 @@ Each demo is one command from a fresh checkout, and `tests/projects/test_demos.p
 | Demo | What it shows | Command |
 |---|---|---|
 | [repair](demos/repair/README.md) | An agent fixes a bug through the edit host. The host refuses a debug print (`E-EFFECT-EXPANSION`) and a tidy-up that changes behaviour (`E-PRESERVE`, with the input that shows it). `cairn diff` then reports the fix as a behaviour change, the tidy-up as SMT-equivalent, and a major version bump. | `make demo-repair` |
-| [numeric](demos/numeric/README.md) | A 1024 x 1024 heat-plate sweep written once runs on host threads and as CUDA lanes. The host result stays within 0.0000148 of an f64 reference, against a stated bound of 0.0048. The device half compiles for sm_120 and has not run. | `make demo-numeric` |
+| [numeric](demos/numeric/README.md) | A 1024 x 1024 heat-plate sweep written once runs on host threads and as CUDA lanes. The host result stays within 0.0000148 of an f64 reference, against a stated bound of 0.0048. On an RTX 5070 Ti the device half gave the host's bits. | `make demo-numeric` |
 | [visual](demos/visual/README.md) | An agent asks what a program draws, finds in the layout record that a colour bar covers the plot, moves it, and gets back the new frames. | `make demo-visual` |
 | [implement](demos/implement/README.md) | An agent writes faster implementations of a sum of squares through `cairn mcp`. A looser tolerance is refused (`E-TOLERANCE`), a candidate that drops the tail fails validation at `n = 5`, and `cairn tune` times the valid ones and keeps the fastest. | `make demo-implement` |
 
@@ -174,7 +174,7 @@ The compiler is not proved correct. The checker and the C++ emitter are about 15
 
 What has not been validated:
 
-- Most device code has not run on a GPU. Device lanes, transfers and three kernels ran on one RTX 5070 Ti (`evidence/v0_8_3/gpu`). Everything added since compiles for sm_120 and is checked on the host: vector loads, shared staging, device plans, tensor-core fragments and multiplies, cooperative regions, pipeline stages, typed PTX, the device `scan`, foreign CUDA kernels and the execution context. `--emulate` runs that code's logic on host threads, which is not a device run.
+- Device code has run on one GPU, an RTX 5070 Ti under WSL2. In the 1.1.0 session, 48 of the suite's 52 device-run cases passed on it (three trap on purpose and were left out, one needs Compute Sanitizer): device plans, wide loads and stores, atomics, cooperative regions with their finish and votes, tensor-core multiplies, the device `scan`, `cq_` entries in a CUDA graph and foreign CUDA kernels, each checked against the host or a reference ([evidence/v1_1/gpu](evidence/v1_1/gpu/README.md)). Pipeline stages, layouts in code, asserts and gradients in a lane, `compact` and a guard that fails on the device have not run on a GPU, and Compute Sanitizer cannot instrument that GPU under WSL2. `--emulate` runs device code's logic on host threads, which is not a device run.
 - `cairn predict` on the device side uses published specifications, not measurements.
 - `cairn validate` is finite testing on generated inputs. The reference is an independent algorithm, but it goes through the same compiler.
 - Host performance was measured on one 16-thread x86-64 machine against plain C++, OpenMP and oneTBB at equal guards. Nothing is claimed against tuned C++ or CUDA.

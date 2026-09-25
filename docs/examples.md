@@ -495,7 +495,7 @@ cairn run examples/tensor/transpose.cairn       # exits 0 when all three transpo
 cairn explain examples/tensor/transpose.cairn   # bank_ways and conversions for each spread
 ```
 
-`tile64.cairn` and `tile32.cairn` add `a * b` into `c` with tensor-core fragments, under `mma_unordered`'s signature and contract; [numerics.md](numerics.md#tensor-core-fragments) gives their two tilings and what their runs on the host showed. Both compile for sm_120 and have not run on a GPU ([evidence/v1_0/tensor](../evidence/v1_0/tensor/README.md)).
+`tile64.cairn` and `tile32.cairn` add `a * b` into `c` with tensor-core fragments, under `mma_unordered`'s signature and contract; [numerics.md](numerics.md#tensor-core-fragments) gives their two tilings and what their runs on the host showed. Both compile for sm_120, and on an RTX 5070 Ti each kept the contract on the suite's shapes ([evidence/v1_0/tensor](../evidence/v1_0/tensor/README.md), [evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)).
 
 ## examples/foreign
 

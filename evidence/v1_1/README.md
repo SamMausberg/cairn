@@ -1,6 +1,6 @@
 # 1.1 records
 
-Each directory is one record of the work after `v1.0.0`, taken as it landed. Its README says what ran, on which machine, with which tools, and what did not run. Most ran on the reference machine, an AMD Ryzen 7 7800X3D (16 threads) under WSL2, shared with other agents' builds and suites; `device_perf/` is the only record whose code ran on a GPU.
+Each directory is one record of the work after `v1.0.0`, taken as it landed. Its README says what ran, on which machine, with which tools, and what did not run. Most ran on the reference machine, an AMD Ryzen 7 7800X3D (16 threads) under WSL2, shared with other agents' builds and suites; `device_perf/` and `gpu/` are the records whose code ran on a GPU.
 
 | Record | What it holds |
 |---|---|
@@ -11,8 +11,10 @@ Each directory is one record of the work after `v1.0.0`, taken as it landed. Its
 | `diagnostics/` | `cairn check` reporting every independent refusal: the first refusal unchanged, accepted programs emitting the same C++, and checking no slower. |
 | `emulation/` | Device programs judged against `sm_120` and run under `--emulate`, their device work on host threads. |
 | `friction/` | Where the 1.1 evaluation's CAIRN tokens went, taken apart from the subjects' transcripts: what each request carried, each refusal and its cost, and the causes; no model ran. |
+| `gpu/` | The release's one `make gpu` session: every test that runs device code, the three failures it found and their fixes, and `examples/reduction`'s sum timed beside hand-written CUDA. |
 | `harness/` | What `cairn export --harness` wrote for each benchmark and how far each submission got without a GPU. |
 | `kernels/` | Wide loads and stores, atomic updates, a cooperative region's finish and shared arrays nobody zeroes, and `examples/reduction` rewritten without `unsafe`. |
+| `lean/` | The release's from-scratch build of `proofs/` and its axiom audit. |
 | `review/` | An adversarial review of what landed after 1.0.0: the attacks, and which held. |
 | `search/` | What `cairn tune`'s search costs before and after lazy generation and shared compiles. |
 | `speed/` | Where the test suite's time and `cairn check`'s went before the 1.1 speed work, and what each change of it cut, timed interleaved on the shared machine. |
