@@ -59,8 +59,10 @@ pub fn remove(n:usize, path:ro<u8>[n]@host) -> std.core.Result[usize, std.io.IoE
 pub fn rename(n:usize, from:ro<u8>[n]@host, m:usize, to:ro<u8>[m]@host) -> std.core.Result[usize, std.io.IoError]
 
 // Everything left to read, however it arrives: a pipe, a socket, /proc, a file whose size lies. Each read fills the
-// room `into` has spare, and a full `into` doubles; the count is what was added. Cost: a regular file is sized first,
-// so its bytes arrive in one allocation and about one read.
+// room `into` has spare, and a full `into` doubles; the count is what was added. Cost: after the first read, `f` is
+// asked how much is left, so the rest of a regular file arrives in one allocation; a pipe's `into` doubles as it fills.
+// A read that fails first, such as a directory's (EISDIR, 21), is returned before any size is asked, since ext4 gives a
+// directory's end as 2^63 - 1.
 // effects: alloc, diverge, ffi:__errno_location, ffi:lseek, ffi:read, ffi_precondition, free, io, local_read,
 // local_write, mmio, read:f, read:into, trap, write:into, zero_init
 pub fn read_to_end(f:ro<std.io.File>, into:rw<std.vec.Vec[u8]>) -> std.core.Result[usize, std.io.IoError]

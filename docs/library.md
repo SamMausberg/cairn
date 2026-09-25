@@ -228,7 +228,7 @@ fn main() -> i32 {
 
 `close` returns nothing, because a function that consumes a linear value cannot return a status. If you need one, report it through a borrow.
 
-A path in `std.io` ends in a NUL byte, because C reads a pointer and no length; [std.fs](#stdfs) takes paths without one. `read` is one system call and returns 0 at the end of the file. `read_full` and `write` loop until the kernel has done all of it. `read_to_end` asks a regular file how much is left first, so the file arrives in one allocation, and a pipe's `Vec` doubles as it fills. Nothing here buffers. For output, the [print builtins](language.md#print-and-format) usually serve.
+A path in `std.io` ends in a NUL byte, because C reads a pointer and no length; [std.fs](#stdfs) takes paths without one. `read` is one system call and returns 0 at the end of the file. `read_full` and `write` loop until the kernel has done all of it. After its first read, `read_to_end` asks the file how much is left, so the rest of a regular file arrives in one allocation and a pipe's `Vec` doubles as it fills; a directory fails that read with EISDIR (21) before any size is asked. Nothing here buffers. For output, the [print builtins](language.md#print-and-format) usually serve.
 
 ## std.fs
 

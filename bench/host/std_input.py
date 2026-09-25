@@ -138,8 +138,11 @@ def main() -> int:
     ask.add_argument("--runs", type=int, default=5)
     ask.add_argument("--out", type=Path, required=True)
     ask.add_argument("--note", default="", help="One sentence recorded beside the numbers.")
+    ask.add_argument("--after-label", help="What this tree is, recorded in place of its path.")
+    ask.add_argument("--before-label", help="What the --before checkout is, recorded in place of its path.")
     args = ask.parse_args()
     trees = {"after": ROOT, **({"before": args.before.resolve()} if args.before else {})}
+    labels = {"after": args.after_label, "before": args.before_label}
     load_before = os.getloadavg()
     with tempfile.TemporaryDirectory() as scratch:
         work = Path(scratch)
@@ -170,7 +173,7 @@ def main() -> int:
         "note": args.note,
         "arms": {
             arm: {
-                "tree": str(tree),
+                "tree": labels[arm] or str(tree),
                 "programs": {
                     name: {how: summary(runs[arm, name, how]) for how in ("file", "pipe")} if exes[arm, name]
                     else "refused"
