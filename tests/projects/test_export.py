@@ -224,7 +224,7 @@ def test_a_device_export_separates_the_kernels_from_the_launch_wrappers_and_neve
     assert ran["status"] == "not-run" and "make" in ran["reason"] and not (tmp_path / "runs").exists()
 
 
-def test_a_device_export_runs_one_test_block_at_a_time_under_the_device_lock(tmp_path, monkeypatch):
+def test_a_device_export_holds_the_device_lock_and_runs_one_test_block_at_a_time(tmp_path, monkeypatch):
     """An export that runs device code does it as the owner's make targets do: under perf/on_device.py's machine-wide
     lock, one process at a time. The build and the processes are stand-ins, so nothing is compiled or launched."""
     import threading
