@@ -23,7 +23,7 @@ from ...compiler.cairnc import Diagnostic, fail
 from ...projects.project import ProjectError
 from ..diagnostics import declared, explain
 from ..history import beside
-from ..hosts.edits import EditHost, load_json_strict
+from ..hosts.edits import EditHost, load_json_strict, named
 from ..hosts.implementations import ImplementationHost
 from ..hosts.plans import PlanHost
 from ..hosts.write_back import Files
@@ -264,7 +264,7 @@ class Tools:
         try:
             answer = self.implementations.respond(request)
         except Diagnostic as error:
-            s = self.implementations.sessions.get(handle) if isinstance(handle, str) else None
+            s = named(self.implementations.sessions, request)
             return explain(error, s.source if s else ""), True
         if files is not None and base is not None and session is not None:
             try:

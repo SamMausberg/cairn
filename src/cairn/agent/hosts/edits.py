@@ -68,6 +68,12 @@ def keeps_tokens(source: str, candidate: str, start: int, end: int, stop: int) -
     return found[0] == found[1]
 
 
+def named(sessions: dict[str, Any], request: Any) -> Any:
+    """The session of `sessions` that a request names by its handle, or None."""
+    handle = request.get("handle") if isinstance(request, dict) else None
+    return sessions.get(handle) if isinstance(handle, str) else None
+
+
 def shaped(request: Any, protocol: str, keys: set[str]) -> None:
     """A request is an object of exactly `keys` under `protocol`; `kind` has already chosen the keys."""
     if not isinstance(request, dict):
@@ -576,18 +582,19 @@ class EditHost:
         shaped(request, HANDLES, {"protocol", "handle", "kind", *REQUESTS.get(kind, ())})
         s = self.session(request["handle"])
         admitted = self.admitted.get(request["handle"], [])
-        if kind == "explain":  # The latest admitted candidate of this session, else the original.
-            return s.explain(admitted[-1][0] if admitted else None)
-        if kind == "predict":  # What the latest admitted candidate is predicted to change; nothing is built.
-            return s.predict(request["sizes"], admitted[-1][0] if admitted else None)
-        if kind == "shot":  # What the latest admitted candidate draws, run headless, and how its rows moved.
+        latest = admitted[-1][0] if admitted else None  # the latest admitted candidate of this session, if any
+        if kind == "explain":  # The latest candidate, else the original.
+            return s.explain(latest)
+        if kind == "predict":  # What the latest candidate is predicted to change; nothing is built.
+            return s.predict(request["sizes"], latest)
+        if kind == "shot":  # What the latest candidate draws, run headless, and how its rows moved.
             import tempfile
 
             self.shots = self.shots or Path(tempfile.mkdtemp(prefix="cairn-shots-"))
-            return s.shot(request["functions"], self.shots, admitted[-1][0] if admitted else None)
+            return s.shot(request["functions"], self.shots, latest)
         if kind in {"state", "delta"}:
             evidence = [{k: r[k] for k in ("symbol", "status", "effects", "check_sites")} for _, r in admitted]
-            now = state(admitted[-1][0] if admitted else s.source, evidence)
+            now = state(s.source if latest is None else latest, evidence)
             earlier = self.states.get(request["since"]) if kind == "delta" else None
             if kind == "delta" and earlier is None:
                 fail("E-SESSION", "This host sent no state with that digest; ask for the state.")
@@ -617,7 +624,6 @@ class EditHost:
             request = load_json_strict(text)
             return self.respond(request)
         except Diagnostic as e:
-            handle = request.get("handle") if isinstance(request, dict) else None
-            s = self.sessions.get(handle) if isinstance(handle, str) else None
+            s = named(self.sessions, request)
             d = explain(e, s.source if s else "", tuple(s.visible) if s else ())
             return {k: v for k, v in d.items() if k not in REFUSAL_TERMS} if "terms" in self.sent else d
