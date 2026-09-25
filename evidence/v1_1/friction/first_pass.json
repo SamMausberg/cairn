@@ -1,0 +1,694 @@
+{
+ "r1_basis_points_cairn": {
+  "subject": "r1_basis_points_cairn",
+  "first_pass": 5,
+  "judged": [
+   [
+    5,
+    "passed"
+   ]
+  ]
+ },
+ "r1_basis_points_cpp": {
+  "subject": "r1_basis_points_cpp",
+  "first_pass": 2,
+  "judged": [
+   [
+    2,
+    "passed"
+   ]
+  ]
+ },
+ "r1_basis_points_plugin": {
+  "subject": "r1_basis_points_plugin",
+  "first_pass": 4,
+  "judged": [
+   [
+    4,
+    "passed"
+   ]
+  ]
+ },
+ "r1_basis_points_plugin_set_aside": {
+  "subject": "r1_basis_points_plugin_set_aside",
+  "first_pass": 3,
+  "judged": [
+   [
+    3,
+    "passed"
+   ]
+  ]
+ },
+ "r1_block_scan_cairn": {
+  "subject": "r1_block_scan_cairn",
+  "first_pass": 23,
+  "judged": [
+   [
+    14,
+    "not typed"
+   ],
+   [
+    16,
+    "not typed"
+   ],
+   [
+    19,
+    "not typed"
+   ],
+   [
+    21,
+    "not typed"
+   ],
+   [
+    23,
+    "passed"
+   ]
+  ]
+ },
+ "r1_block_scan_cpp": {
+  "subject": "r1_block_scan_cpp",
+  "first_pass": 1,
+  "judged": [
+   [
+    1,
+    "passed"
+   ]
+  ]
+ },
+ "r1_block_scan_plugin_set_aside": {
+  "subject": "r1_block_scan_plugin_set_aside",
+  "first_pass": 37,
+  "judged": [
+   [
+    31,
+    "not typed"
+   ],
+   [
+    35,
+    "not typed"
+   ],
+   [
+    37,
+    "passed"
+   ]
+  ]
+ },
+ "r1_chunk_sums_cairn": {
+  "subject": "r1_chunk_sums_cairn",
+  "first_pass": 36,
+  "judged": [
+   [
+    22,
+    "not typed"
+   ],
+   [
+    23,
+    "not typed"
+   ],
+   [
+    24,
+    "not typed"
+   ],
+   [
+    27,
+    "not typed"
+   ],
+   [
+    32,
+    "not typed"
+   ],
+   [
+    35,
+    "not typed"
+   ],
+   [
+    36,
+    "passed"
+   ]
+  ]
+ },
+ "r1_chunk_sums_cpp": {
+  "subject": "r1_chunk_sums_cpp",
+  "first_pass": 1,
+  "judged": [
+   [
+    1,
+    "passed"
+   ]
+  ]
+ },
+ "r1_chunk_sums_plugin": {
+  "subject": "r1_chunk_sums_plugin",
+  "first_pass": 40,
+  "judged": [
+   [
+    37,
+    "not typed"
+   ],
+   [
+    40,
+    "passed"
+   ]
+  ]
+ },
+ "r1_chunk_sums_plugin_set_aside": {
+  "subject": "r1_chunk_sums_plugin_set_aside",
+  "first_pass": 37,
+  "judged": [
+   [
+    37,
+    "passed"
+   ]
+  ]
+ },
+ "r1_csv_field_cairn": {
+  "subject": "r1_csv_field_cairn",
+  "first_pass": 3,
+  "judged": [
+   [
+    3,
+    "passed"
+   ]
+  ]
+ },
+ "r1_csv_field_cpp": {
+  "subject": "r1_csv_field_cpp",
+  "first_pass": 2,
+  "judged": [
+   [
+    2,
+    "passed"
+   ]
+  ]
+ },
+ "r1_csv_field_plugin": {
+  "subject": "r1_csv_field_plugin",
+  "first_pass": 2,
+  "judged": [
+   [
+    2,
+    "passed"
+   ]
+  ]
+ },
+ "r1_csv_field_plugin_set_aside": {
+  "subject": "r1_csv_field_plugin_set_aside",
+  "first_pass": 2,
+  "judged": [
+   [
+    2,
+    "passed"
+   ]
+  ]
+ },
+ "r1_dedupe_cairn": {
+  "subject": "r1_dedupe_cairn",
+  "first_pass": 4,
+  "judged": [
+   [
+    4,
+    "passed"
+   ]
+  ]
+ },
+ "r1_dedupe_cpp": {
+  "subject": "r1_dedupe_cpp",
+  "first_pass": 2,
+  "judged": [
+   [
+    2,
+    "passed"
+   ]
+  ]
+ },
+ "r1_dedupe_plugin": {
+  "subject": "r1_dedupe_plugin",
+  "first_pass": 3,
+  "judged": [
+   [
+    3,
+    "passed"
+   ]
+  ]
+ },
+ "r1_dedupe_plugin_set_aside": {
+  "subject": "r1_dedupe_plugin_set_aside",
+  "first_pass": 5,
+  "judged": [
+   [
+    2,
+    "not typed"
+   ],
+   [
+    5,
+    "passed"
+   ]
+  ]
+ },
+ "r1_histogram_cairn": {
+  "subject": "r1_histogram_cairn",
+  "first_pass": 25,
+  "judged": [
+   [
+    22,
+    "not typed"
+   ],
+   [
+    24,
+    "not typed"
+   ],
+   [
+    25,
+    "passed"
+   ]
+  ]
+ },
+ "r1_histogram_cpp": {
+  "subject": "r1_histogram_cpp",
+  "first_pass": 3,
+  "judged": [
+   [
+    3,
+    "passed"
+   ]
+  ]
+ },
+ "r1_histogram_plugin": {
+  "subject": "r1_histogram_plugin",
+  "first_pass": 10,
+  "judged": [
+   [
+    6,
+    "not typed"
+   ],
+   [
+    7,
+    "not typed"
+   ],
+   [
+    10,
+    "passed"
+   ]
+  ]
+ },
+ "r1_histogram_plugin_set_aside": {
+  "subject": "r1_histogram_plugin_set_aside",
+  "first_pass": 29,
+  "judged": [
+   [
+    27,
+    "not typed"
+   ],
+   [
+    29,
+    "passed"
+   ]
+  ]
+ },
+ "r1_pool_cairn": {
+  "subject": "r1_pool_cairn",
+  "first_pass": 17,
+  "judged": [
+   [
+    13,
+    "not typed"
+   ],
+   [
+    17,
+    "passed"
+   ]
+  ]
+ },
+ "r1_pool_cpp": {
+  "subject": "r1_pool_cpp",
+  "first_pass": 4,
+  "judged": [
+   [
+    1,
+    "output"
+   ],
+   [
+    4,
+    "passed"
+   ]
+  ]
+ },
+ "r1_pool_plugin": {
+  "subject": "r1_pool_plugin",
+  "first_pass": 33,
+  "judged": [
+   [
+    25,
+    "not typed"
+   ],
+   [
+    28,
+    "not typed"
+   ],
+   [
+    31,
+    "not typed"
+   ],
+   [
+    33,
+    "passed"
+   ]
+  ]
+ },
+ "r1_pool_plugin_set_aside": {
+  "subject": "r1_pool_plugin_set_aside",
+  "first_pass": 19,
+  "judged": [
+   [
+    15,
+    "not typed"
+   ],
+   [
+    19,
+    "passed"
+   ]
+  ]
+ },
+ "r1_records_cairn": {
+  "subject": "r1_records_cairn",
+  "first_pass": 14,
+  "judged": [
+   [
+    13,
+    "not typed"
+   ],
+   [
+    14,
+    "passed"
+   ]
+  ]
+ },
+ "r1_records_cpp": {
+  "subject": "r1_records_cpp",
+  "first_pass": 3,
+  "judged": [
+   [
+    3,
+    "passed"
+   ]
+  ]
+ },
+ "r1_records_plugin": {
+  "subject": "r1_records_plugin",
+  "first_pass": 11,
+  "judged": [
+   [
+    11,
+    "passed"
+   ]
+  ]
+ },
+ "r1_records_plugin_set_aside": {
+  "subject": "r1_records_plugin_set_aside",
+  "first_pass": 19,
+  "judged": [
+   [
+    19,
+    "passed"
+   ]
+  ]
+ },
+ "r1_rle_cairn": {
+  "subject": "r1_rle_cairn",
+  "first_pass": 13,
+  "judged": [
+   [
+    10,
+    "not typed"
+   ],
+   [
+    13,
+    "passed"
+   ]
+  ]
+ },
+ "r1_rle_cpp": {
+  "subject": "r1_rle_cpp",
+  "first_pass": 1,
+  "judged": [
+   [
+    1,
+    "passed"
+   ]
+  ]
+ },
+ "r1_rle_plugin": {
+  "subject": "r1_rle_plugin",
+  "first_pass": 18,
+  "judged": [
+   [
+    14,
+    "not typed"
+   ],
+   [
+    18,
+    "passed"
+   ]
+  ]
+ },
+ "r1_sieve_cairn": {
+  "subject": "r1_sieve_cairn",
+  "first_pass": 23,
+  "judged": [
+   [
+    21,
+    "not typed"
+   ],
+   [
+    23,
+    "passed"
+   ]
+  ]
+ },
+ "r1_sieve_cpp": {
+  "subject": "r1_sieve_cpp",
+  "first_pass": 1,
+  "judged": [
+   [
+    1,
+    "passed"
+   ]
+  ]
+ },
+ "r1_sieve_plugin": {
+  "subject": "r1_sieve_plugin",
+  "first_pass": 30,
+  "judged": [
+   [
+    22,
+    "not typed"
+   ],
+   [
+    24,
+    "not typed"
+   ],
+   [
+    27,
+    "not typed"
+   ],
+   [
+    30,
+    "passed"
+   ]
+  ]
+ },
+ "r1_sieve_plugin_set_aside": {
+  "subject": "r1_sieve_plugin_set_aside",
+  "first_pass": 28,
+  "judged": [
+   [
+    25,
+    "not typed"
+   ],
+   [
+    28,
+    "passed"
+   ]
+  ]
+ },
+ "r1_split_sum_cairn": {
+  "subject": "r1_split_sum_cairn",
+  "first_pass": 2,
+  "judged": [
+   [
+    2,
+    "passed"
+   ]
+  ]
+ },
+ "r1_split_sum_cpp": {
+  "subject": "r1_split_sum_cpp",
+  "first_pass": 2,
+  "judged": [
+   [
+    2,
+    "passed"
+   ]
+  ]
+ },
+ "r1_split_sum_plugin": {
+  "subject": "r1_split_sum_plugin",
+  "first_pass": 5,
+  "judged": [
+   [
+    4,
+    "not typed"
+   ],
+   [
+    5,
+    "passed"
+   ]
+  ]
+ },
+ "r1_split_sum_plugin_set_aside": {
+  "subject": "r1_split_sum_plugin_set_aside",
+  "first_pass": 6,
+  "judged": [
+   [
+    3,
+    "not typed"
+   ],
+   [
+    6,
+    "passed"
+   ]
+  ]
+ },
+ "r1_tally_cairn": {
+  "subject": "r1_tally_cairn",
+  "first_pass": 4,
+  "judged": [
+   [
+    3,
+    "not typed"
+   ],
+   [
+    4,
+    "passed"
+   ]
+  ]
+ },
+ "r1_tally_cpp": {
+  "subject": "r1_tally_cpp",
+  "first_pass": 4,
+  "judged": [
+   [
+    3,
+    "build"
+   ],
+   [
+    4,
+    "passed"
+   ]
+  ]
+ },
+ "r1_tally_plugin": {
+  "subject": "r1_tally_plugin",
+  "first_pass": 10,
+  "judged": [
+   [
+    7,
+    "not typed"
+   ],
+   [
+    8,
+    "not typed"
+   ],
+   [
+    10,
+    "passed"
+   ]
+  ]
+ },
+ "r1_varint_cairn": {
+  "subject": "r1_varint_cairn",
+  "first_pass": 3,
+  "judged": [
+   [
+    3,
+    "passed"
+   ]
+  ]
+ },
+ "r1_varint_cpp": {
+  "subject": "r1_varint_cpp",
+  "first_pass": 2,
+  "judged": [
+   [
+    2,
+    "passed"
+   ]
+  ]
+ },
+ "r1_varint_plugin": {
+  "subject": "r1_varint_plugin",
+  "first_pass": 2,
+  "judged": [
+   [
+    2,
+    "passed"
+   ]
+  ]
+ },
+ "r1_varint_plugin_set_aside": {
+  "subject": "r1_varint_plugin_set_aside",
+  "first_pass": 3,
+  "judged": [
+   [
+    3,
+    "passed"
+   ]
+  ]
+ },
+ "r2_histogram_cairn": {
+  "subject": "r2_histogram_cairn",
+  "first_pass": 21,
+  "judged": [
+   [
+    14,
+    "not typed"
+   ],
+   [
+    17,
+    "not typed"
+   ],
+   [
+    21,
+    "passed"
+   ]
+  ]
+ },
+ "r2_histogram_cpp": {
+  "subject": "r2_histogram_cpp",
+  "first_pass": 4,
+  "judged": [
+   [
+    3,
+    "build"
+   ],
+   [
+    4,
+    "passed"
+   ]
+  ]
+ },
+ "r2_histogram_plugin": {
+  "subject": "r2_histogram_plugin",
+  "first_pass": 11,
+  "judged": [
+   [
+    8,
+    "not typed"
+   ],
+   [
+    11,
+    "passed"
+   ]
+  ]
+ }
+}

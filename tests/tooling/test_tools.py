@@ -208,6 +208,24 @@ def test_skill_tokens():
     assert record["files"]["SKILL.md"] < record["tour"]["tokens"] < record["skill_total"]
 
 
+def test_friction_costs():
+    """Where the 1.1 evaluation's CAIRN subjects spent their tokens, read from the kept transcripts."""
+    record = parsed(tool("tools/ai/friction.py", "costs"))
+    assert record["arms"]["cairn"]["subjects"] == 14 and record["arms"]["plugin"]["subjects"] == 13
+    assert record["arms"]["cairn"]["carried"] > record["arms"]["cpp"]["tokens"]
+    conversion = record["refusals"]["a writing call as the one operand of a conversion"]
+    assert conversion["refusals"] == 14 and conversion["tokens"] > 0
+
+
+@needs_clang
+def test_friction_replay_and_judge():
+    """One subject's versions, checked by this checkout and judged by the evaluation's hidden check."""
+    replayed = parsed(tool("tools/ai/friction.py", "replay", "--compiler", ".", "--subject", "r1_varint_cairn"))
+    assert [r["status"] for r in replayed["r1_varint_cairn"]] == ["typed"]
+    judged = parsed(tool("tools/ai/friction.py", "judge", "--compiler", ".", "--subject", "r1_varint_cpp"))
+    assert judged["r1_varint_cpp"]["first_pass"] == 2
+
+
 @needs_clang
 def test_mutation_checks():
     printed = tool("tools/corpus/mutation_checks.py", timeout=600)
