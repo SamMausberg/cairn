@@ -6,7 +6,7 @@ Tasks and task groups run declared functions on threads of their own, an I/O rin
 
 `let t = spawn f(args);` evaluates the arguments and runs a declared function on its own thread, a parked one when there is one. `t` is a linear ticket: `wait(t)` consumes it on every path of the same function and returns `f`'s result, and the ticket cannot be stored, passed or returned.
 
-Until the `wait`, every place lent to the task is leased: nobody may write what the task reads or touch what it writes, the owner included (`E-LEASED`). Read-only lending is shared freely. Parts of one array may go mutably to different tasks when each visibly ends where the next begins, so a K-way split works.
+Until the `wait`, every place lent to the task is leased: nobody may write what the task reads or touch what it writes, the owner included (`E-LEASED`). Read-only lending is shared freely. Parts of one array may go mutably to different tasks when each visibly ends where the next begins, so a K-way split works. A bound is visible when it is a literal, a name that cannot change, or an expression of literals and constants, which counts as the number it folds to: with `const BINS:usize = 256;`, `d[0..BINS]` and `d[BINS..2 * BINS]` are disjoint.
 
 ```cairn
 fn fill(n:usize, out:rw<u64>[n], start:u64) { for i in 0..n { out[i] = start + u64(i); } }

@@ -553,3 +553,38 @@ def test_unsigned_reduce_plus_is_checked_in_any_order_on_host_and_device(tmp_pat
         for name, source, status in (("fits", fits, (0,)), ("overflows", overflows, (-6, 134))):
             (tmp_path / name).mkdir()
             assert build_and_run(tmp_path / name, source, "g++")[0] in status
+
+
+CONSTANT_PARTS = """const BINS:usize = 256;
+
+fn count(n:usize, xs:ro<u32>[n], out:rw<u64>[BINS]) { for x in xs { out[usize(x & 255)] += 1; } }
+
+fn main() -> i32 {
+  let mut xs = Buf[u32](8);
+  for i in 0..8 { xs[i] = u32(i); }
+  let mut partial = Buf[u64](2 * BINS);
+  let t0 = spawn count(xs[0..4], partial[0..BINS]);
+  let t1 = spawn count(xs[4..8], partial[BINS..2 * BINS]);
+  wait(t0);
+  wait(t1);
+  let mut total:u64 = 0;
+  for i in 0..2 * BINS { total += partial[i]; }
+  if total != 8 { return 1; }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_parts_whose_bounds_are_constant_expressions_are_leased_as_the_values_they_fold_to(tmp_path, cxx):
+    """`partial[0..BINS]` and `partial[BINS..2 * BINS]` are `[0..256]` and `[256..512]`, visibly disjoint; a 1.1
+    evaluation subject had to name each bound to be believed. ThreadSanitizer watches the two tasks write them."""
+    cpp = compile_source(CONSTANT_PARTS)[0]
+    assert compile_source(canonical_source(CONSTANT_PARTS))[0] == cpp
+    ran = watched(tmp_path, cpp, cxx, "thread")
+    assert ran.returncode == 0 and "Sanitizer" not in ran.stderr, ran.stdout + ran.stderr
+
+
+def test_constant_parts_that_overlap_are_leased_apart_and_named_by_their_values():
+    overlapping = CONSTANT_PARTS.replace("partial[BINS..2 * BINS]", "partial[BINS - 1..2 * BINS]")
+    assert refused("E-LEASED", overlapping)["message"] == "partial[255..512] is lent to t0 until wait(t0)."
