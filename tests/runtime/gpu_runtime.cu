@@ -4,7 +4,7 @@
 #include <cstdio>
 #include <cstring>
 #include <vector>
-#include "cairn_gpu.hpp"
+#include "cairn_cub.hpp"  // cairn_gpu.hpp, and CUB for the device reduce, scan and compact
 #include "cairn_parallel.hpp"
 
 using cr::gpu::Dir;

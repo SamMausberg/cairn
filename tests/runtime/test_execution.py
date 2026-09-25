@@ -238,6 +238,40 @@ def test_runtime_files_include_the_execution_header():
     assert "cudaDeviceSynchronize" not in RUNTIME_FILES["cairn_exec.hpp"] + RUNTIME_FILES["cairn_reuse.hpp"]
 
 
+REGION = "fn scale(n:usize, y:rw<f32>[n]@device, x:ro<f32>[n]@device) { parallel i in n { y[i] = 2.0 * x[i]; } }\n"
+COLLECTORS = {
+    "reduce": "fn total(n:usize, x:ro<u64>[n]@device) -> u64 { let s = reduce + parallel i in n yield x[i]; return s; }",
+    "scan": "fn sums(n:usize, x:ro<u32>[n]@device, s:rw<u32>[n]@device) -> u32 {\n"
+    "  let t = scan + exclusive s parallel i in n yield x[i];\n  return t;\n}",
+    "compact": "fn odd(n:usize, x:ro<u32>[n]@device, k:rw<u32>[n]@device) -> usize {\n"
+    "  let used = compact k for i in n where x[i] % 2 == 1 yield x[i];\n  return used;\n}",
+}
+
+
+@pytest.mark.parametrize("collector", sorted(COLLECTORS))
+def test_only_a_program_with_a_device_collector_includes_cub(collector):
+    """CUB is about half of an nvcc build, so cairn_gpu.hpp does not read it: cairn_cub.hpp does, and the lowering
+    includes that only in a program with a device reduce, scan or compact."""
+    assert "cub/" not in RUNTIME_FILES["cairn_gpu.hpp"] and "cub/" in RUNTIME_FILES["cairn_cub.hpp"]
+    region = compile_source(REGION)[0]
+    assert '#include "cairn_gpu.hpp"' in region and '#include "cairn_cub.hpp"' not in region
+    assert '#include "cairn_cub.hpp"' in compile_source(REGION + COLLECTORS[collector])[0]
+
+
+def test_a_device_program_without_a_collector_builds_without_cub(tmp_path):
+    """Compiled by nvcc for sm_120 and never run: the object of a program with only a region holds nothing of CUB,
+    not even the empty kernel CUB defines wherever it is included, and a reduction's holds CUB's reduce kernels."""
+    if not shutil.which("nm"):
+        pytest.skip("needs nm")
+    found = {}
+    for name, source in (("region", REGION), ("reduce", REGION + COLLECTORS["reduce"])):
+        (tmp_path / name).mkdir()
+        built = device_build(tmp_path / name, compile_source(source)[0])
+        listed = subprocess.run(["nm", str(built)], capture_output=True, text=True, check=True).stdout
+        found[name] = [line.split()[-1] for line in listed.splitlines() if "cub" in line]
+    assert found["region"] == [] and any("DeviceReduceKernel" in symbol for symbol in found["reduce"])
+
+
 FAN = """
 fn work(n:usize, x:rw<u32>[n]@device, round:u32) -> u64 {
   parallel i in n { x[i] = u32(i % 1000) + round; }

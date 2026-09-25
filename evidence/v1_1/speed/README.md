@@ -31,8 +31,36 @@ The suite seldom builds one program twice: 626 of 779 clang++ compiles had disti
 | `examples/tensor/transpose.cairn` | 1.27 | 1.00 |
 | `examples/cooperative/tuned.toml` | 0.25 | 0.21 |
 
+Later that day, with the machine nearly idle (load 3), the same comparison gave 5.51 against 2.71 seconds for tile64, 1.75 against 0.82 for tile32 and 0.77 against 0.60 for the transpose.
+
 What the checker says is unchanged. Every program `tools/checks/emission_identity.py` takes, 2101 of them with 1173 refusals, gives the same C++, the same whole manifest and the same whole refusal record, message included. 3000 regions from `tools/checks/differential_cooperative.py`'s generator, with some writes made atomic updates, some reads at an index the rule cannot follow and some arrays left unzeroed, give the same record before and after: 974 accepted, and every code of the rule among the refusals (E-COOP-UNWRITTEN 701, E-COOP-CONFLICT 665, E-COOP-BARRIER 289, E-ATOMIC-MIXED 225, E-COOP-UNORDERED 69, E-COOP-REUSE 59, E-COOP-UNDECIDED 18). `tools/checks/differential_cooperative.py --count 1000` agreed with the Lean model on all 1000 regions. `cairn predict --card all`, which runs the same block for its census, printed identical output for both tile examples, the transpose, `examples/cooperative/tuned.toml` and `examples/reduction/gpu.toml`.
+
+## CUB only where a program has a device collector
+
+Every device program read CUB's reduce and scan headers through `runtime/cairn_gpu.hpp`, and CUB is about half of what nvcc reads and compiles for a small program: its host preprocessing, cudafe++, cicc and host compile all shrink without it. Only a device `reduce`, `scan` or `compact` calls CUB. Its calls now live in `runtime/cairn_cub.hpp`, which the lowering includes only in a program with one of those, so a program without one builds to the same kernels and no longer carries CUB's `EmptyKernel`, which CUB defines wherever it is included.
+
+Every device example built for sm_120 by `tools/checks/device_examples.py --targets sm_120 --jobs 1`, main at 349c77b against the change, in the order main, change, change, main. The first three runs saw load 3 to 8 and the last rose to 48; the table gives each example's mean of its two runs, in seconds, including the check of its source.
+
+| Example | Main | Change |
+|---|---|---|
+| `demos/numeric/gpu.toml` | 12.5 | 3.6 |
+| `examples/apps/analytics/gpu.toml` (a device reduce and compact) | 15.4 | 11.7 |
+| `examples/apps/gpu_pipeline/cairn.toml` (a device reduce and compact) | 11.1 | 10.3 |
+| `examples/apps/matmul/gpu.toml` | 8.6 | 3.4 |
+| `examples/apps/simulator/cairn.toml` | 8.8 | 3.8 |
+| `examples/cooperative/gpu.toml` | 8.6 | 3.5 |
+| `examples/cooperative/tuned.toml` | 8.4 | 3.4 |
+| `examples/foreign/device/cairn.toml` (vendored CUDA that calls the synchronous reduce) | 20.8 | 13.6 |
+| `examples/harness/cairn.toml` | 8.9 | 2.6 |
+| `examples/reduction/gpu.toml` | 9.2 | 3.5 |
+| `examples/tensor/tile32.cairn` | 11.5 | 6.5 |
+| `examples/tensor/tile64.cairn` | 15.9 | 11.8 |
+| all twelve | 139.8 | 77.6 |
+
+The four runs took 131 and 171 seconds on main and 82 and 92 with the change. The test modules the CI device jobs run (`make device-build`, at `-n 3`) took 757 seconds on main and 475 with the change, one right after the other, the load 18 when the first began and 29 when the second ended.
+
+Of the 2101 programs `tools/checks/emission_identity.py` takes, 2090 emit the same C++ as before. The other 11 are exactly the programs with a device collector, and each differs by one added line, `#include "cairn_cub.hpp"`.
 
 ## What did not run
 
-Nothing here ran on a GPU. The suite's device builds compile for sm_120 and stop there, as everywhere outside `make gpu`.
+Nothing here ran on a GPU. The suite's device builds compile for sm_120 and stop there, as everywhere outside `make gpu`. Only CUDA 13.2 is installed on this machine; the CI device jobs build the same modules under CUDA 12.9 as well.
