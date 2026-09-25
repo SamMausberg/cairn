@@ -20,9 +20,8 @@ def graph(project: Project, with_interfaces: bool = False) -> dict[str, Any]:
     files: list[dict[str, Any]] = []
     owners: dict[str, list[Any]] = {}
     current = ""
-    lines = project.source.split("\n")
-    for unit in project.units:  # each file's own text, as load_project combined it
-        names = opened("\n".join(lines[unit.first_line - 1 : unit.first_line - 1 + unit.lines]), current)
+    for unit, _, text in project.files():
+        names = opened(text, current)
         current = names[-1] if names else current
         files.append({"path": unit.path, "sha256": unit.sha256, "modules": names})
         for name in names:

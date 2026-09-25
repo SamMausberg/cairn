@@ -7,7 +7,7 @@ import os
 import re
 import tomllib
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from itertools import islice, takewhile
 from pathlib import Path, PurePosixPath
@@ -159,6 +159,30 @@ class Project:
         paths = [u.path for u in self.units]
         return [f"// source: {paths[0]}\n", *(f"\n// source: {p}\n" for p in paths[1:]), "\n"], texts
 
+    def files(self) -> list[tuple[Unit, int, str]]:
+        """Each file of the combined source: its unit, the offset its text starts at, and the text."""
+        between, texts = self.layout()
+        out, at = [], 0
+        for unit, gap, text in zip(self.units, between[:-1], texts, strict=True):
+            at += len(gap)
+            out.append((unit, at, text))
+            at += len(text)
+        return out
+
+    def rewritten(self, texts: Mapping[str, str]) -> Project:
+        """This project with each file `texts` names (its path -> a text) holding that text, laid out as this one is:
+        the combined source, and each unit's first line, line count and hash."""
+        between, own = self.layout()
+        new = [texts.get(u.path, text) for u, text in zip(self.units, own, strict=True)]
+        units, line = [], 1
+        for unit, gap, text in zip(self.units, between[:-1], new, strict=True):
+            line += gap.count("\n")
+            units.append(replace(unit, first_line=line, lines=text.count("\n") + 1,
+                                 sha256=hashlib.sha256(text.encode()).hexdigest()))  # fmt: skip
+            line += text.count("\n")
+        source = "".join(b + t for b, t in zip(between, [*new, ""], strict=True))
+        return replace(self, source=source, units=tuple(units))
+
     def split(self, candidate: str) -> dict[str, str]:
         """Each file's text in `candidate`, a combined source laid out as this one is, by the file's path.
 
@@ -194,7 +218,7 @@ class Project:
             after = (placed[i] or 0) + len(text)
         cuts = [p for p in placed if p is not None]
         split = {u.path: candidate[cuts[i] + len(between[i]) : cuts[i + 1]] for i, u in enumerate(self.units)}
-        if "".join(b + t for b, t in zip(between, [*split.values(), ""], strict=True)) != candidate:
+        if self.rewritten(split).source != candidate:
             raise ProjectError("The candidate does not split into this project's files; nothing was written.")
         return split
 
