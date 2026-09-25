@@ -1,0 +1,1861 @@
+{
+ "summary": {
+  "arms": {
+   "cairn": {
+    "subjects": 14,
+    "tokens": 27934022,
+    "requests": 405,
+    "gained": 671265,
+    "carried": 15374888,
+    "before_first_edit": 7098406,
+    "first_edit_to_first_pass": 5183691,
+    "after_first_pass": 15651925
+   },
+   "cpp": {
+    "subjects": 14,
+    "tokens": 3340840,
+    "requests": 161,
+    "gained": 22150,
+    "carried": 199547,
+    "before_first_edit": 376243,
+    "first_edit_to_first_pass": 298971,
+    "after_first_pass": 2665626
+   },
+   "plugin": {
+    "subjects": 13,
+    "tokens": 17173368,
+    "requests": 376,
+    "gained": 312881,
+    "carried": 6245025,
+    "before_first_edit": 5232328,
+    "first_edit_to_first_pass": 2580096,
+    "after_first_pass": 9360944
+   }
+  },
+  "documentation": {
+   "cairn": {
+    "guide.md": 2727225,
+    "concurrency.md": 2423248,
+    "language.md": 2165800,
+    "memory.md": 1665646,
+    "library.md": 1290583,
+    "std/io.md": 683170,
+    "numerics.md": 532692,
+    "std/text.md": 421254,
+    "devices.md": 412577,
+    "std/vec.md": 307125,
+    "a search of docs/": 285228,
+    "std/fmt.md": 174936
+   },
+   "cpp": {},
+   "plugin": {
+    "skill": 1317959,
+    "library.md": 628729,
+    "cairn doc": 572336,
+    "memory.md": 570228,
+    "a search of docs/": 340170,
+    "card owners": 187245,
+    "numerics.md": 176894,
+    "std/text.md": 152703,
+    "concurrency.md": 148527,
+    "std/io.md": 142698,
+    "card tasks": 137075,
+    "std/vec.md": 110059
+   }
+  },
+  "refusals": {
+   "a writing call as the one operand of a conversion": {
+    "refusals": 14,
+    "requests": 43,
+    "tokens": 3404410
+   },
+   "the minimum of a signed type as a literal or constant": {
+    "refusals": 3,
+    "requests": 18,
+    "tokens": 1448362
+   },
+   "a Buf, whose extent is len(b), passed where [n] is expected": {
+    "refusals": 4,
+    "requests": 13,
+    "tokens": 1318664
+   },
+   "an unannotated literal's u64 used as a usize": {
+    "refusals": 1,
+    "requests": 4,
+    "tokens": 420278
+   },
+   "wrapping or checked arithmetic on a signed integer": {
+    "refusals": 1,
+    "requests": 7,
+    "tokens": 320823
+   },
+   "disjoint parts whose bounds are constant expressions": {
+    "refusals": 1,
+    "requests": 3,
+    "tokens": 307814
+   },
+   "a writing call beside another operand": {
+    "refusals": 1,
+    "requests": 3,
+    "tokens": 279790
+   },
+   "a part bound to a local": {
+    "refusals": 1,
+    "requests": 4,
+    "tokens": 218123
+   },
+   "an imported println hiding the builtin": {
+    "refusals": 1,
+    "requests": 3,
+    "tokens": 187687
+   },
+   "one guarded thread writing an outside element": {
+    "refusals": 1,
+    "requests": 2,
+    "tokens": 179880
+   },
+   "a place lent to a task touched before its wait": {
+    "refusals": 1,
+    "requests": 5,
+    "tokens": 135031
+   },
+   "len of a Vec": {
+    "refusals": 1,
+    "requests": 2,
+    "tokens": 122721
+   },
+   "if as an expression": {
+    "refusals": 2,
+    "requests": 5,
+    "tokens": 115965
+   },
+   "cairn test of a project with no test blocks": {
+    "refusals": 4,
+    "requests": 2,
+    "tokens": 85836
+   },
+   "a linear value not consumed on every path": {
+    "refusals": 1,
+    "requests": 2,
+    "tokens": 59654
+   }
+  }
+ },
+ "subjects": [
+  {
+   "subject": "r1_basis_points_cairn",
+   "task": "basis_points",
+   "arm": "cairn",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 14,
+   "tokens": 258735,
+   "first_request_context": 13372,
+   "first_edit": 5,
+   "context_gained_before_first_edit": 4720,
+   "carried_after_first_edit": 42480,
+   "documentation_carried": {
+    "language.md": 2819,
+    "a search of docs/": 2241
+   },
+   "refusals": [],
+   "first_pass": 5,
+   "phases": {
+    "before_first_edit": 76143,
+    "first_edit_to_first_pass": 18092,
+    "after_first_pass": 164500
+   }
+  },
+  {
+   "subject": "r1_basis_points_cpp",
+   "task": "basis_points",
+   "arm": "cpp",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 8,
+   "tokens": 122685,
+   "first_request_context": 13372,
+   "first_edit": 2,
+   "context_gained_before_first_edit": 1505,
+   "carried_after_first_edit": 9030,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 2,
+   "phases": {
+    "before_first_edit": 27756,
+    "first_edit_to_first_pass": 14877,
+    "after_first_pass": 80052
+   }
+  },
+  {
+   "subject": "r1_basis_points_plugin_set_aside",
+   "task": "basis_points",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": true,
+   "requests": 16,
+   "tokens": 401272,
+   "first_request_context": 15938,
+   "first_edit": 3,
+   "context_gained_before_first_edit": 6560,
+   "carried_after_first_edit": 85280,
+   "documentation_carried": {
+    "skill": 54639
+   },
+   "refusals": [],
+   "first_pass": 3,
+   "phases": {
+    "before_first_edit": 51356,
+    "first_edit_to_first_pass": 22498,
+    "after_first_pass": 327418
+   }
+  },
+  {
+   "subject": "r1_basis_points_plugin",
+   "task": "basis_points",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 12,
+   "tokens": 276157,
+   "first_request_context": 15938,
+   "first_edit": 4,
+   "context_gained_before_first_edit": 6893,
+   "carried_after_first_edit": 55144,
+   "documentation_carried": {
+    "skill": 37269
+   },
+   "refusals": [
+    {
+     "request": 10,
+     "code": "E-PROJECT-OR-ENVIRONMENT",
+     "cause": "cairn test of a project with no test blocks",
+     "line": "",
+     "message": "No tests: write a test block, add project.tests or supply --contract.",
+     "round_trip_requests": 0,
+     "round_trip_tokens": 0
+    }
+   ],
+   "first_pass": 4,
+   "phases": {
+    "before_first_edit": 73785,
+    "first_edit_to_first_pass": 22831,
+    "after_first_pass": 179541
+   }
+  },
+  {
+   "subject": "r1_block_scan_cairn",
+   "task": "block_scan",
+   "arm": "cairn",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 40,
+   "tokens": 3295456,
+   "first_request_context": 13372,
+   "first_edit": 14,
+   "context_gained_before_first_edit": 72900,
+   "carried_after_first_edit": 1895400,
+   "documentation_carried": {
+    "concurrency.md": 444835,
+    "devices.md": 412577,
+    "guide.md": 356552,
+    "language.md": 141320,
+    "std/io.md": 90057,
+    "memory.md": 81556,
+    "a search of docs/": 61055,
+    "std/vec.md": 44072
+   },
+   "refusals": [
+    {
+     "request": 15,
+     "code": "E-COOP-GLOBAL",
+     "cause": "one guarded thread writing an outside element",
+     "line": "if t == 255 { sums[b] = bufA[255]; }",
+     "message": "sums is written at line 85 by the threads of every block, and the checker cannot show that no two of them write one element: the index does not depend on t, so every t writes the same element.",
+     "round_trip_requests": 2,
+     "round_trip_tokens": 179880
+    },
+    {
+     "request": 17,
+     "code": "E-TYPE-MISMATCH",
+     "cause": "a Buf, whose extent is len(b), passed where [n] is expected",
+     "line": "transfer(x, values);",
+     "message": "Expected rw<u64>[n]@device, got rw<u64>[len(values)]@device.",
+     "round_trip_requests": 5,
+     "round_trip_tokens": 466538
+    },
+    {
+     "request": 22,
+     "code": "E-EFFECT-ORDER",
+     "cause": "a writing call as the one operand of a conversion",
+     "line": "let n:usize = usize(next_u64(inp));",
+     "message": "Bind a writing call to its own statement before using its result.",
+     "round_trip_requests": 2,
+     "round_trip_tokens": 189490
+    }
+   ],
+   "first_pass": 23,
+   "phases": {
+    "before_first_edit": 777893,
+    "first_edit_to_first_pass": 914839,
+    "after_first_pass": 1602724
+   }
+  },
+  {
+   "subject": "r1_block_scan_cpp",
+   "task": "block_scan",
+   "arm": "cpp",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 28,
+   "tokens": 931128,
+   "first_request_context": 13372,
+   "first_edit": 1,
+   "context_gained_before_first_edit": 1096,
+   "carried_after_first_edit": 29592,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 1,
+   "phases": {
+    "before_first_edit": 13372,
+    "first_edit_to_first_pass": 14468,
+    "after_first_pass": 903288
+   }
+  },
+  {
+   "subject": "r1_block_scan_plugin_set_aside",
+   "task": "block_scan",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": true,
+   "requests": 55,
+   "tokens": 3809292,
+   "first_request_context": 15938,
+   "first_edit": 31,
+   "context_gained_before_first_edit": 65367,
+   "carried_after_first_edit": 1568808,
+   "documentation_carried": {
+    "devices.md": 369822,
+    "library.md": 224317,
+    "skill": 213908,
+    "a search of docs/": 130209,
+    "std/io.md": 123828,
+    "card cooperative": 94245,
+    "card parallel": 84531,
+    "std/text.md": 79100,
+    "std/vec.md": 49581,
+    "memory.md": 38057,
+    "card owners": 36358,
+    "card sums": 21638,
+    "card memory": 14190,
+    "card views": 12011,
+    "card printing": 10098,
+    "card modules": 7271
+   },
+   "refusals": [
+    {
+     "request": 32,
+     "code": "E-TYPE-MISMATCH",
+     "cause": "a Buf, whose extent is len(b), passed where [n] is expected",
+     "line": "transfer(dev_x, host_x);",
+     "message": "Expected rw<u64>[n]@device, got rw<u64>[len(host_x)]@device.",
+     "round_trip_requests": 4,
+     "round_trip_tokens": 348802
+    },
+    {
+     "request": 36,
+     "code": "E-EFFECT-ORDER",
+     "cause": "a writing call as the one operand of a conversion",
+     "line": "let n:usize = usize(next_u64(inp));",
+     "message": "Bind a writing call to its own statement before using its result.",
+     "round_trip_requests": 2,
+     "round_trip_tokens": 180882
+    }
+   ],
+   "first_pass": 37,
+   "phases": {
+    "before_first_edit": 1572688,
+    "first_edit_to_first_pass": 604344,
+    "after_first_pass": 1632260
+   }
+  },
+  {
+   "subject": "r1_chunk_sums_cairn",
+   "task": "chunk_sums",
+   "arm": "cairn",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 47,
+   "tokens": 4049113,
+   "first_request_context": 13374,
+   "first_edit": 22,
+   "context_gained_before_first_edit": 87337,
+   "carried_after_first_edit": 2183425,
+   "documentation_carried": {
+    "concurrency.md": 457191,
+    "guide.md": 418396,
+    "language.md": 356780,
+    "numerics.md": 330286,
+    "std/io.md": 101314,
+    "std/text.md": 66223,
+    "std/vec.md": 48203,
+    "std/core.md": 20093,
+    "a search of docs/": 11530,
+    "cairn rules": 8406
+   },
+   "refusals": [
+    {
+     "request": 25,
+     "code": "E-LITERAL-RANGE",
+     "cause": "the minimum of a signed type as a literal or constant",
+     "line": "const I64_MIN:i64 = -9223372036854775807 - 1;",
+     "message": "Literal is not representable in i64.",
+     "round_trip_requests": 3,
+     "round_trip_tokens": 312862
+    },
+    {
+     "request": 28,
+     "code": "E-LITERAL-RANGE",
+     "cause": "the minimum of a signed type as a literal or constant",
+     "line": "const I64_MIN:i64 = 0 - I64_MAX - 1;",
+     "message": "Literal is not representable in i64.",
+     "round_trip_requests": 2,
+     "round_trip_tokens": 211524
+    },
+    {
+     "request": 33,
+     "code": "E-EFFECT-ORDER",
+     "cause": "a writing call as the one operand of a conversion",
+     "line": "let k = usize(next_u64(inp));",
+     "message": "Bind a writing call to its own statement before using its result.",
+     "round_trip_requests": 4,
+     "round_trip_tokens": 456112
+    }
+   ],
+   "first_pass": 36,
+   "phases": {
+    "before_first_edit": 1262729,
+    "first_edit_to_first_pass": 1606368,
+    "after_first_pass": 1180016
+   }
+  },
+  {
+   "subject": "r1_chunk_sums_cpp",
+   "task": "chunk_sums",
+   "arm": "cpp",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 8,
+   "tokens": 138716,
+   "first_request_context": 13374,
+   "first_edit": 1,
+   "context_gained_before_first_edit": 1231,
+   "carried_after_first_edit": 8617,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 1,
+   "phases": {
+    "before_first_edit": 13374,
+    "first_edit_to_first_pass": 14605,
+    "after_first_pass": 110737
+   }
+  },
+  {
+   "subject": "r1_chunk_sums_plugin_set_aside",
+   "task": "chunk_sums",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": true,
+   "requests": 51,
+   "tokens": 3081418,
+   "first_request_context": 15942,
+   "first_edit": 37,
+   "context_gained_before_first_edit": 68807,
+   "carried_after_first_edit": 963298,
+   "documentation_carried": {
+    "cairn doc": 530732,
+    "skill": 198548,
+    "cairn rules": 76871,
+    "numerics.md": 68071,
+    "roadmap.md": 66639,
+    "library.md": 66505,
+    "concurrency.md": 56469,
+    "cairn --help": 43098,
+    "card tasks": 41643,
+    "a search of docs/": 9214,
+    "language.md": 200
+   },
+   "refusals": [
+    {
+     "request": 22,
+     "code": "E-LITERAL-RANGE",
+     "cause": "the minimum of a signed type as a literal or constant",
+     "line": "const MINV:i64 = (0 - MAXV) - 1;",
+     "message": "Literal is not representable in i64.",
+     "round_trip_requests": 13,
+     "round_trip_tokens": 923976
+    }
+   ],
+   "first_pass": 37,
+   "phases": {
+    "before_first_edit": 1760712,
+    "first_edit_to_first_pass": 84749,
+    "after_first_pass": 1235957
+   }
+  },
+  {
+   "subject": "r1_chunk_sums_plugin",
+   "task": "chunk_sums",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 50,
+   "tokens": 2946373,
+   "first_request_context": 15942,
+   "first_edit": 37,
+   "context_gained_before_first_edit": 67221,
+   "carried_after_first_edit": 873873,
+   "documentation_carried": {
+    "skill": 194304,
+    "a search of docs/": 194162,
+    "concurrency.md": 148527,
+    "numerics.md": 90340,
+    "roadmap.md": 82891,
+    "std/io.md": 75155,
+    "library.md": 70537,
+    "std/text.md": 55441,
+    "card owners": 42721,
+    "card tasks": 40775,
+    "std/vec.md": 35808,
+    "language.md": 31933,
+    "card sums": 31781,
+    "guide.md": 16938,
+    "card printing": 16366,
+    "std/core.md": 11364,
+    "card memory": 7538,
+    "card views": 6520,
+    "card records": 5596,
+    "card modules": 4186,
+    "std_api.md": 599
+   },
+   "refusals": [
+    {
+     "request": 13,
+     "code": "E-WRAP-TYPE",
+     "cause": "wrapping or checked arithmetic on a signed integer",
+     "line": "let y:i64 = add_wrap(x, 3);",
+     "message": "Wrapping/bit shift operations require unsigned integers.",
+     "round_trip_requests": 7,
+     "round_trip_tokens": 320823
+    },
+    {
+     "request": 38,
+     "code": "E-EFFECT-ORDER",
+     "cause": "a writing call as the one operand of a conversion",
+     "line": "let k = usize(next_u64(inp));",
+     "message": "Bind a writing call to its own statement before using its result.",
+     "round_trip_requests": 3,
+     "round_trip_tokens": 257791
+    }
+   ],
+   "first_pass": 40,
+   "phases": {
+    "before_first_edit": 1796971,
+    "first_edit_to_first_pass": 339048,
+    "after_first_pass": 810354
+   }
+  },
+  {
+   "subject": "r1_csv_field_cairn",
+   "task": "csv_field",
+   "arm": "cairn",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 17,
+   "tokens": 321408,
+   "first_request_context": 13372,
+   "first_edit": 3,
+   "context_gained_before_first_edit": 2407,
+   "carried_after_first_edit": 33698,
+   "documentation_carried": {
+    "a search of docs/": 373
+   },
+   "refusals": [],
+   "first_pass": 3,
+   "phases": {
+    "before_first_edit": 42740,
+    "first_edit_to_first_pass": 15779,
+    "after_first_pass": 262889
+   }
+  },
+  {
+   "subject": "r1_csv_field_cpp",
+   "task": "csv_field",
+   "arm": "cpp",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 7,
+   "tokens": 107967,
+   "first_request_context": 13372,
+   "first_edit": 2,
+   "context_gained_before_first_edit": 1792,
+   "carried_after_first_edit": 8960,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 2,
+   "phases": {
+    "before_first_edit": 27720,
+    "first_edit_to_first_pass": 15164,
+    "after_first_pass": 65083
+   }
+  },
+  {
+   "subject": "r1_csv_field_plugin_set_aside",
+   "task": "csv_field",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": true,
+   "requests": 25,
+   "tokens": 662098,
+   "first_request_context": 15938,
+   "first_edit": 2,
+   "context_gained_before_first_edit": 2118,
+   "carried_after_first_edit": 48714,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 2,
+   "phases": {
+    "before_first_edit": 33025,
+    "first_edit_to_first_pass": 18056,
+    "after_first_pass": 611017
+   }
+  },
+  {
+   "subject": "r1_csv_field_plugin",
+   "task": "csv_field",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 15,
+   "tokens": 325250,
+   "first_request_context": 15938,
+   "first_edit": 2,
+   "context_gained_before_first_edit": 2123,
+   "carried_after_first_edit": 27599,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 2,
+   "phases": {
+    "before_first_edit": 33030,
+    "first_edit_to_first_pass": 18061,
+    "after_first_pass": 274159
+   }
+  },
+  {
+   "subject": "r1_dedupe_cairn",
+   "task": "dedupe",
+   "arm": "cairn",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 15,
+   "tokens": 329657,
+   "first_request_context": 13372,
+   "first_edit": 4,
+   "context_gained_before_first_edit": 8215,
+   "carried_after_first_edit": 90365,
+   "documentation_carried": {
+    "a search of docs/": 43547,
+    "language.md": 10090
+   },
+   "refusals": [],
+   "first_pass": 4,
+   "phases": {
+    "before_first_edit": 64500,
+    "first_edit_to_first_pass": 21587,
+    "after_first_pass": 243570
+   }
+  },
+  {
+   "subject": "r1_dedupe_cpp",
+   "task": "dedupe",
+   "arm": "cpp",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 7,
+   "tokens": 106564,
+   "first_request_context": 13372,
+   "first_edit": 2,
+   "context_gained_before_first_edit": 1617,
+   "carried_after_first_edit": 8085,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 2,
+   "phases": {
+    "before_first_edit": 27668,
+    "first_edit_to_first_pass": 14989,
+    "after_first_pass": 63907
+   }
+  },
+  {
+   "subject": "r1_dedupe_plugin_set_aside",
+   "task": "dedupe",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": true,
+   "requests": 18,
+   "tokens": 443016,
+   "first_request_context": 15938,
+   "first_edit": 2,
+   "context_gained_before_first_edit": 2544,
+   "carried_after_first_edit": 40704,
+   "documentation_carried": {
+    "skill": 52702
+   },
+   "refusals": [
+    {
+     "request": 3,
+     "code": "E-NAME",
+     "cause": "if as an expression",
+     "line": "let distinct = if n == 0 { 0 } else { runs(readings) };",
+     "message": "Expected an identifier, found 'if'.",
+     "round_trip_requests": 3,
+     "round_trip_tokens": 67600
+    }
+   ],
+   "first_pass": 5,
+   "phases": {
+    "before_first_edit": 32973,
+    "first_edit_to_first_pass": 81163,
+    "after_first_pass": 328880
+   }
+  },
+  {
+   "subject": "r1_dedupe_plugin",
+   "task": "dedupe",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 15,
+   "tokens": 367797,
+   "first_request_context": 15938,
+   "first_edit": 3,
+   "context_gained_before_first_edit": 7024,
+   "carried_after_first_edit": 84288,
+   "documentation_carried": {
+    "skill": 52392
+   },
+   "refusals": [],
+   "first_pass": 3,
+   "phases": {
+    "before_first_edit": 51574,
+    "first_edit_to_first_pass": 22962,
+    "after_first_pass": 293261
+   }
+  },
+  {
+   "subject": "r1_histogram_cairn",
+   "task": "histogram",
+   "arm": "cairn",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 45,
+   "tokens": 3501707,
+   "first_request_context": 13371,
+   "first_edit": 22,
+   "context_gained_before_first_edit": 81640,
+   "carried_after_first_edit": 1877720,
+   "documentation_carried": {
+    "concurrency.md": 497289,
+    "guide.md": 391608,
+    "memory.md": 379407,
+    "language.md": 325994,
+    "std/io.md": 112571,
+    "std/text.md": 69903,
+    "library.md": 64355,
+    "std/vec.md": 50958,
+    "std/fmt.md": 48074,
+    "abstractions.md": 29997,
+    "a search of docs/": 14849
+   },
+   "refusals": [
+    {
+     "request": 23,
+     "code": "E-EFFECT-ORDER",
+     "cause": "a writing call as the one operand of a conversion",
+     "line": "let n = usize(next_u64(inp));",
+     "message": "Bind a writing call to its own statement before using its result.",
+     "round_trip_requests": 3,
+     "round_trip_tokens": 292757
+    }
+   ],
+   "first_pass": 25,
+   "phases": {
+    "before_first_edit": 1160448,
+    "first_edit_to_first_pass": 386366,
+    "after_first_pass": 1954893
+   }
+  },
+  {
+   "subject": "r1_histogram_cpp",
+   "task": "histogram",
+   "arm": "cpp",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 13,
+   "tokens": 240230,
+   "first_request_context": 13371,
+   "first_edit": 3,
+   "context_gained_before_first_edit": 1602,
+   "carried_after_first_edit": 16020,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 3,
+   "phases": {
+    "before_first_edit": 42362,
+    "first_edit_to_first_pass": 14973,
+    "after_first_pass": 182895
+   }
+  },
+  {
+   "subject": "r1_histogram_plugin_set_aside",
+   "task": "histogram",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": true,
+   "requests": 48,
+   "tokens": 2918109,
+   "first_request_context": 15936,
+   "first_edit": 27,
+   "context_gained_before_first_edit": 59856,
+   "carried_after_first_edit": 1256976,
+   "documentation_carried": {
+    "cairn doc": 217747,
+    "skill": 185518,
+    "concurrency.md": 147383,
+    "std/io.md": 104128,
+    "cairn rules": 92390,
+    "library.md": 71908,
+    "std/text.md": 68063,
+    "card owners": 40199,
+    "card tasks": 38336,
+    "card views": 15090,
+    "a search of docs/": 5181,
+    "memory.md": 1507
+   },
+   "refusals": [
+    {
+     "request": 28,
+     "code": "E-EFFECT-ORDER",
+     "cause": "a writing call as the one operand of a conversion",
+     "line": "let n = usize(next_u64(inp));",
+     "message": "Bind a writing call to its own statement before using its result.",
+     "round_trip_requests": 2,
+     "round_trip_tokens": 156505
+    }
+   ],
+   "first_pass": 29,
+   "phases": {
+    "before_first_edit": 1196953,
+    "first_edit_to_first_pass": 231399,
+    "after_first_pass": 1489757
+   }
+  },
+  {
+   "subject": "r1_histogram_plugin",
+   "task": "histogram",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 28,
+   "tokens": 940676,
+   "first_request_context": 15936,
+   "first_edit": 6,
+   "context_gained_before_first_edit": 11385,
+   "carried_after_first_edit": 250470,
+   "documentation_carried": {
+    "skill": 104910,
+    "card owners": 20906,
+    "card tasks": 19954,
+    "card printing": 7661,
+    "card views": 7550
+   },
+   "refusals": [
+    {
+     "request": 8,
+     "code": "E-EFFECT-ORDER",
+     "cause": "a writing call as the one operand of a conversion",
+     "line": "let n = usize(next_u64(inp));",
+     "message": "Bind a writing call to its own statement before using its result.",
+     "round_trip_requests": 3,
+     "round_trip_tokens": 96229
+    }
+   ],
+   "first_pass": 10,
+   "phases": {
+    "before_first_edit": 123086,
+    "first_edit_to_first_pass": 152871,
+    "after_first_pass": 664719
+   }
+  },
+  {
+   "subject": "r1_pool_cairn",
+   "task": "pool",
+   "arm": "cairn",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 41,
+   "tokens": 3869476,
+   "first_request_context": 13370,
+   "first_edit": 13,
+   "context_gained_before_first_edit": 91721,
+   "carried_after_first_edit": 2568188,
+   "documentation_carried": {
+    "library.md": 443008,
+    "memory.md": 413369,
+    "guide.md": 354084,
+    "language.md": 346286,
+    "std/io.md": 104128,
+    "std/text.md": 66223,
+    "std/vec.md": 50958,
+    "std/fmt.md": 48074,
+    "std/arena.md": 30029,
+    "std/sort.md": 24265,
+    "std/core.md": 20667,
+    "std/mem.md": 18161,
+    "a search of docs/": 9993
+   },
+   "refusals": [
+    {
+     "request": 14,
+     "code": "E-EFFECT-ORDER",
+     "cause": "a writing call as the one operand of a conversion",
+     "line": "let size:usize = usize(next_u64(inp));",
+     "message": "Bind a writing call to its own statement before using its result.",
+     "round_trip_requests": 4,
+     "round_trip_tokens": 436369
+    },
+    {
+     "request": 31,
+     "code": "E-TYPE-MISMATCH",
+     "cause": "a Buf, whose extent is len(b), passed where [n] is expected",
+     "line": "vec.extend_from(v, size, zeros);",
+     "message": "Expected ro<u8>[size]@host, got ro<u8>[len(zeros)]@host.",
+     "round_trip_requests": 2,
+     "round_trip_tokens": 242033
+    }
+   ],
+   "first_pass": 17,
+   "phases": {
+    "before_first_edit": 619307,
+    "first_edit_to_first_pass": 539275,
+    "after_first_pass": 2710894
+   }
+  },
+  {
+   "subject": "r1_pool_cpp",
+   "task": "pool",
+   "arm": "cpp",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 14,
+   "tokens": 290350,
+   "first_request_context": 13370,
+   "first_edit": 1,
+   "context_gained_before_first_edit": 1411,
+   "carried_after_first_edit": 18343,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 4,
+   "phases": {
+    "before_first_edit": 13370,
+    "first_edit_to_first_pass": 71035,
+    "after_first_pass": 205945
+   }
+  },
+  {
+   "subject": "r1_pool_plugin_set_aside",
+   "task": "pool",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": true,
+   "requests": 35,
+   "tokens": 1830711,
+   "first_request_context": 15934,
+   "first_edit": 15,
+   "context_gained_before_first_edit": 25929,
+   "carried_after_first_edit": 518580,
+   "documentation_carried": {
+    "skill": 133155,
+    "std/text.md": 49668,
+    "a search of docs/": 48970,
+    "std/vec.md": 37185,
+    "card owners": 27269,
+    "card printing": 10447,
+    "card views": 10295,
+    "card records": 7631,
+    "language.md": 7061,
+    "std/mem.md": 2530,
+    "card memory": 2420,
+    "card sums": 2401
+   },
+   "refusals": [
+    {
+     "request": 16,
+     "code": "E-EFFECT-ORDER",
+     "cause": "a writing call as the one operand of a conversion",
+     "line": "let size = usize(next_u64(inp));",
+     "message": "Bind a writing call to its own statement before using its result.",
+     "round_trip_requests": 3,
+     "round_trip_tokens": 194857
+    }
+   ],
+   "first_pass": 19,
+   "phases": {
+    "before_first_edit": 455759,
+    "first_edit_to_first_pass": 300766,
+    "after_first_pass": 1074186
+   }
+  },
+  {
+   "subject": "r1_pool_plugin",
+   "task": "pool",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 54,
+   "tokens": 3991451,
+   "first_request_context": 15934,
+   "first_edit": 25,
+   "context_gained_before_first_edit": 72847,
+   "carried_after_first_edit": 2112563,
+   "documentation_carried": {
+    "memory.md": 558656,
+    "library.md": 233686,
+    "skill": 209768,
+    "numerics.md": 86554,
+    "std/text.md": 57026,
+    "std/vec.md": 45449,
+    "card owners": 44539,
+    "language.md": 41778,
+    "a search of docs/": 38530,
+    "std_api.md": 36676,
+    "examples.md": 34544,
+    "card sums": 33134,
+    "std/arena.md": 30029,
+    "card printing": 17063,
+    "card views": 16815,
+    "std/mem.md": 16085,
+    "card records": 12465,
+    "card modules": 7051
+   },
+   "refusals": [
+    {
+     "request": 26,
+     "code": "E-EFFECT-ORDER",
+     "cause": "a writing call beside another operand",
+     "line": "let mut pool = Pool(vec.new[Slot](), vec.new[usize]());",
+     "message": "Bind a writing call to its own statement before using its result.",
+     "round_trip_requests": 3,
+     "round_trip_tokens": 279790
+    },
+    {
+     "request": 29,
+     "code": "E-EFFECT-ORDER",
+     "cause": "a writing call as the one operand of a conversion",
+     "line": "let i = usize(next_u64(inp));",
+     "message": "Bind a writing call to its own statement before using its result.",
+     "round_trip_requests": 5,
+     "round_trip_tokens": 476726
+    }
+   ],
+   "first_pass": 33,
+   "phases": {
+    "before_first_edit": 1075328,
+    "first_edit_to_first_pass": 841062,
+    "after_first_pass": 2075061
+   }
+  },
+  {
+   "subject": "r1_records_cairn",
+   "task": "records",
+   "arm": "cairn",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 33,
+   "tokens": 2380398,
+   "first_request_context": 13369,
+   "first_edit": 13,
+   "context_gained_before_first_edit": 68038,
+   "carried_after_first_edit": 1360760,
+   "documentation_carried": {
+    "language.md": 356591,
+    "guide.md": 279660,
+    "std/io.md": 81614,
+    "std/text.md": 53347,
+    "library.md": 42608,
+    "std/vec.md": 38563,
+    "std/fmt.md": 37391,
+    "std/core.md": 16074,
+    "a search of docs/": 4406
+   },
+   "refusals": [],
+   "first_pass": 14,
+   "phases": {
+    "before_first_edit": 568300,
+    "first_edit_to_first_pass": 165896,
+    "after_first_pass": 1646202
+   }
+  },
+  {
+   "subject": "r1_records_cpp",
+   "task": "records",
+   "arm": "cpp",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 15,
+   "tokens": 347333,
+   "first_request_context": 13369,
+   "first_edit": 3,
+   "context_gained_before_first_edit": 2166,
+   "carried_after_first_edit": 25992,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 3,
+   "phases": {
+    "before_first_edit": 43491,
+    "first_edit_to_first_pass": 15535,
+    "after_first_pass": 288307
+   }
+  },
+  {
+   "subject": "r1_records_plugin_set_aside",
+   "task": "records",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": true,
+   "requests": 38,
+   "tokens": 2501164,
+   "first_request_context": 15932,
+   "first_edit": 19,
+   "context_gained_before_first_edit": 58914,
+   "carried_after_first_edit": 1119366,
+   "documentation_carried": {
+    "cairn doc": 683000,
+    "skill": 145116,
+    "cairn rules": 117644,
+    "card printing": 1687,
+    "card owners": 1662,
+    "card views": 1649,
+    "card sums": 1636,
+    "language.md": 342
+   },
+   "refusals": [
+    {
+     "request": 35,
+     "code": "E-PROJECT-OR-ENVIRONMENT",
+     "cause": "cairn test of a project with no test blocks",
+     "line": "",
+     "message": "No tests: write a test block, add project.tests or supply --contract.",
+     "round_trip_requests": 0,
+     "round_trip_tokens": 0
+    }
+   ],
+   "first_pass": 19,
+   "phases": {
+    "before_first_edit": 852324,
+    "first_edit_to_first_pass": 74846,
+    "after_first_pass": 1573994
+   }
+  },
+  {
+   "subject": "r1_records_plugin",
+   "task": "records",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 27,
+   "tokens": 1467750,
+   "first_request_context": 15932,
+   "first_edit": 11,
+   "context_gained_before_first_edit": 29882,
+   "carried_after_first_edit": 478112,
+   "documentation_carried": {
+    "skill": 101025,
+    "a search of docs/": 99514,
+    "card owners": 19997,
+    "card sums": 11495,
+    "card printing": 7661,
+    "card views": 7550,
+    "card records": 4324
+   },
+   "refusals": [],
+   "first_pass": 11,
+   "phases": {
+    "before_first_edit": 321133,
+    "first_edit_to_first_pass": 45814,
+    "after_first_pass": 1100803
+   }
+  },
+  {
+   "subject": "r1_rle_cairn",
+   "task": "rle",
+   "arm": "cairn",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 28,
+   "tokens": 1469878,
+   "first_request_context": 13370,
+   "first_edit": 10,
+   "context_gained_before_first_edit": 42610,
+   "carried_after_first_edit": 766980,
+   "documentation_carried": {
+    "library.md": 303777,
+    "guide.md": 240168,
+    "language.md": 154817,
+    "std/text.md": 42309,
+    "std/vec.md": 31677,
+    "a search of docs/": 13728
+   },
+   "refusals": [
+    {
+     "request": 11,
+     "code": "E-EFFECT-ORDER",
+     "cause": "a writing call as the one operand of a conversion",
+     "line": "let cap = usize(next_u64(inp));",
+     "message": "Bind a writing call to its own statement before using its result.",
+     "round_trip_requests": 3,
+     "round_trip_tokens": 174008
+    }
+   ],
+   "first_pass": 13,
+   "phases": {
+    "before_first_edit": 348624,
+    "first_edit_to_first_pass": 228733,
+    "after_first_pass": 892521
+   }
+  },
+  {
+   "subject": "r1_rle_cpp",
+   "task": "rle",
+   "arm": "cpp",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 10,
+   "tokens": 173513,
+   "first_request_context": 13370,
+   "first_edit": 1,
+   "context_gained_before_first_edit": 1220,
+   "carried_after_first_edit": 10980,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 1,
+   "phases": {
+    "before_first_edit": 13370,
+    "first_edit_to_first_pass": 14590,
+    "after_first_pass": 145553
+   }
+  },
+  {
+   "subject": "r1_rle_plugin",
+   "task": "rle",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 31,
+   "tokens": 1474922,
+   "first_request_context": 15934,
+   "first_edit": 14,
+   "context_gained_before_first_edit": 34965,
+   "carried_after_first_edit": 594405,
+   "documentation_carried": {
+    "library.md": 324506,
+    "skill": 116928,
+    "std/io.md": 67543,
+    "std/text.md": 40236,
+    "std/vec.md": 28802,
+    "card printing": 7313,
+    "card views": 4804,
+    "a search of docs/": 4456,
+    "card modules": 3966
+   },
+   "refusals": [
+    {
+     "request": 15,
+     "code": "E-VIEW-ALIAS",
+     "cause": "a part bound to a local",
+     "line": "let hex_view = inp.bytes.data[hex_lo..hex_hi];",
+     "message": "A part xs[lo..hi] is a borrow: it exists only as a view argument of a call.",
+     "round_trip_requests": 4,
+     "round_trip_tokens": 218123
+    }
+   ],
+   "first_pass": 18,
+   "phases": {
+    "before_first_edit": 484428,
+    "first_edit_to_first_pass": 264222,
+    "after_first_pass": 726272
+   }
+  },
+  {
+   "subject": "r1_sieve_cairn",
+   "task": "sieve",
+   "arm": "cairn",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 43,
+   "tokens": 4349924,
+   "first_request_context": 13371,
+   "first_edit": 21,
+   "context_gained_before_first_edit": 113848,
+   "carried_after_first_edit": 2504656,
+   "documentation_carried": {
+    "concurrency.md": 471744,
+    "memory.md": 444618,
+    "library.md": 436835,
+    "guide.md": 372960,
+    "language.md": 287868,
+    "a search of docs/": 114920,
+    "std/io.md": 106943,
+    "std/text.md": 68063,
+    "std_api.md": 29199
+   },
+   "refusals": [
+    {
+     "request": 22,
+     "code": "E-TYPE-MISMATCH",
+     "cause": "a Buf, whose extent is len(b), passed where [n] is expected",
+     "line": "sieve_all(size, is_composite, base_primes.len, base_primes);",
+     "message": "Expected rw<u8>[size]@host, got rw<u8>[len(is_composite)]@host.",
+     "round_trip_requests": 2,
+     "round_trip_tokens": 261291
+    }
+   ],
+   "first_pass": 23,
+   "phases": {
+    "before_first_edit": 1384542,
+    "first_edit_to_first_pass": 387567,
+    "after_first_pass": 2577815
+   }
+  },
+  {
+   "subject": "r1_sieve_cpp",
+   "task": "sieve",
+   "arm": "cpp",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 12,
+   "tokens": 238295,
+   "first_request_context": 13371,
+   "first_edit": 1,
+   "context_gained_before_first_edit": 970,
+   "carried_after_first_edit": 10670,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 1,
+   "phases": {
+    "before_first_edit": 13371,
+    "first_edit_to_first_pass": 14341,
+    "after_first_pass": 210583
+   }
+  },
+  {
+   "subject": "r1_sieve_plugin_set_aside",
+   "task": "sieve",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": true,
+   "requests": 46,
+   "tokens": 2301323,
+   "first_request_context": 15936,
+   "first_edit": 25,
+   "context_gained_before_first_edit": 46907,
+   "carried_after_first_edit": 985047,
+   "documentation_carried": {
+    "skill": 177848,
+    "cairn rules": 169892,
+    "cairn doc": 149301,
+    "cairn --help": 43008,
+    "card printing": 5301,
+    "card owners": 5261,
+    "card tasks": 5242,
+    "card views": 5242
+   },
+   "refusals": [
+    {
+     "request": 26,
+     "code": "E-EFFECT-ORDER",
+     "cause": "a writing call as the one operand of a conversion",
+     "line": "let n = usize(next_u64(inp));",
+     "message": "Bind a writing call to its own statement before using its result.",
+     "round_trip_requests": 3,
+     "round_trip_tokens": 195773
+    }
+   ],
+   "first_pass": 28,
+   "phases": {
+    "before_first_edit": 851161,
+    "first_edit_to_first_pass": 257622,
+    "after_first_pass": 1192540
+   }
+  },
+  {
+   "subject": "r1_sieve_plugin",
+   "task": "sieve",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 45,
+   "tokens": 2338092,
+   "first_request_context": 15936,
+   "first_edit": 22,
+   "context_gained_before_first_edit": 42731,
+   "carried_after_first_edit": 982813,
+   "documentation_carried": {
+    "cairn doc": 572336,
+    "skill": 173634,
+    "card owners": 38176,
+    "card tasks": 36438,
+    "card sums": 16905,
+    "card views": 14413,
+    "card printing": 9054,
+    "a search of docs/": 3370
+   },
+   "refusals": [
+    {
+     "request": 23,
+     "code": "E-LEN",
+     "cause": "len of a Vec",
+     "line": "let num_primes = len(primes);",
+     "message": "len requires an array view.",
+     "round_trip_requests": 2,
+     "round_trip_tokens": 122721
+    },
+    {
+     "request": 25,
+     "code": "E-TYPE-MISMATCH",
+     "cause": "an imported println hiding the builtin",
+     "line": "println(\"count \", count);",
+     "message": "Expected usize, got ro<u8>[6]@host.",
+     "round_trip_requests": 3,
+     "round_trip_tokens": 187687
+    },
+    {
+     "request": 28,
+     "code": "E-EFFECT-ORDER",
+     "cause": "a writing call as the one operand of a conversion",
+     "line": "let n = usize(read_bound());",
+     "message": "Bind a writing call to its own statement before using its result.",
+     "round_trip_requests": 3,
+     "round_trip_tokens": 191837
+    }
+   ],
+   "first_pass": 30,
+   "phases": {
+    "before_first_edit": 830256,
+    "first_edit_to_first_pass": 557220,
+    "after_first_pass": 950616
+   }
+  },
+  {
+   "subject": "r1_split_sum_cairn",
+   "task": "split_sum",
+   "arm": "cairn",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 14,
+   "tokens": 269700,
+   "first_request_context": 13372,
+   "first_edit": 2,
+   "context_gained_before_first_edit": 2704,
+   "carried_after_first_edit": 32448,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 2,
+   "phases": {
+    "before_first_edit": 27955,
+    "first_edit_to_first_pass": 16076,
+    "after_first_pass": 225669
+   }
+  },
+  {
+   "subject": "r1_split_sum_cpp",
+   "task": "split_sum",
+   "arm": "cpp",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 8,
+   "tokens": 125897,
+   "first_request_context": 13372,
+   "first_edit": 2,
+   "context_gained_before_first_edit": 1756,
+   "carried_after_first_edit": 10536,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 2,
+   "phases": {
+    "before_first_edit": 27745,
+    "first_edit_to_first_pass": 15128,
+    "after_first_pass": 83024
+   }
+  },
+  {
+   "subject": "r1_split_sum_plugin_set_aside",
+   "task": "split_sum",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": true,
+   "requests": 14,
+   "tokens": 328145,
+   "first_request_context": 15938,
+   "first_edit": 3,
+   "context_gained_before_first_edit": 6762,
+   "carried_after_first_edit": 74382,
+   "documentation_carried": {
+    "skill": 45617,
+    "language.md": 526
+   },
+   "refusals": [
+    {
+     "request": 5,
+     "code": "E-NAME",
+     "cause": "if as an expression",
+     "line": "let hi = lo + size + (if j < extra { 1 } else { 0 });",
+     "message": "Expected an identifier, found 'if'.",
+     "round_trip_requests": 2,
+     "round_trip_tokens": 48365
+    }
+   ],
+   "first_pass": 6,
+   "phases": {
+    "before_first_edit": 51606,
+    "first_edit_to_first_pass": 93468,
+    "after_first_pass": 183071
+   }
+  },
+  {
+   "subject": "r1_split_sum_plugin",
+   "task": "split_sum",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 33,
+   "tokens": 1070049,
+   "first_request_context": 15938,
+   "first_edit": 4,
+   "context_gained_before_first_edit": 7696,
+   "carried_after_first_edit": 223184,
+   "documentation_carried": {
+    "skill": 126600
+   },
+   "refusals": [],
+   "first_pass": 5,
+   "phases": {
+    "before_first_edit": 74350,
+    "first_edit_to_first_pass": 47822,
+    "after_first_pass": 947877
+   }
+  },
+  {
+   "subject": "r1_tally_cairn",
+   "task": "tally",
+   "arm": "cairn",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 23,
+   "tokens": 652205,
+   "first_request_context": 13370,
+   "first_edit": 3,
+   "context_gained_before_first_edit": 10743,
+   "carried_after_first_edit": 214860,
+   "documentation_carried": {
+    "concurrency.md": 156780
+   },
+   "refusals": [],
+   "first_pass": 4,
+   "phases": {
+    "before_first_edit": 44300,
+    "first_edit_to_first_pass": 48950,
+    "after_first_pass": 558955
+   }
+  },
+  {
+   "subject": "r1_tally_cpp",
+   "task": "tally",
+   "arm": "cpp",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 10,
+   "tokens": 163429,
+   "first_request_context": 13370,
+   "first_edit": 3,
+   "context_gained_before_first_edit": 2122,
+   "carried_after_first_edit": 14854,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 4,
+   "phases": {
+    "before_first_edit": 42465,
+    "first_edit_to_first_pass": 31734,
+    "after_first_pass": 89230
+   }
+  },
+  {
+   "subject": "r1_tally_plugin",
+   "task": "tally",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 27,
+   "tokens": 816826,
+   "first_request_context": 15934,
+   "first_edit": 7,
+   "context_gained_before_first_edit": 10847,
+   "carried_after_first_edit": 216940,
+   "documentation_carried": {
+    "skill": 100104,
+    "card tasks": 19954,
+    "a search of docs/": 138
+   },
+   "refusals": [
+    {
+     "request": 4,
+     "code": "E-LEASED",
+     "cause": "a place lent to a task touched before its wait",
+     "line": "spawn tally_chunk(values, n * j / k, n * (j + 1) / k, t, total) into workers;",
+     "message": "total is lent to workers until wait(workers), and the next iteration would lend it again.",
+     "round_trip_requests": 5,
+     "round_trip_tokens": 135031
+    },
+    {
+     "request": 9,
+     "code": "E-LINEAR-LEAK",
+     "cause": "a linear value not consumed on every path",
+     "line": "return 0;",
+     "message": "workers is linear: consume it, or defer its consumer, on every path.",
+     "round_trip_requests": 2,
+     "round_trip_tokens": 59654
+    },
+    {
+     "request": 24,
+     "code": "E-PROJECT-OR-ENVIRONMENT",
+     "cause": "cairn test of a project with no test blocks",
+     "line": "",
+     "message": "No tests: write a test block, add project.tests or supply --contract.",
+     "round_trip_requests": 0,
+     "round_trip_tokens": 0
+    }
+   ],
+   "first_pass": 10,
+   "phases": {
+    "before_first_edit": 149450,
+    "first_edit_to_first_pass": 113790,
+    "after_first_pass": 553586
+   }
+  },
+  {
+   "subject": "r1_varint_cairn",
+   "task": "varint",
+   "arm": "cairn",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 9,
+   "tokens": 154072,
+   "first_request_context": 13370,
+   "first_edit": 3,
+   "context_gained_before_first_edit": 3281,
+   "carried_after_first_edit": 19686,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 3,
+   "phases": {
+    "before_first_edit": 43469,
+    "first_edit_to_first_pass": 16651,
+    "after_first_pass": 93952
+   }
+  },
+  {
+   "subject": "r1_varint_cpp",
+   "task": "varint",
+   "arm": "cpp",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 7,
+   "tokens": 109416,
+   "first_request_context": 13370,
+   "first_edit": 2,
+   "context_gained_before_first_edit": 2069,
+   "carried_after_first_edit": 10345,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 2,
+   "phases": {
+    "before_first_edit": 27825,
+    "first_edit_to_first_pass": 15439,
+    "after_first_pass": 66152
+   }
+  },
+  {
+   "subject": "r1_varint_plugin_set_aside",
+   "task": "varint",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": true,
+   "requests": 8,
+   "tokens": 149397,
+   "first_request_context": 15934,
+   "first_edit": 3,
+   "context_gained_before_first_edit": 2691,
+   "carried_after_first_edit": 13455,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 3,
+   "phases": {
+    "before_first_edit": 50531,
+    "first_edit_to_first_pass": 18625,
+    "after_first_pass": 80241
+   }
+  },
+  {
+   "subject": "r1_varint_plugin",
+   "task": "varint",
+   "arm": "plugin",
+   "replicate": "r1",
+   "set_aside": false,
+   "requests": 12,
+   "tokens": 239649,
+   "first_request_context": 15934,
+   "first_edit": 2,
+   "context_gained_before_first_edit": 2271,
+   "carried_after_first_edit": 22710,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 2,
+   "phases": {
+    "before_first_edit": 33037,
+    "first_edit_to_first_pass": 18205,
+    "after_first_pass": 188407
+   }
+  },
+  {
+   "subject": "r2_histogram_cairn",
+   "task": "histogram",
+   "arm": "cairn",
+   "replicate": "r2",
+   "set_aside": false,
+   "requests": 36,
+   "tokens": 3032293,
+   "first_request_context": 13371,
+   "first_edit": 14,
+   "context_gained_before_first_edit": 81101,
+   "carried_after_first_edit": 1784222,
+   "documentation_carried": {
+    "concurrency.md": 395409,
+    "memory.md": 346696,
+    "guide.md": 313797,
+    "numerics.md": 202406,
+    "language.md": 183235,
+    "std/io.md": 86543,
+    "std/text.md": 55186,
+    "std/vec.md": 42694,
+    "std/fmt.md": 41397,
+    "std/core.md": 17222,
+    "a search of docs/": 8586
+   },
+   "refusals": [
+    {
+     "request": 15,
+     "code": "E-LEASED",
+     "cause": "disjoint parts whose bounds are constant expressions",
+     "line": "let t1 = spawn count_range(b - a, xs[a..b], shift, partial[BINS..2 * BINS]);",
+     "message": "partial[?..?] is lent to t0 until wait(t0).",
+     "round_trip_requests": 3,
+     "round_trip_tokens": 307814
+    },
+    {
+     "request": 18,
+     "code": "E-TYPE-MISMATCH",
+     "cause": "an unannotated literal's u64 used as a usize",
+     "line": "let t0 = spawn count_range(a, xs[0..a], shift, partial[p0..p1]);",
+     "message": "Expected usize, got u64.",
+     "round_trip_requests": 4,
+     "round_trip_tokens": 420278
+    }
+   ],
+   "first_pass": 21,
+   "phases": {
+    "before_first_edit": 677456,
+    "first_edit_to_first_pass": 817512,
+    "after_first_pass": 1537325
+   }
+  },
+  {
+   "subject": "r2_histogram_cpp",
+   "task": "histogram",
+   "arm": "cpp",
+   "replicate": "r2",
+   "set_aside": false,
+   "requests": 14,
+   "tokens": 245317,
+   "first_request_context": 13371,
+   "first_edit": 3,
+   "context_gained_before_first_edit": 1593,
+   "carried_after_first_edit": 17523,
+   "documentation_carried": {},
+   "refusals": [],
+   "first_pass": 4,
+   "phases": {
+    "before_first_edit": 42354,
+    "first_edit_to_first_pass": 32093,
+    "after_first_pass": 170870
+   }
+  },
+  {
+   "subject": "r2_histogram_plugin",
+   "task": "histogram",
+   "arm": "plugin",
+   "replicate": "r2",
+   "set_aside": false,
+   "requests": 27,
+   "tokens": 918376,
+   "first_request_context": 15936,
+   "first_edit": 8,
+   "context_gained_before_first_edit": 16996,
+   "carried_after_first_edit": 322924,
+   "documentation_carried": {
+    "skill": 101025,
+    "language.md": 22752,
+    "card owners": 20906,
+    "card tasks": 19954,
+    "memory.md": 11572,
+    "card printing": 7661,
+    "card views": 7550
+   },
+   "refusals": [
+    {
+     "request": 9,
+     "code": "E-EFFECT-ORDER",
+     "cause": "a writing call as the one operand of a conversion",
+     "line": "let n = usize(next_u64(inp));",
+     "message": "Bind a writing call to its own statement before using its result.",
+     "round_trip_requests": 3,
+     "round_trip_tokens": 105074
+    },
+    {
+     "request": 23,
+     "code": "E-PROJECT-OR-ENVIRONMENT",
+     "cause": "cairn test of a project with no test blocks",
+     "line": "",
+     "message": "No tests: write a test block, add project.tests or supply --contract.",
+     "round_trip_requests": 2,
+     "round_trip_tokens": 85836
+    }
+   ],
+   "first_pass": 11,
+   "phases": {
+    "before_first_edit": 185900,
+    "first_edit_to_first_pass": 136188,
+    "after_first_pass": 596288
+   }
+  }
+ ]
+}

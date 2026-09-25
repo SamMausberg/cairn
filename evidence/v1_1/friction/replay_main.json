@@ -1,0 +1,474 @@
+{
+ "r1_basis_points_cairn": [
+  {
+   "request": 6,
+   "status": "typed"
+  }
+ ],
+ "r1_basis_points_plugin_set_aside": [
+  {
+   "request": 4,
+   "status": "typed"
+  }
+ ],
+ "r1_basis_points_plugin": [
+  {
+   "request": 5,
+   "status": "typed"
+  }
+ ],
+ "r1_block_scan_cairn": [
+  {
+   "request": 15,
+   "status": "rejected",
+   "code": "E-COOP-GLOBAL",
+   "message": "sums is written at line 84 by the threads of every block, and the checker cannot show that no two of them write one element: the index does not depend on t, so every t writes the same element.",
+   "repair_hint": "Write each outside element from one thread, at an index built as block * width + thread.",
+   "line": 84
+  },
+  {
+   "request": 17,
+   "status": "rejected",
+   "code": "E-TYPE-MISMATCH",
+   "message": "Expected rw<u64>[n]@device, got rw<u64>[len(values)]@device.",
+   "repair_hint": "Use the expected type; an explicit conversion may trap. Do not change a signature to hide it.",
+   "line": 110
+  },
+  {
+   "request": 22,
+   "status": "rejected",
+   "code": "E-EFFECT-ORDER",
+   "message": "Bind a writing call to its own statement before using its result.",
+   "repair_hint": null,
+   "line": 99
+  },
+  {
+   "request": 24,
+   "status": "typed"
+  }
+ ],
+ "r1_block_scan_plugin_set_aside": [
+  {
+   "request": 32,
+   "status": "rejected",
+   "code": "E-TYPE-MISMATCH",
+   "message": "Expected rw<u64>[n]@device, got rw<u64>[len(host_x)]@device.",
+   "repair_hint": "Use the expected type; an explicit conversion may trap. Do not change a signature to hide it.",
+   "line": 135
+  },
+  {
+   "request": 36,
+   "status": "rejected",
+   "code": "E-EFFECT-ORDER",
+   "message": "Bind a writing call to its own statement before using its result.",
+   "repair_hint": null,
+   "line": 123
+  },
+  {
+   "request": 38,
+   "status": "typed"
+  }
+ ],
+ "r1_chunk_sums_cairn": [
+  {
+   "request": 25,
+   "status": "rejected",
+   "code": "E-LITERAL-RANGE",
+   "message": "Literal is not representable in i64.",
+   "repair_hint": null,
+   "line": 65
+  },
+  {
+   "request": 28,
+   "status": "rejected",
+   "code": "E-LITERAL-RANGE",
+   "message": "Literal is not representable in i64.",
+   "repair_hint": null,
+   "line": 65
+  },
+  {
+   "request": 33,
+   "status": "rejected",
+   "code": "E-EFFECT-ORDER",
+   "message": "Bind a writing call to its own statement before using its result.",
+   "repair_hint": null,
+   "line": 88
+  },
+  {
+   "request": 37,
+   "status": "typed"
+  }
+ ],
+ "r1_chunk_sums_plugin_set_aside": [
+  {
+   "request": 38,
+   "status": "typed"
+  }
+ ],
+ "r1_chunk_sums_plugin": [
+  {
+   "request": 38,
+   "status": "rejected",
+   "code": "E-EFFECT-ORDER",
+   "message": "Bind a writing call to its own statement before using its result.",
+   "repair_hint": null,
+   "line": 88
+  },
+  {
+   "request": 41,
+   "status": "typed"
+  }
+ ],
+ "r1_csv_field_cairn": [
+  {
+   "request": 4,
+   "status": "typed"
+  }
+ ],
+ "r1_csv_field_plugin_set_aside": [
+  {
+   "request": 3,
+   "status": "typed"
+  }
+ ],
+ "r1_csv_field_plugin": [
+  {
+   "request": 3,
+   "status": "typed"
+  }
+ ],
+ "r1_dedupe_cairn": [
+  {
+   "request": 5,
+   "status": "typed"
+  }
+ ],
+ "r1_dedupe_plugin_set_aside": [
+  {
+   "request": 3,
+   "status": "rejected",
+   "code": "E-NAME",
+   "message": "Expected an identifier, found 'if'.",
+   "repair_hint": null,
+   "line": 90
+  },
+  {
+   "request": 6,
+   "status": "typed"
+  }
+ ],
+ "r1_dedupe_plugin": [
+  {
+   "request": 4,
+   "status": "typed"
+  }
+ ],
+ "r1_histogram_cairn": [
+  {
+   "request": 23,
+   "status": "rejected",
+   "code": "E-EFFECT-ORDER",
+   "message": "Bind a writing call to its own statement before using its result.",
+   "repair_hint": null,
+   "line": 77
+  },
+  {
+   "request": 26,
+   "status": "typed"
+  }
+ ],
+ "r1_histogram_plugin_set_aside": [
+  {
+   "request": 28,
+   "status": "rejected",
+   "code": "E-EFFECT-ORDER",
+   "message": "Bind a writing call to its own statement before using its result.",
+   "repair_hint": null,
+   "line": 86
+  },
+  {
+   "request": 30,
+   "status": "typed"
+  }
+ ],
+ "r1_histogram_plugin": [
+  {
+   "request": 8,
+   "status": "rejected",
+   "code": "E-EFFECT-ORDER",
+   "message": "Bind a writing call to its own statement before using its result.",
+   "repair_hint": null,
+   "line": 76
+  },
+  {
+   "request": 11,
+   "status": "typed"
+  }
+ ],
+ "r1_pool_cairn": [
+  {
+   "request": 14,
+   "status": "rejected",
+   "code": "E-EFFECT-ORDER",
+   "message": "Bind a writing call to its own statement before using its result.",
+   "repair_hint": null,
+   "line": 133
+  },
+  {
+   "request": 18,
+   "status": "typed"
+  },
+  {
+   "request": 31,
+   "status": "rejected",
+   "code": "E-TYPE-MISMATCH",
+   "message": "Expected ro<u8>[size]@host, got ro<u8>[len(zeros)]@host.",
+   "repair_hint": "Use the expected type; an explicit conversion may trap. Do not change a signature to hide it.",
+   "line": 71
+  },
+  {
+   "request": 33,
+   "status": "typed"
+  }
+ ],
+ "r1_pool_plugin_set_aside": [
+  {
+   "request": 16,
+   "status": "rejected",
+   "code": "E-EFFECT-ORDER",
+   "message": "Bind a writing call to its own statement before using its result.",
+   "repair_hint": null,
+   "line": 124
+  },
+  {
+   "request": 19,
+   "status": "typed"
+  }
+ ],
+ "r1_pool_plugin": [
+  {
+   "request": 26,
+   "status": "rejected",
+   "code": "E-EFFECT-ORDER",
+   "message": "Bind a writing call to its own statement before using its result.",
+   "repair_hint": null,
+   "line": 189
+  },
+  {
+   "request": 29,
+   "status": "rejected",
+   "code": "E-EFFECT-ORDER",
+   "message": "Bind a writing call to its own statement before using its result.",
+   "repair_hint": null,
+   "line": 200
+  },
+  {
+   "request": 34,
+   "status": "typed"
+  }
+ ],
+ "r1_records_cairn": [
+  {
+   "request": 15,
+   "status": "typed"
+  }
+ ],
+ "r1_records_plugin_set_aside": [
+  {
+   "request": 20,
+   "status": "typed"
+  }
+ ],
+ "r1_records_plugin": [
+  {
+   "request": 12,
+   "status": "typed"
+  }
+ ],
+ "r1_rle_cairn": [
+  {
+   "request": 11,
+   "status": "rejected",
+   "code": "E-EFFECT-ORDER",
+   "message": "Bind a writing call to its own statement before using its result.",
+   "repair_hint": null,
+   "line": 72
+  },
+  {
+   "request": 14,
+   "status": "typed"
+  }
+ ],
+ "r1_rle_plugin": [
+  {
+   "request": 15,
+   "status": "rejected",
+   "code": "E-VIEW-ALIAS",
+   "message": "A part xs[lo..hi] is a borrow: it exists only as a view argument of a call.",
+   "repair_hint": null,
+   "line": 84
+  },
+  {
+   "request": 19,
+   "status": "typed"
+  }
+ ],
+ "r1_sieve_cairn": [
+  {
+   "request": 22,
+   "status": "rejected",
+   "code": "E-TYPE-MISMATCH",
+   "message": "Expected rw<u8>[size]@host, got rw<u8>[len(is_composite)]@host.",
+   "repair_hint": "Use the expected type; an explicit conversion may trap. Do not change a signature to hide it.",
+   "line": 151
+  },
+  {
+   "request": 24,
+   "status": "typed"
+  }
+ ],
+ "r1_sieve_plugin_set_aside": [
+  {
+   "request": 26,
+   "status": "rejected",
+   "code": "E-EFFECT-ORDER",
+   "message": "Bind a writing call to its own statement before using its result.",
+   "repair_hint": null,
+   "line": 129
+  },
+  {
+   "request": 29,
+   "status": "typed"
+  }
+ ],
+ "r1_sieve_plugin": [
+  {
+   "request": 23,
+   "status": "rejected",
+   "code": "E-LEN",
+   "message": "len requires an array view.",
+   "repair_hint": null,
+   "line": 105
+  },
+  {
+   "request": 25,
+   "status": "rejected",
+   "code": "E-TYPE-MISMATCH",
+   "message": "Expected usize, got ro<u8>[6]@host.",
+   "repair_hint": "Use the expected type; an explicit conversion may trap. Do not change a signature to hide it.",
+   "line": 140
+  },
+  {
+   "request": 28,
+   "status": "rejected",
+   "code": "E-EFFECT-ORDER",
+   "message": "Bind a writing call to its own statement before using its result.",
+   "repair_hint": null,
+   "line": 58
+  },
+  {
+   "request": 31,
+   "status": "typed"
+  }
+ ],
+ "r1_split_sum_cairn": [
+  {
+   "request": 3,
+   "status": "typed"
+  }
+ ],
+ "r1_split_sum_plugin_set_aside": [
+  {
+   "request": 5,
+   "status": "rejected",
+   "code": "E-NAME",
+   "message": "Expected an identifier, found 'if'.",
+   "repair_hint": null,
+   "line": 74
+  },
+  {
+   "request": 7,
+   "status": "typed"
+  }
+ ],
+ "r1_split_sum_plugin": [
+  {
+   "request": 6,
+   "status": "typed"
+  }
+ ],
+ "r1_tally_cairn": [
+  {
+   "request": 5,
+   "status": "typed"
+  }
+ ],
+ "r1_tally_plugin": [
+  {
+   "request": 9,
+   "status": "rejected",
+   "code": "E-LINEAR-LEAK",
+   "message": "workers is linear: consume it, or defer its consumer, on every path.",
+   "repair_hint": null,
+   "line": 92
+  },
+  {
+   "request": 11,
+   "status": "typed"
+  }
+ ],
+ "r1_varint_cairn": [
+  {
+   "request": 4,
+   "status": "typed"
+  }
+ ],
+ "r1_varint_plugin_set_aside": [
+  {
+   "request": 4,
+   "status": "typed"
+  }
+ ],
+ "r1_varint_plugin": [
+  {
+   "request": 3,
+   "status": "typed"
+  }
+ ],
+ "r2_histogram_cairn": [
+  {
+   "request": 15,
+   "status": "rejected",
+   "code": "E-LEASED",
+   "message": "partial[?..?] is lent to t0 until wait(t0).",
+   "repair_hint": "Touch it after the wait, or lend each task a part the other does not touch.",
+   "line": 96
+  },
+  {
+   "request": 18,
+   "status": "rejected",
+   "code": "E-TYPE-MISMATCH",
+   "message": "Expected usize, got u64.",
+   "repair_hint": "Convert explicitly, usize(x), which traps outside usize's range, or compute in usize.",
+   "line": 101
+  },
+  {
+   "request": 22,
+   "status": "typed"
+  }
+ ],
+ "r2_histogram_plugin": [
+  {
+   "request": 9,
+   "status": "rejected",
+   "code": "E-EFFECT-ORDER",
+   "message": "Bind a writing call to its own statement before using its result.",
+   "repair_hint": null,
+   "line": 73
+  },
+  {
+   "request": 12,
+   "status": "typed"
+  }
+ ]
+}
