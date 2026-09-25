@@ -69,6 +69,8 @@ def test_an_accepted_program_is_one_line(tmp_path, capsys):
     assert main(["check", str(source), "--format", "human"]) == 0
     said = capsys.readouterr().out
     assert said.startswith("typed: 1 function, and ") and said.endswith(" from the library\n"), said
+    assert main(["check", str(source), "--format", "json"]) == 0  # the verdict; a build keeps the project's hashes
+    assert set(json.loads(capsys.readouterr().out)) == {"status", "functions", "library_functions", "formal_status"}
 
 
 @pytest.mark.parametrize(
