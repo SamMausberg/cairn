@@ -18,6 +18,15 @@ Where the test suite and `cairn check`, `build` and `validate` spent their time 
 
 The suite seldom builds one program twice: 626 of 779 clang++ compiles had distinct arguments and sources. It does check one source again and again: 14690 `compile_program` calls on 5739 distinct sources, and the repeats cost 358 of their 548 seconds. `examples/tensor/tile64.cairn` alone was checked 14 times, at 13.6 seconds a check under that load.
 
+## Tests that compiled the same text twice
+
+`tools/checks/emission_identity.py compare` compiled all 2101 of its programs before it looked at whether the record was taken with the same `--normalize`, and `test_emission_identity` runs exactly that mismatch to see it refused. It now refuses before it compiles. `test_repository_sources_still_compile_after_formatting` compiled every corpus file and then its formatted text, though formatting leaves 214 of the 246 files as they are; an unchanged text now uses the first compile. Main at 349c77b against the change, run alternately at load 3 to 6, in seconds:
+
+| Test | Main | Change |
+|---|---|---|
+| `tests/tooling/test_tools.py::test_emission_identity` | 25.4, 27.5 | 16.2, 19.2 |
+| `tests/tooling/test_formatting.py::test_repository_sources_still_compile_after_formatting` | 25.5, 27.0 | 14.1, 17.1 |
+
 ## The phase rule
 
 `cairn check examples/tensor/tile64.cairn` spent all but a second in the phase rule's run of one block (`compiler/cooperative`). Four things made that run slow, and none of them was the rule. Every writer of an element was compared with every access to it, so an element one warp's store wrote 32 times cost 1024 comparisons; `arith` built a table of fifteen closures for each of 547000 integer operations; a fragment's footprint was worked out again for each of a warp's 32 threads; and `Layout.shape` and `cosize` were recomputed on each of 427000 reads. The change decides an element with no possible conflict from who made its accesses, keeps the operations in one table, works each footprint out once per call and each layout's shape once per value, and expands each access into its threads and elements in one place.
