@@ -3,9 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from cairn.agent.hosts.edits import PROTOCOL, EditSession, explain, load_json_strict
+from cairn.agent.hosts.edits import PROTOCOL, EditSession, explain, keeps_tokens, load_json_strict
 from cairn.agent.projection import canonical_source, semantic_ast
 from cairn.compiler.cairnc import Diagnostic, Parser, compile_source
+from cairn.compiler.syntax.lexing import lex
 from emitted import code_of
 
 R = Path(__file__).resolve().parents[2]
@@ -121,6 +122,37 @@ def test_a_reply_ending_in_a_comment_hides_nothing_after_its_span(after):
     s = EditSession(source, "spread")
     rejected("E-DECLARATION", s, request(s, "{ parallel i in n { out[i] = 2; } } //"))
     assert s.check(request(s, "{ parallel i in n { out[i] = 2; } } // a comment that ends\n"))[0].count(after) == 1
+
+
+REPLIES = ["{ return x; }", "{ return x; } //", "{ return x; } // ends\n", "{return x;}y", "y{", '{ return "}"; }',
+           "(x)", "(x) //", "(x)y", "( // c\n x)", '("a")', "x", "(1 + 2)", "", "\n", "'", "@"]  # fmt: skip
+
+
+def outside(text: str, start: int, end: int) -> tuple[list[str], list[str]]:
+    """What keeps_tokens() compares, from a lex of the whole text: the tokens before `start` and from `end` on."""
+    try:
+        tokens = lex(text)
+    except Diagnostic:
+        return [], []
+    return [t.s for t in tokens if t.end <= start], [t.s for t in tokens if t.start >= end]
+
+
+@pytest.mark.parametrize("path", ["examples/basics/native.cairn", "examples/apps/kvstore/src/store.cairn"])
+def test_a_reply_keeps_the_tokens_a_lex_of_the_whole_text_says_it_keeps(path):
+    """keeps_tokens() lexes only the lines a span touches, and says what comparing a lex of both whole texts says: for
+    a span starting and ending at every token of three bodies, and replies that end in a comment, join a token or
+    break one."""
+    source = (Path(__file__).resolve().parents[2] / path).read_text()
+    tokens = lex(source)
+    for f in Parser(source).parse().functions[:3]:
+        inside = [t for t in tokens if f.body_start <= t.start < f.end]
+        for i, first in enumerate(inside):
+            for last in inside[i : i + 3]:
+                start, end = first.start, last.end
+                for reply in REPLIES:
+                    candidate = source[:start] + reply + source[end:]
+                    whole = outside(candidate, start, start + len(reply)) == outside(source, start, end)
+                    assert keeps_tokens(source, candidate, start, end, start + len(reply)) == whole, (start, end, reply)
 
 
 def test_stale_session():

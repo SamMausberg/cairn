@@ -19,6 +19,7 @@ import pytest
 from cairn.compiler.cairnc import Diagnostic, compile_program, generate, joined
 from cairn.compiler.check import incremental
 from cairn.compiler.compilations import Cache, Compilation
+from cairn.compiler.syntax.parser import Parser
 from cairn.compiler.syntax.tree import Type
 from cairn.projects.project import load_project
 from sources import cairn_sources
@@ -239,24 +240,50 @@ def test_each_kind_of_edit_checks_as_a_whole_check_does(label):
     assert agrees(base, PROGRAM, after) == (label not in WHOLE)
 
 
+def walks(cache: Cache) -> list:
+    return [entry for entry in cache.recent() if entry.walked is not None]
+
+
+@pytest.mark.parametrize("path", EXAMPLES, ids=lambda p: str(p.relative_to(ROOT)))
+def test_an_edited_body_of_every_example_parses_from_the_kept_parse_as_a_whole_parse_does(path):
+    source = load_project(path).source
+    tree = Parser(source).parse()
+    spans = incremental.bodies(tree)
+    for name, span in spans.items():
+        for edit in EDITS.values():
+            body = edit(source[span[1] : span[2]]) if span[3] else None
+            after = body and spliced(source, span, body)
+            if after and (found := incremental.edited(source, after, spans)) is not None:
+                assert found.name == name
+                try:
+                    mine = incremental.spliced(pickle.loads(pickle.dumps(tree)), found, after)
+                except incremental.Fallback:
+                    continue  # a body that does not parse alone is parsed whole, where the whole parse refuses it
+                assert canonical(mine) == canonical(Parser(after).parse()), (name, edit)
+
+
 def test_a_kept_walk_answers_an_edit_and_the_edit_keeps_one_for_the_next():
     """compiler/compilations.py: an edit is checked from the walk of the source it edits, a refusal keeps no walk, and
     an edit of an edit is checked from the first edit's walk. Every answer is a whole check's."""
     cache = Cache()
     Compilation(PROGRAM, cache=cache).program()
-    spans = cache.walks()[0].walked.spans
+    spans = walks(cache)[0].walked.spans
     added = spliced(PROGRAM, spans["middle"], TARGETED["add a call"][1])
     refused = spliced(PROGRAM, spans["leaf"], TARGETED["refuse a correct program"][1])
     for source, every, name in [(added, False, "middle"), (refused, True, "leaf"), (refused, False, "leaf")]:
         compiled = Compilation(source, every=every, cache=cache)
         assert same(answer(compiled.program), answer(lambda s=source, e=every: compile_program(s, every=e)))
         assert compiled.edit == name
-    assert [entry.source for entry in cache.walks()] == [added, PROGRAM]
+    assert [entry.source for entry in walks(cache)] == [added, PROGRAM]
     assert Compilation(added, cache=cache).emitted() == Compilation(added, cache=Cache()).emitted()
-    again = spliced(added, cache.walks()[0].walked.spans["middle"], TARGETED["recursion"][1])
+    again = spliced(added, walks(cache)[0].walked.spans["middle"], TARGETED["recursion"][1])
     chained = Compilation(again, cache=cache)
     assert same(answer(chained.program), answer(lambda: compile_program(again))) and chained.edit == "middle"
-    assert cache.walks()[0].source == again
+    assert walks(cache)[0].source == again
+    parse = Compilation(PROGRAM, cache=cache)
+    assert canonical(parse.parsed()) == canonical(Parser(PROGRAM).parse())  # kept, where the next one is made from
+    reparsed = Compilation(added, cache=cache)
+    assert canonical(reparsed.parsed()) == canonical(Parser(added).parse()) and reparsed.edit == "middle"
 
 
 def test_an_edit_outside_one_body_is_checked_whole():

@@ -52,13 +52,20 @@ def load_json_strict(text: str) -> Any:
         fail("E-REQUEST", str(e))
 
 
-def outside(text: str, start: int, end: int) -> tuple[list[str], list[str]]:
-    """The tokens of `text` before `start` and from `end` on, which a reply spliced into [start, end) must keep."""
-    try:
-        tokens = lex(text)
-    except Diagnostic:
-        return [], []  # a candidate that does not lex is refused where it is compiled, with the reply's position
-    return [t.s for t in tokens if t.end <= start], [t.s for t in tokens if t.start >= end]
+def keeps_tokens(source: str, candidate: str, start: int, end: int, stop: int) -> bool:
+    """Whether every token of `candidate` outside the reply it holds at [start, stop) lexes as the token `source` has
+    outside the span [start, end) the reply replaced. Only the lines the span touches are lexed: a line starts outside
+    every token but a run of whitespace, and the two texts are the same before the span's first line and after its
+    last, so every token there is the same too."""
+    first, found = source.rfind("\n", 0, start) + 1, []
+    for text, at in ((source, end), (candidate, stop)):
+        last = text.find("\n", at)
+        try:
+            tokens = lex(text, first, last if last >= 0 else len(text))[:-1]
+        except Diagnostic:
+            return False  # nothing is kept of a candidate that does not lex
+        found.append(([t.s for t in tokens if t.end <= start], [t.s for t in tokens if t.start >= at]))
+    return found[0] == found[1]
 
 
 def shaped(request: Any, protocol: str, keys: set[str]) -> None:
@@ -398,7 +405,7 @@ class EditSession:
         if kind == "expr":
             text = "(" + text + ")"  # Operator binding at the insertion site must not change the tree around it.
         candidate = self.source[:start] + text + self.source[end:]  # Every byte outside the span is preserved,
-        if outside(candidate, start, start + len(text)) != outside(self.source, start, end):  # and every token.
+        if not keeps_tokens(self.source, candidate, start, end, start + len(text)):  # and every token.
             fail("E-DECLARATION", "The replacement's last line comment would hide what follows its span on that "
                  "line; end the comment with a newline.")  # fmt: skip
         try:
