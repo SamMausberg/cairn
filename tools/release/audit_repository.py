@@ -8,7 +8,6 @@ import json
 import lzma
 import re
 import subprocess
-import threading
 from pathlib import Path
 
 RULES = {
@@ -64,61 +63,89 @@ def too_large(name: str, data: bytes) -> bool:
     return len(data) > (RECORD_LIMIT if record else LIMIT)
 
 
+class Objects:
+    """One `git cat-file --batch` for a whole audit, asked for one object at a time: starting a process for each tree
+    and blob spent minutes, and a tree's entries decide which object is asked for next."""
+
+    def __init__(self, root: Path):
+        self.batch = subprocess.Popen(
+            ["git", "-C", str(root), "cat-file", "--batch"], stdin=subprocess.PIPE, stdout=subprocess.PIPE
+        )
+
+    def read(self, oid: str, kind: str) -> bytes:
+        self.batch.stdin.write(oid.encode() + b"\n")
+        self.batch.stdin.flush()
+        header = self.batch.stdout.readline().split()
+        if header[:2] != [oid.encode(), kind.encode()]:
+            raise ValueError(f"git cat-file answered {header!r} for {kind} {oid}.")
+        size = int(header[2])
+        return self.batch.stdout.read(size + 1)[:size]
+
+    def close(self) -> None:
+        self.batch.stdin.close()
+        if self.batch.wait() != 0:
+            raise ValueError("git cat-file --batch failed.")
+
+
+def entries(tree: bytes, width: int):
+    """Each `(mode, name, id)` of a tree object: `MODE NAME\\0` and the id's `width` raw bytes, one after another."""
+    at = 0
+    while at < len(tree):
+        space = tree.index(b" ", at)
+        end = tree.index(b"\0", space)
+        yield tree[at:space].decode(), tree[space + 1 : end].decode("utf-8"), tree[end + 1 : end + 1 + width].hex()
+        at = end + 1 + width
+
+
 def audit(root: Path, revisions: tuple[str, ...] = ("--all",)) -> dict:
-    """Every blob of every commit `revisions` reach, every branch and tag by default, against the rules above."""
+    """Every blob of every commit `revisions` reach, every branch and tag by default, against the rules above.
 
-    def git(*args: str) -> bytes:
-        return subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, timeout=30).stdout
-
-    commits = git("rev-list", *revisions).decode().splitlines()
-    if len(commits) > 1000:
-        raise ValueError("History exceeds the bounded audit; perform an independent full audit.")
+    A tree is read once for each top-level folder it sits under, since that folder, with a file's name, is all an
+    allowance looks at; a blob is read once for each allowance it is found under. So the work grows with distinct
+    content and not with the number of commits, and no length of history stops the audit.
+    """
+    listed = subprocess.run(["git", "-C", str(root), "rev-list", "--no-commit-header", "--format=%H %T", *revisions],
+                            check=True, capture_output=True, text=True).stdout  # fmt: skip
+    commits = [line.split() for line in listed.splitlines()]
     # first: each distinct blob under each allowance, with the path and commit it was first seen at there. A blob is
     # judged once at a path of each kind, so a record under evidence/ does not admit the same bytes anywhere else.
-    findings, first, count = [], {}, 0
-    for commit in commits:
-        for record in git("ls-tree", "-r", "-z", commit).split(b"\0"):
-            if not record:
+    findings, first, walked, count = [], {}, set(), 0
+    objects = Objects(root)
+    for commit, tree in commits:
+        width = len(tree) // 2
+        stack = [(tree, "")]
+        while stack:
+            oid, prefix = stack.pop()
+            place = prefix.split("/", 1)[0]
+            if (oid, place) in walked:
                 continue
-            metadata, raw = record.split(b"\t", 1)
-            mode, kind, oid = metadata.decode().split()
-            name = raw.decode("utf-8")
-            p = Path(name)
-            if "\n" in name or p.name in BAD_NAMES or p.name.startswith(".env.") or p.suffix in BAD_SUFFIXES:
-                findings.append({"path": name, "rule": "excluded-path", "commit": commit})
-            if mode not in {"100644", "100755"} or kind != "blob":
-                findings.append({"path": name, "rule": "symlink-or-submodule", "commit": commit})
-                continue
-            first.setdefault((oid, allowance(name)), (name, commit))
-            if len(first) > 20000:
-                raise ValueError("History exceeds bounded blob audit.")
-    # One `git cat-file --batch` reads every blob, where a pair of processes per blob spent minutes starting up.
-    request = "".join(f"{oid}\n" for oid, _ in first).encode()
-    with subprocess.Popen(
-        ["git", "-C", str(root), "cat-file", "--batch"], stdin=subprocess.PIPE, stdout=subprocess.PIPE
-    ) as batch:
-        feeder = threading.Thread(target=lambda: (batch.stdin.write(request), batch.stdin.close()))
-        feeder.start()
-        for (oid, _), (name, commit) in first.items():
-            header = batch.stdout.readline().split()
-            if header[:2] != [oid.encode(), b"blob"]:
-                raise ValueError(f"git cat-file answered {header!r} for blob {oid}.")
-            size = int(header[2])
-            data = batch.stdout.read(size + 1)[:size]
-            if too_large(name, data):
-                findings.append({"path": name, "rule": "large-file", "commit": commit})
-                continue
-            count += len(data)
-            text = unpacked(name, data)
-            if b"\0" in data and not picture(name, data) and text is None:
-                findings.append({"path": name, "rule": "binary-file", "commit": commit})
-            for rule, pattern in RULES.items():
-                if pattern.search(data) or (text is not None and pattern.search(text)):  # compression hides nothing
-                    # Never print a credential or a matching source snippet.
-                    findings.append({"path": name, "rule": rule, "commit": commit})
-        feeder.join()
-    if batch.returncode != 0:
-        raise ValueError("git cat-file --batch failed.")
+            walked.add((oid, place))
+            for mode, entry, child in entries(objects.read(oid, "tree"), width):
+                name = prefix + entry
+                p = Path(name)
+                if "\n" in name or (mode != "40000" and (p.name in BAD_NAMES or p.name.startswith(".env.")
+                                                         or p.suffix in BAD_SUFFIXES)):  # fmt: skip
+                    findings.append({"path": name, "rule": "excluded-path", "commit": commit})
+                if mode == "40000":
+                    stack.append((child, name + "/"))
+                elif mode not in {"100644", "100755"}:
+                    findings.append({"path": name, "rule": "symlink-or-submodule", "commit": commit})
+                else:
+                    first.setdefault((child, allowance(name)), (name, commit))
+    for (oid, _), (name, commit) in first.items():
+        data = objects.read(oid, "blob")
+        if too_large(name, data):
+            findings.append({"path": name, "rule": "large-file", "commit": commit})
+            continue
+        count += len(data)
+        text = unpacked(name, data)
+        if b"\0" in data and not picture(name, data) and text is None:
+            findings.append({"path": name, "rule": "binary-file", "commit": commit})
+        for rule, pattern in RULES.items():
+            if pattern.search(data) or (text is not None and pattern.search(text)):  # compression hides nothing
+                # Never print a credential or a matching source snippet.
+                findings.append({"path": name, "rule": rule, "commit": commit})
+    objects.close()
     reach = "all reachable commits" if revisions == ("--all",) else f"the commits {' '.join(revisions)} reaches"
     return {
         "status": "no-pattern-findings" if not findings else "blocked",

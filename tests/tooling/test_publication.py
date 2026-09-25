@@ -96,6 +96,51 @@ def test_a_compressed_json_lines_record_under_evidence_is_read_as_its_text(tmp_p
     assert found == {(name, "binary-file") for name in binaries} | {("evidence/v9/token.jsonl.xz", "github-token")}
 
 
+def test_the_audit_reads_a_history_of_any_length_and_what_left_it(tmp_path):
+    """Twelve hundred commits, past the thousand the audit once refused to read: a binary one commit added and the
+    next removed is found, and a file every commit changes is read once for each of its versions."""
+    import subprocess
+
+    stream = []
+    for n in range(1, 1201):
+        stream.append(f"commit refs/heads/main\nmark :{n}\ncommitter t <t@t> {1700000000 + n} +0000\ndata 0\n".encode())
+        stream.append(f"from :{n - 1}\n".encode() if n > 1 else b"")
+        body = f"{n}\n".encode()
+        stream.append(b"M 100644 inline counter.txt\ndata %d\n%s\n" % (len(body), body))
+        if n == 600:
+            stream.append(b"M 100644 inline tools/blob.bin\ndata 4\n\0\1\2\3\n")
+        if n == 601:
+            stream.append(b"D tools/blob.bin\n")
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "fast-import", "--quiet"], input=b"".join(stream), check=True)
+    result = audit(tmp_path)
+    assert result["commits"] == 1200 and result["distinct_blobs"] == 1201
+    assert [(f["path"], f["rule"]) for f in result["findings"]] == [("tools/blob.bin", "binary-file")]
+
+
+def test_the_audit_judges_one_tree_by_the_folder_it_sits_in_and_refuses_names_links_and_submodules(tmp_path):
+    import lzma
+    import os
+    import subprocess
+
+    for top in ("evidence", "tools"):  # one tree, read under each top-level folder
+        (tmp_path / top / "shared").mkdir(parents=True)
+        (tmp_path / top / "shared/t.jsonl.xz").write_bytes(lzma.compress(b'{"a": 1}\n'))
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config/.env").write_text("X=1\n")
+    (tmp_path / "id_rsa").write_text("not a key\n")
+    (tmp_path / "lib.o").write_text("text\n")
+    os.symlink("id_rsa", tmp_path / "link")
+    git = ["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]
+    for args in (["init", "-q"], ["add", "."], ["update-index", "--add", "--cacheinfo", f"160000,{'1' * 40},vendor"],
+                 ["commit", "-qm", "tree"]):  # fmt: skip
+        subprocess.run([*git, *args], check=True, capture_output=True)
+    found = {(f["path"], f["rule"]) for f in audit(tmp_path)["findings"]}
+    assert found == {("tools/shared/t.jsonl.xz", "binary-file"), ("config/.env", "excluded-path"),
+                     ("id_rsa", "excluded-path"), ("lib.o", "excluded-path"), ("link", "symlink-or-submodule"),
+                     ("vendor", "symlink-or-submodule")}  # fmt: skip
+
+
 def test_a_text_record_under_evidence_may_reach_four_megabytes_and_nothing_else_may_pass_two(tmp_path):
     import subprocess
 
