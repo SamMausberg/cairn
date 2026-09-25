@@ -61,7 +61,7 @@ cairn rules src/main.cairn    # the cards a program selects beyond base, integer
 cairn rules --list            # every card, its codes and the words that select it
 ```
 
-`cairn rules` prints the compiler's rule cards, offline and without compiling anything. Every code the compiler, the hosts and `cairn` emit belongs to exactly one card, so a refusal always leads to the rule behind it. Thirty-one cards state the language. Six more state what the hosts, the command line and the compiler's own limits refuse: `hosts`, `migrations`, `sketches`, `validation`, `commands` and `limits`.
+`cairn rules` prints the compiler's rule cards, offline and without compiling anything. Every code the compiler, the hosts and `cairn` emit belongs to exactly one card, so a refusal always leads to the rule behind it. One card states each part of the language. The tool cards state what the hosts, the command line and the compiler's own limits refuse: `hosts`, `migrations`, `sketches`, `validation`, `commands`, `harness` and `limits`.
 
 Given a file or a project, it prints the cards the program's words select, which are the cards a host sends an agent editing it. A code no card states, such as one a recipe's `require` chose, and a word that is no code, card or path are refused with `E-RULE`. The record is `cairn.rules/1`: each card's name, kind, codes and text.
 
@@ -233,7 +233,7 @@ $ cairn explain examples/apps/analytics --symbol analytics.query.above_loop
            "reasons": ["Cannot vectorize early exit loop", ...]}, ...]
 ```
 
-`sites` counts what needed a guard, `discharged` what the checker proved cannot fail, and `emitted` what the lowering wrote. `emitted` can exceed the difference, because a part's base is written once for its data and once for its size. Here `out[used]` keeps its guard, since nothing bounds `used` by `out`'s extent, and clang names that guard's early exit as why the loop stays scalar. `--keep-guards` on `emit`, `build` and `run` writes every guard. Loop verdicts come from clang only; under g++ or with device code the report says why it has none.
+`sites` counts what needed a guard, `discharged` what the checker proved cannot fail, and `emitted` what the lowering wrote. `emitted` can exceed the difference, because a part's base is written once for its data and once for its size. Here `out[used]` keeps its guard, since nothing bounds `used` by `out`'s extent, and clang names that guard's early exit as why the loop stays scalar. Loop verdicts come from clang only; under g++ or with device code the report says why it has none.
 
 An agent gets the same report from `cairn inspect --symbol f --explain`, or by sending `{"protocol": "cairn.edit/2", "handle": "e1", "kind": "explain"}` after an edit.
 
@@ -524,7 +524,7 @@ stencil_tiled implements stencil_1d (vendor/stencil.cu)
   finite-tested   not run: it runs device code, and device code runs only under make gpu; its 12 device tests are native-built
 ```
 
-Each line is its own claim. The contract is the externs' declared rows, which nothing checks against the source. The build compiles the vendored files unchanged with the program's command line and device target, and fails if a symbol's C++ types differ from what its extern passes. The device line is what ptxas reports when the source is compiled for the device target; nothing is launched. The finite tests are [cairn validate](#cairn-validate)'s, with the vendored objects linked into both libraries it builds, under each compiler; they are finite testing, and a failure names the shrunk input. The JSON record, `cairn.foreign/1`, adds the implementation's identity, each source's sha256 and every kernel of every CUDA source. A source that defines nothing the program declares, like the vendored `parallel_gpu.cu`, is compiled with the same flags and inspected, and not linked. The command exits 1 when a build or a test failed.
+Each line is its own claim. The contract is the externs' declared rows, which nothing checks against the source. The build compiles the vendored files unchanged with the program's command line and device target, and fails if a symbol's C++ types differ from what its extern passes. The device line is what ptxas reports when the source is compiled for the device target; nothing is launched. The finite tests are [cairn validate](#cairn-validate)'s, with the vendored objects linked into both libraries it builds, under each compiler; they are finite testing, and a failure names the shrunk input. The JSON record, `cairn.foreign/1`, adds the implementation's identity, each source's sha256 and every kernel of every CUDA source. The command exits 1 when a build or a test failed.
 
 ## A manifest is named by its path
 
@@ -695,7 +695,7 @@ nvcc runs the host half of a device build with the `--cxx` compiler, clang++ by 
 
 The features are `FEATURES` in `src/cairn/projects/target.py`. `tests/tooling/test_target.py` assembles one probe instruction per feature for each of sixteen targets the installed nvcc compiles and holds the table to what ptxas accepts. The limits (registers per thread, shared memory per block and per SM, threads per block, warps per SM) are the CUDA Programming Guide's for 7.5, 8.0, 8.6, 8.7, 8.9, 9.0, 10.0, 10.3, 10.7, 11.0, 12.0 and 12.1, a specification rather than a measurement, and every packaged card is held to its row. A target without a row has unknown limits, and its record says so.
 
-`--emulate` on `build`, `run` and `test` judges the program against the target and then builds it for the host, with its device work on host threads ([devices.md](devices.md#emulating-device-code-on-the-host)). nvcc does not run. What the host cannot run as the device would, typed PTX, a launched `extern` kernel, vendored CUDA and a feature it does not model, is refused with `E-EMULATE`, and the receipt's `emulation` names the target the program was judged against.
+`--emulate` on `build`, `run` and `test` judges the program against the target and then builds it for the host, with its device work on host threads ([devices.md](devices.md#emulating-device-code-on-the-host)). nvcc does not run, and what the host cannot run as the device would is refused with `E-EMULATE`.
 
 ## The freestanding target
 

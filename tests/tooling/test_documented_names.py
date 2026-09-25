@@ -6,6 +6,7 @@ import re
 import shlex
 from pathlib import Path
 
+from cairn.agent.teaching import TOOL_CARDS
 from cairn.commands import parser
 from cairn.editor.shells import commands, options
 
@@ -111,3 +112,8 @@ def test_tools_md_names_every_command():
         named |= set(re.findall(r"\bcairn ([a-z][a-z-]*)", span))
     missing = sorted(set(commands(parser())) - named)
     assert not missing, f"docs/tools.md never names cairn {', cairn '.join(missing)}"
+
+
+def test_tools_md_names_every_tool_card():
+    sentence = next(s for s in TOOLS.read_text().split(". ") if s.startswith("The tool cards state"))
+    assert re.findall(r"`([a-z]+)`", sentence) == list(TOOL_CARDS), "list the tool cards in docs/tools.md's cairn rules"

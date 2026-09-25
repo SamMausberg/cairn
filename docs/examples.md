@@ -495,7 +495,7 @@ cairn run examples/tensor/transpose.cairn       # exits 0 when all three transpo
 cairn explain examples/tensor/transpose.cairn   # bank_ways and conversions for each spread
 ```
 
-`tile64.cairn` and `tile32.cairn` add `a * b` into `c` with [tensor-core fragments](numerics.md#tensor-core-fragments), under `mma_unordered`'s signature and contract. `tile64` is the tiling `mma_unordered` fixes: 64 x 64 tiles, four warps of 2 x 2 WMMA fragments, k in steps of 32 through two padded stages. `tile32` is another: 64 x 32 tiles, eight warps of two `mma.sync` fragments, one stage whose A tile is swizzled. `tests/soundness/test_tensor_kernels.py` runs both on the host under both compilers and ThreadSanitizer on generated shapes with partial tiles. Both compile for sm_120 and have not run on a GPU ([evidence/v1_0/tensor](../evidence/v1_0/tensor/README.md)).
+`tile64.cairn` and `tile32.cairn` add `a * b` into `c` with tensor-core fragments, under `mma_unordered`'s signature and contract; [numerics.md](numerics.md#tensor-core-fragments) gives their two tilings and what their runs on the host showed. Both compile for sm_120 and have not run on a GPU ([evidence/v1_0/tensor](../evidence/v1_0/tensor/README.md)).
 
 ## examples/foreign
 
@@ -522,10 +522,8 @@ Each writes the submission, the export it embeds and a `cairn.harness/1` record,
 
 ## examples/bazel
 
-A Bazel workspace for [`rules_cairn`](tools.md#large-projects-and-bazel): two libraries, `geometry` and `pricing`, a binary `shop` and a test, each a `.cairn` file. A library is checked on its own as a validation action, and a binary or test builds its sources and its dependencies' as one program.
+A Bazel workspace for [`rules_cairn`](tools.md#large-projects-and-bazel), which says how the rules check and build it: two libraries, `geometry` and `pricing`, a binary `shop` and a test, each a `.cairn` file.
 
 ```sh
 cd examples/bazel && bazel test //...
 ```
-
-`MODULE.bazel` names this checkout with `cairn.local(path = "../..")`, so nothing is fetched.
