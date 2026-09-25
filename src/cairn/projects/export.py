@@ -21,6 +21,7 @@ names, and only the command `toolchain.command` gives for the record's kind, arc
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import hashlib
 import json
@@ -292,6 +293,16 @@ def runnable(record: dict[str, Any]) -> str:
     return ""
 
 
+def device_turn(record: dict[str, Any]) -> contextlib.AbstractContextManager[Any]:
+    """The machine-wide device lock (perf/on_device.py) while an export that runs device code runs it, so device
+    processes never overlap; nothing for a host program."""
+    if not record.get("device_target"):
+        return contextlib.nullcontext()
+    from ..perf.on_device import locked
+
+    return locked()
+
+
 def run(directory: Path, arguments: tuple[str, ...] = (), timeout: int = 60, memory_mib: int = 1024,
         output: Path | None = None) -> dict[str, Any]:  # fmt: skip
     """Build the export, then run what it built once; with a timing harness, what it printed is the measurement."""
@@ -306,9 +317,10 @@ def run(directory: Path, arguments: tuple[str, ...] = (), timeout: int = 60, mem
     if built["status"] != "native-built":
         return answer("run", record, status=built["status"], build=built)
     memory = None if record.get("device_target") else memory_mib
-    done = subprocess.run([built["artifact"], *arguments], capture_output=True, text=True, errors="backslashreplace",
-                          timeout=timeout, stdin=subprocess.DEVNULL,
-                          preexec_fn=functools.partial(limited, timeout, memory))  # fmt: skip
+    with device_turn(record):
+        done = subprocess.run([built["artifact"], *arguments], capture_output=True, text=True,
+                              errors="backslashreplace", timeout=timeout, stdin=subprocess.DEVNULL,
+                              preexec_fn=functools.partial(limited, timeout, memory))  # fmt: skip
     ran = answer("run", record, status="program-exited", exit_code=done.returncode, stdout=done.stdout[:32000],
                  stderr=done.stderr[:8000], artifact_sha256=built["artifact_sha256"])  # fmt: skip
     if record.get("harness") and done.returncode == 0:
@@ -349,7 +361,8 @@ def test(directory: Path, jobs: int = 0, timeout: int = 60, memory_mib: int = 10
             return {"name": name, "status": "passed"}
         return {"name": name, "status": "failed", "exit_code": done.returncode, "reason": reason(done)}
 
-    with ThreadPoolExecutor(max_workers=jobs or min(8, os.cpu_count() or 1)) as pool:
+    workers = 1 if record.get("device_target") else jobs or min(8, os.cpu_count() or 1)  # one device process at a time
+    with device_turn(record), ThreadPoolExecutor(max_workers=workers) as pool:
         results = list(pool.map(one, range(len(record["tests"]))))
     failed = sum(r["status"] != "passed" for r in results)
     tested = answer("test", record, status="test-blocks-failed" if failed else "passed-test-blocks", tests=results,

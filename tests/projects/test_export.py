@@ -6,9 +6,11 @@ command, and see each refused with E-EXPORT-TAMPERED before anything is built. A
 here and is never run.
 """
 
+import contextlib
 import json
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -220,6 +222,48 @@ def test_a_device_export_separates_the_kernels_from_the_launch_wrappers_and_neve
     assert built["status"] == "native-built", built.get("stderr", "")[-3000:]
     ran = exported.run(tmp_path / "dev", output=tmp_path / "runs")
     assert ran["status"] == "not-run" and "make" in ran["reason"] and not (tmp_path / "runs").exists()
+
+
+def test_a_device_export_holds_the_device_lock_and_runs_one_test_block_at_a_time(tmp_path, monkeypatch):
+    """An export that runs device code does it as the owner's make targets do: under perf/on_device.py's machine-wide
+    lock, one process at a time. The build and the processes are stand-ins, so nothing is compiled or launched."""
+    import threading
+
+    from cairn.perf import on_device
+
+    held, running, most = [], [0], [0]
+    guard = threading.Lock()
+
+    @contextlib.contextmanager
+    def locked():
+        held.append(True)
+        try:
+            yield
+        finally:
+            held.pop()
+
+    def process(*args, **kwargs):
+        assert held, "a device process ran without the device lock"
+        with guard:
+            running[0] += 1
+            most[0] = max(most[0], running[0])
+        time.sleep(0.02)
+        with guard:
+            running[0] -= 1
+        return subprocess.CompletedProcess(args[0], 0, "", "")
+
+    record = {"identity": "x", "kind": "exe", "device_target": "sm_120", "tests": ["a", "b", "c", "d"]}
+    monkeypatch.setattr(on_device, "locked", locked)
+    monkeypatch.setattr(exported, "check", lambda directory: record)
+    monkeypatch.setattr(exported, "runnable", lambda record: "")
+    monkeypatch.setattr(exported, "build", lambda *a, **k: {"status": "native-built", "artifact": "app",
+                                                          "artifact_sha256": "0", "directory": str(tmp_path)})  # fmt: skip
+    monkeypatch.setattr(exported.subprocess, "run", process)
+    tested = exported.test(tmp_path, jobs=8)
+    assert tested["passed"] == 4 and most[0] == 1
+    ran = exported.run(tmp_path)
+    assert ran["status"] == "program-exited" and not held
+    assert isinstance(exported.device_turn({"device_target": None}), contextlib.nullcontext)  # a host export
 
 
 @NVCC
