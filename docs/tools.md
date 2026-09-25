@@ -430,7 +430,7 @@ Beside the class, each function lists how its signature, effect row, guards, all
 
 ## cairn export
 
-`cairn export PATH --out DIR` writes the program `cairn build` would compile into a new directory: the generated C++ (`program.cu` for a device program), exactly the runtime headers it includes, the C header with `--kind library --header`, and `export.json`. That record holds the command line, the device target, each compiler's path and version, a sha256 per file, each function's canonical emission, and one identity over all of it.
+`cairn export PATH --out DIR` writes the program `cairn build` would compile into a new directory: the generated C++ (`program.cu` for a device program), exactly the runtime headers it includes, the C header with `--kind library --header`, and `export.json`. That record holds the command line, the device target, each compiler's path and version, a sha256 per file, each function's canonical emission, and one identity over all of it. The device target is judged as `cairn build` judges it, so a target the build refuses (`E-IMPL-TARGET`, `E-TARGET-FEATURE`, `E-ASM-TARGET`) is refused before anything is written.
 
 ```sh
 cairn export examples/systems --out out/systems     # the program and its record

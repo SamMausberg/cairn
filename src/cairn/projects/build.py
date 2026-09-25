@@ -12,6 +12,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TypeVar
 
 from ..compiler.cairnc import RUNTIME_FILES, Parser, generate, joined, units, write_program
 from ..compiler.lower.codegen import mangle
@@ -21,7 +22,7 @@ from ..compiler.primitives.machine import unbuildable
 from ..compiler.syntax.tree import Diagnostic
 from . import emulation, foreign
 from .project import Project, ProjectError
-from .target import resolve
+from .target import DeviceTarget, resolve
 from .toolchain import (
     audit_effects,
     find,
@@ -38,6 +39,7 @@ from .toolchain import command as native_command
 from .toolchain import version as compiler_version
 
 PRECOMPILE_AT = 16  # units to compile before a precompiled header repays its own build (evidence/v1_0/scale)
+Judged = TypeVar("Judged", DeviceTarget, None)  # a program's device target, or None for a host program
 
 
 def intact(target: Path, digest: Path) -> bool:
@@ -127,6 +129,18 @@ int main(int argc, char** argv) {{
   return 0;
 }}
 """
+
+
+def judged(device: Judged, receipt: dict) -> Judged:
+    """`device` holding what the program asks of it, judged before any compiler runs: a selected implementation's
+    needs first (E-IMPL-TARGET), then the program's own features (E-TARGET-FEATURE); and E-ASM-TARGET for assembly
+    that builds only on another host or for another device target. A build and an export judge a program alike."""
+    if device is not None:
+        targeted(receipt["functions"], device)
+        device = device.require(receipt["device_features"])
+    if why := unbuildable(receipt["requires"], host_family(), device.name if device else ""):
+        raise Diagnostic("E-ASM-TARGET", why)
+    return device
 
 
 @dataclass
@@ -219,10 +233,7 @@ def build(project: Project, *, output: Path | None = None, cxx: str = "clang++",
     cuda = "cuda" in receipt["requires"] or foreign.linked_device_code(project)  # a linked kernel makes a device build
     if cuda or any(foreign.cuda(path) for path, _ in project.foreign):  # One target, resolved once, for everything.
         device = resolve(device_target, project.device_target)
-        targeted(receipt["functions"], device)  # a selected implementation's needs, named before the program's
-        device = device.require(receipt["device_features"])
-    if why := unbuildable(receipt["requires"], host_family(), device.name if device else ""):
-        raise Diagnostic("E-ASM-TARGET", why)  # assembly builds only for the machine it names
+    device = judged(device, receipt)
     emulated = emulate and device is not None  # judged against the target above, then built for the host
     if emulated:
         emulation.check(project.source, receipt, project.foreign)
