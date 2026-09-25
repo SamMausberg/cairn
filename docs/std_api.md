@@ -5,7 +5,7 @@ Every public declaration of the packaged library, with its bounds, the comment a
 | module | what it holds |
 |---|---|
 | [std.arena](std/arena.md) | A generational arena: values live in one owned array and are named by a copyable Handle instead of a borrow, which is how CAIRN expresses graphs and cycles. |
-| [std.core](std/core.md) | The vocabulary every other module shares. |
+| [std.core](std/core.md) | The vocabulary every other module shares, and the limits of each integer type. |
 | [std.derived](std/derived.md) | Implementations written once for any record whose fields already have them: `derive eq for Point;`, `derive ord for Point;`, `derive hash for Point;`. |
 | [std.draw](std/draw.md) | Drawing into an Image on the CPU: filled rectangles, lines, filled circles, source-over blending, blits of one image onto another, text in a built-in 8 by 13 bitmap font, and the layout record and frame capture that let a person or an agent see what a program drew. |
 | [std.env](std/env.md) | The program's arguments and environment, as it was started. |
@@ -19,7 +19,7 @@ Every public declaration of the packaged library, with its bounds, the comment a
 | [std.net](std/net.md) | Blocking TCP over the C library. |
 | [std.sort](std/sort.md) | In-place ordering. |
 | [std.sys](std/sys.md) | The C library, declared exactly once: every other module borrows these names instead of redeclaring them, because an extern's C symbol *is* its CAIRN name and two declarations of one symbol collide in the emitted program. |
-| [std.text](std/text.md) | Numbers to bytes and back, and the searching a line protocol needs. |
+| [std.text](std/text.md) | Numbers to bytes and back, the ASCII class of a byte, and the searching a line protocol needs. |
 | [std.time](std/time.md) | Clocks and waiting. |
 | [std.vec](std/vec.md) | A growable owner. |
 | [std.wire](std/wire.md) |  |
