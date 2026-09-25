@@ -124,8 +124,9 @@ def library_sections(modules: list[str] | None = None) -> tuple[list[str], list[
 
 
 def standard_library(modules: list[str] | None = None) -> str:
-    """The reference of the packaged modules named, every one when none is, in one document."""
-    return GENERATED + "\n\n".join([NOTE, *library_sections(modules)[1]]) + "\n"
+    """The reference of the packaged modules named, every one when none is, in one document. It is read where it is
+    printed, so it does not say where a generated page is edited."""
+    return "\n\n".join([NOTE, *library_sections(modules)[1]]) + "\n"
 
 
 def standard_library_pages() -> dict[str, str]:
