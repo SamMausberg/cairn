@@ -32,4 +32,5 @@ Each record under this directory ([index](README.md)) says what ran for its subj
 - `make bench`, the preregistered CPU suite, and `make scale` did not run for this release; no host performance claim changes.
 - `make embedded` did not run: `qemu-system-aarch64` is not installed here. CI's AArch64 job ran the freestanding image under QEMU.
 - On the GPU: Compute Sanitizer, the tests that trap on purpose, pipeline stages, layouts in code, asserts and gradients in a lane, `compact`, `bench/gpu/parallel_gpu.py`, and every `bench/device` pair but `reduction` (`gpu/`).
+  Corrected on 2026-09-25: pipeline stages, layouts in code and the device `compact` did run in that session, in tests that passed (`gpu/make_gpu_tests.txt`). What did not run on the GPU is Compute Sanitizer, the tests that trap on purpose, storage floats, asserts and gradients in a lane, `bench/gpu/parallel_gpu.py`, and every `bench/device` pair but `reduction`.
 - `make calibrate-device` and `make tune-device` did not run; no device card is measured.

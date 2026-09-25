@@ -1,0 +1,57 @@
+# Each test of make_gpu.txt with its result. pytest -q prints one character per test in the order it runs them,
+# and with -p no:xdist that is the order of `pytest --collect-only -p no:xdist --device-runs` over the same GPU_TESTS
+# at 23f4c98, which collects these 52 tests. The three failures and three skips fall on the tests make_gpu.txt and
+# README.md name. Derived on 2026-09-25 from make_gpu.txt and that collection; nothing was run on a device.
+
+passed   tests/language/test_assembly.py::test_typed_ptx_in_a_lane_and_a_cooperative_region_runs_on_the_device
+skipped  tests/language/test_layouts.py::test_a_coordinate_outside_its_layout_traps_in_a_device_lane
+passed   tests/projects/test_app_analytics.py::test_the_device_agrees_with_the_host
+passed   tests/projects/test_app_matmul.py::test_the_tensor_cores_keep_the_contract_on_the_device
+passed   tests/projects/test_apps.py::test_device_apps_agree_with_the_host[simulator]
+passed   tests/projects/test_apps.py::test_device_apps_agree_with_the_host[gpu_pipeline]
+passed   tests/projects/test_cooperative_examples.py::test_the_device_configuration_agrees_with_its_plain_loops
+failed   tests/projects/test_demos.py::test_the_device_plate_has_the_host_bits
+passed   tests/projects/test_foreign.py::test_the_device_implementation_runs_against_its_reference_on_the_gpu
+passed   tests/projects/test_reduction_example.py::test_the_device_configuration_agrees_with_its_plain_loop
+passed   tests/runtime/test_device_arithmetic.py::test_the_device_checks_agree_on_a_device
+passed   tests/runtime/test_enqueue.py::test_the_enqueued_entries_run_on_a_device_directly_and_replayed_in_a_graph
+passed   tests/runtime/test_execution.py::test_the_pipeline_keeps_its_results_on_the_device
+failed   tests/runtime/test_finish_counter.py::test_every_launch_finishes_once_on_a_device_replayed_and_direct_at_once
+passed   tests/runtime/test_native_runtime.py::test_gpu_runtime
+passed   tests/runtime/test_native_runtime.py::test_gpu_runtime_deaths
+skipped  tests/runtime/test_native_runtime.py::test_gpu_runtime_device_traps
+passed   tests/runtime/test_native_runtime.py::test_gpu_reuse
+passed   tests/runtime/test_native_runtime.py::test_gpu_reuse_deaths
+passed   tests/soundness/test_atomics.py::test_the_device_program_agrees_on_the_device
+passed   tests/soundness/test_concurrency.py::test_the_same_lane_body_runs_on_the_device
+passed   tests/soundness/test_concurrency.py::test_lane_local_storage_and_sums_run_on_the_device
+passed   tests/soundness/test_concurrency.py::test_parts_are_guarded_inside_device_lanes_and_device_scratch_is_in_the_row
+passed   tests/soundness/test_concurrency.py::test_a_view_is_lent_as_what_its_memory_also_is
+passed   tests/soundness/test_concurrency.py::test_queued_device_work_is_ordered_by_tickets_and_overlaps_the_host
+passed   tests/soundness/test_concurrency.py::test_unsigned_reduce_plus_is_checked_in_any_order_on_host_and_device
+passed   tests/soundness/test_device_paths.py::test_every_vector_plan_computes_what_the_scalar_lanes_compute[]
+passed   tests/soundness/test_device_paths.py::test_every_vector_plan_computes_what_the_scalar_lanes_compute[plan fill { vector 2; }]
+passed   tests/soundness/test_device_paths.py::test_every_vector_plan_computes_what_the_scalar_lanes_compute[plan fill { vector 2; block 64; per_lane 8; unroll 2; }]
+passed   tests/soundness/test_finish.py::test_the_device_program_agrees_on_the_device
+passed   tests/soundness/test_plans.py::test_every_device_plan_computes_what_the_unplanned_launch_computes[]
+passed   tests/soundness/test_plans.py::test_every_device_plan_computes_what_the_unplanned_launch_computes[plan fill { block 32; }]
+passed   tests/soundness/test_plans.py::test_every_device_plan_computes_what_the_unplanned_launch_computes[plan fill { block 1024; per_lane 64; unroll 8; }]
+passed   tests/soundness/test_plans.py::test_every_device_plan_computes_what_the_unplanned_launch_computes[plan fill { per_lane 65536; }]
+passed   tests/soundness/test_plans.py::test_every_device_plan_computes_what_the_unplanned_launch_computes[plan fill { unroll 3; }]
+passed   tests/soundness/test_reduce_into.py::test_the_device_program_agrees_on_the_device
+skipped  tests/soundness/test_reduce_into.py::test_a_checked_total_that_overflows_traps_on_the_device
+passed   tests/soundness/test_scan.py::test_a_device_scan_is_the_host_prefix
+passed   tests/soundness/test_staging.py::test_every_stage_plan_computes_what_the_unplanned_region_computes[]
+passed   tests/soundness/test_staging.py::test_every_stage_plan_computes_what_the_unplanned_region_computes[plan blur { stage 2; }]
+passed   tests/soundness/test_staging.py::test_every_stage_plan_computes_what_the_unplanned_region_computes[plan blur { stage 2; block 32; per_lane 16; unroll 2; }]
+passed   tests/soundness/test_staging.py::test_every_stage_plan_computes_what_the_unplanned_region_computes[plan blur { stage 32; block 1024; }]
+passed   tests/soundness/test_tensor.py::test_the_tensor_cores_agree_with_the_reference_within_the_contract[f16]
+passed   tests/soundness/test_tensor.py::test_the_tensor_cores_agree_with_the_reference_within_the_contract[bf16]
+passed   tests/soundness/test_tensor.py::test_the_tensor_cores_agree_with_the_reference_within_the_contract[f8e4m3]
+passed   tests/soundness/test_tensor.py::test_the_tensor_cores_agree_with_the_reference_within_the_contract[f8e5m2]
+passed   tests/soundness/test_tensor_kernels.py::test_each_kernel_keeps_the_contract_on_the_device[tile64]
+passed   tests/soundness/test_tensor_kernels.py::test_each_kernel_keeps_the_contract_on_the_device[tile32]
+passed   tests/soundness/test_votes.py::test_the_device_program_agrees_on_the_device
+passed   tests/soundness/test_wide.py::test_the_device_program_agrees_on_the_device
+passed   tests/soundness/test_written.py::test_the_device_program_agrees_on_the_device
+failed   tests/verification/test_device_validation.py::test_each_sanitizer_tool_is_a_result_of_its_own_on_the_device

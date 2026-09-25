@@ -34,6 +34,8 @@ A launch with a finish claims its counter by the stream's id (`runtime/cairn_coo
 
 The other 46 tests ran device code and checked its results: the modules `GPU_TESTS` names at that commit, among them the first device runs of wide loads and stores, atomic updates, a cooperative region's finish, shared arrays nobody zeroes, warp votes, the `cq_` entries of `tests/runtime/test_enqueue.py` including a CUDA graph capture, `reduce op out[k]` over device views, and the device paths, plans, staging, tensor-core tiles, scans and foreign kernels that last ran on a GPU at 0.8.3 or never.
 
+`make_gpu_tests.txt`, added on 2026-09-25, names each of the 52 tests with its result, from `make_gpu.txt` and a collection of the same list at `23f4c98`; nothing was run to make it. By it the passing tests include `examples/cooperative`'s device configuration, whose row sums go through `pipeline` stages at depths 2 and 3; the tensor-core tile kernels of `tests/soundness/test_tensor_kernels.py`, which index shared memory through layouts in code (`T.at`); and `examples/apps/gpu_pipeline` and `tests/runtime/test_execution.py`'s pipeline, which run a device `compact`. [RUN_NOTES.md](../RUN_NOTES.md) listed those three as not run on the GPU, which was wrong.
+
 ## The reduction pair
 
 Median over 60 timed calls, interleaved, GPU time from events on the caller's stream:
