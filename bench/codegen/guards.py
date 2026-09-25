@@ -19,6 +19,7 @@ GUARDS = {
     "division": r"\bcr::(?:divide|remainder)<",
     "part": r"\bcr::part\(",
     "entry": r"\bcr::(?:view|disjoint)\(",
+    "shift": r"\bcr::(?:shr|shl_wrap)<",
 }
 
 

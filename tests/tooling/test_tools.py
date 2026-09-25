@@ -523,3 +523,26 @@ def test_workspace_measure(tmp_path):
     row = json.loads(out.read_text())["projects"]["analytics"]
     assert [c["cached"] for c in row["calls"]["checks"]] == [False, True]
     assert row["calls"]["cycles"][0]["cached"] and row["summary"]["peak_resident_kib"] > 0
+
+
+def test_the_guard_counts_count_every_call_the_emitter_guards_with():
+    """bench/codegen's guard kinds together count exactly the guard calls verify/emission.py names, in every program
+    the counts cover, so a kind the emitter gains is not left out of the totals."""
+    sys.path.insert(0, str(ROOT / "bench/codegen"))
+    from guards import corpus, counts
+
+    from cairn.compiler.cairnc import compile_source
+    from cairn.projects.project import load_project
+    from cairn.verify.emission import guard_count
+
+    differ, counted = [], 0
+    for name, path in corpus(ROOT):
+        try:
+            text = load_project(path.parent).source if path.name == "cairn.toml" else path.read_text(encoding="utf-8")
+            cpp = compile_source(text)[0]
+        except Exception:  # a program that does not build here, as the counts leave it out
+            continue
+        counted += 1
+        if sum(counts(cpp).values()) != guard_count(cpp):
+            differ.append((name, counts(cpp), guard_count(cpp)))
+    assert counted > 20 and not differ, differ
