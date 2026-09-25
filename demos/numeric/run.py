@@ -10,7 +10,6 @@ only under `make gpu` (tests/projects/test_demos.py), which writes results/demos
 import argparse
 import json
 import os
-import platform
 import re
 import shutil
 import statistics
@@ -20,24 +19,18 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path.insert(0, str(ROOT / "src"))
+sys.path[:0] = [str(ROOT / "src"), str(HERE.parent)]
+from transcript import cairn, cpu  # noqa: E402
+
 from cairn.projects.toolchain import flags  # noqa: E402
 
 TIME = re.compile(r"sweeps.* in (\d+) us")
 PRINT = re.compile(r"fingerprint of every cell's bits (\d+)")
 
 
-def cpu() -> str:
-    for line in Path("/proc/cpuinfo").read_text().splitlines():
-        if line.startswith("model name"):
-            return line.split(":", 1)[1].strip()
-    return platform.machine()
-
-
 def build(out: Path, cxx: str) -> dict[str, list[str]]:
     """Every program of the comparison, as the command that runs it."""
-    done = subprocess.run([sys.executable, str(ROOT / "bin/cairn"), "build", str(HERE), "--cxx", cxx, "--out",
-                           str(out / "cairn"), "--format", "json"], capture_output=True, text=True, cwd=ROOT)  # fmt: skip
+    done = cairn("build", str(HERE), "--cxx", cxx, "--out", str(out / "cairn"), "--format", "json")
     record = json.loads(done.stdout)
     if record.get("status") != "native-built":
         raise SystemExit(f"cairn build failed: {done.stdout[-2000:]}{done.stderr[-2000:]}")

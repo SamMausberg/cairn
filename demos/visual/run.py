@@ -10,7 +10,6 @@ import argparse
 import json
 import shutil
 import struct
-import subprocess
 import sys
 import textwrap
 import zlib
@@ -18,7 +17,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path.insert(0, str(ROOT / "src"))
+sys.path[:0] = [str(ROOT / "src"), str(HERE.parent)]
+from transcript import cairn, rel  # noqa: E402
+
 from cairn.agent.hosts.edits import EditHost, stable_json  # noqa: E402
 from cairn.projects.project import load_project  # noqa: E402
 
@@ -28,14 +29,6 @@ REQUESTS = [  # what the scripted agent sends, in order
     {"protocol": "cairn.edit/2", "handle": "e1", "kind": "body", "replacement": "{ return MAP_X + span + 8; }"},
     {"protocol": "cairn.edit/2", "handle": "e1", "kind": "shot", "functions": ["heat.view.frame"]},
 ]
-
-
-def cairn(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, str(ROOT / "bin/cairn"), *args], cwd=ROOT, capture_output=True, text=True)
-
-
-def rel(path: Path) -> str:
-    return str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else str(path)
 
 
 def repack(png: Path, out: Path) -> int:

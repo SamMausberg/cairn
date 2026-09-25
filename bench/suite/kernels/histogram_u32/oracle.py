@@ -24,8 +24,3 @@ def expected(n: int) -> list[int]:
     for i in range(n):
         bins[sample(i) & 255] += 1
     return bins
-
-
-def agrees(n: int, result) -> bool:
-    want = expected(n)
-    return len(result) == len(want) and all(a == b for a, b in zip(result, want, strict=True))

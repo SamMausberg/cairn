@@ -12,7 +12,6 @@ Everything the host, the compiler, the validator and the timer say is computed o
 import argparse
 import json
 import os
-import platform
 import shutil
 import subprocess
 import sys
@@ -21,7 +20,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path.insert(0, str(ROOT / "src"))
+sys.path[:0] = [str(ROOT / "src"), str(HERE.parent)]
+from transcript import cairn, cpu, rel  # noqa: E402
+
 from cairn.perf.tuning.feedback import lines_for_people  # noqa: E402
 from cairn.perf.tuning.tune import lines as tune_lines  # noqa: E402
 
@@ -34,22 +35,6 @@ SUBMISSIONS = [  # what the scripted agent sends, in order: a candidate file, wh
     ("sumsq_by4.cairn", {}, "sumsq_by4 when n % 4 == 0"),
     ("sumsq_blocks.cairn", {}, "sumsq_blocks[K], blocks of K terms each summed from zero, tune K in [4, 8, 16, 32]"),
 ]  # fmt: skip
-
-
-def cairn(*args: str) -> subprocess.CompletedProcess:
-    """The command line a reader would type, run from the repository root."""
-    return subprocess.run([sys.executable, str(ROOT / "bin/cairn"), *args], cwd=ROOT, capture_output=True, text=True)
-
-
-def rel(path: Path) -> str:
-    return str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else str(path)
-
-
-def cpu() -> str:
-    for line in Path("/proc/cpuinfo").read_text().splitlines() if Path("/proc/cpuinfo").exists() else []:
-        if line.startswith("model name"):
-            return line.split(":", 1)[1].strip()
-    return platform.machine()
 
 
 class Server:
