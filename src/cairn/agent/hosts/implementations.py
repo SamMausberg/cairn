@@ -37,7 +37,7 @@ from ..diagnostics import explain, located
 from ..projection import local, signature
 from ..state import delta, state
 from ..teaching import select_cards
-from .edits import digest, load_json_strict, stable_json
+from .edits import digest, load_json_strict, named, stable_json
 
 PROTOCOL = "cairn.implementation/1"
 MAX_SOURCE = 64_000  # bytes of one submission
@@ -227,8 +227,8 @@ class ImplementationHost:
         against that target (projects/emulation.py)."""
         handle = f"i{len(self.sessions) + 1}"
         self.sessions[handle] = ImplementationSession(source, reference, policy, self.regressions, self.cxx, emulate)
-        return {**self.sessions[handle].packet(), "handle": handle,
-                "reply": {**self.sessions[handle].packet()["reply"], "handle": handle}}  # fmt: skip
+        packet = self.sessions[handle].packet()
+        return {**packet, "handle": handle, "reply": {**packet["reply"], "handle": handle}}
 
     def source(self, handle: str) -> str:
         return self.session(handle).source
@@ -329,6 +329,5 @@ class ImplementationHost:
             request = load_json_strict(text)
             return self.respond(request)
         except Diagnostic as e:
-            handle = request.get("handle") if isinstance(request, dict) else None
-            s = self.sessions.get(handle) if isinstance(handle, str) else None
+            s = named(self.sessions, request)
             return explain(e, s.source if s else "")
