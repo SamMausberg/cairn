@@ -61,7 +61,7 @@ fn stage(n:usize, host_x:ro<f32>[n], x:rw<f32>[n]@device, out:rw<f32>[n]@device)
 
 Device work runs on the calling thread's execution context (`runtime/cairn_exec.hpp`): a stream and its event, one scratch arena and a budget, made by the thread's first device operation and kept. A region over device views returns once that stream has run it, and so does a `transfer`, so the host sees the result and a guard that fired in a lane has aborted the process. Nothing waits for the rest of the device. A device `reduce`, `scan` or `compact` takes its temporaries from the arena, which grows to the largest request it has met. Queued work borrows one of the context's streams until its `wait`.
 
-Run again, a pipeline makes no stream, allocates no temporary and waits only for its own stream. A host stand-in that counts CUDA calls (`tests/runtime/test_execution.py`) ran one pipeline of regions, a vector and a staged plan, a reduction, a scan, a compaction, transfers and two queued tickets. The first pass made two streams and three arena allocations, later passes made none, and each pass waited on a stream nine times ([evidence](../evidence/v1_0/execution/README.md)). Its CUDA build compiles for sm_120 without `cudaDeviceSynchronize` and has not run on a GPU. A device `mma_unordered` runs on the same stream and waits only for it.
+Run again, a pipeline makes no stream, allocates no temporary and waits only for its own stream. A host stand-in that counts CUDA calls (`tests/runtime/test_execution.py`) ran one pipeline of regions, a vector and a staged plan, a reduction, a scan, a compaction, transfers and two queued tickets. The first pass made two streams and three arena allocations, later passes made none, and each pass waited on a stream nine times ([evidence](../evidence/v1_0/execution/README.md)), eight once a run of device work waits only before what the host observes next ([evidence](../evidence/v1_1/device_perf/README.md#waits-placed-between-observations-2026-09-25)). Its CUDA build compiles for sm_120 without `cudaDeviceSynchronize` and has not run on a GPU. A device `mma_unordered` runs on the same stream and waits only for it.
 
 A region does not wait for queued work it does not touch; each ticket is waited for at its own `wait`. On a device without concurrent managed access (Windows and WSL2), a live ticket's kernel may still run after a region returns, and the host must not touch `@unified` memory while any kernel runs.
 
@@ -69,7 +69,24 @@ A C program that owns a stream hands it to a device library with `NAME_device_st
 
 ### One wait, or none
 
-A function whose device work nothing on the host can see before it returns waits once, when it returns, instead of after each region. `smooth` below waits once for both regions; a function with a single region waits once either way and compiles as before.
+A run of device work waits once, before the first thing the host observes after it, instead of after each region. In `stage` below the two regions wait once, when the copy back to host memory begins; a function with one region between its copies waits once either way and compiles as before.
+
+```cairn
+fn stage(n:usize, host:rw<f32>[n], x:rw<f32>[n]@device, tmp:rw<f32>[n]@device) {
+  transfer(x, host);
+  parallel i in n { tmp[i] = 2.0 * x[i]; }
+  parallel i in n { x[i] = tmp[i] + 1.0; }     // queued behind the first, with no wait between
+  transfer(host, x);                           // one wait for both, then the copy
+}
+```
+
+The host sees device memory, or what device work did, only through a few operations, and the runtime makes each of them wait for the work queued before it: a copy to or from host memory, a device buffer's allocation and its release where its block ends, a device `reduce`, `scan` or `compact` whose result returns to the host, and queued work. Each of these ends a run. The rule reads the function's body for its runs, and its effect row, which covers everything it calls, for any other way to observe: I/O, a foreign call, a machine register, host assembly, a call through a function value, a lock, an atomic update outside a device region, a host task, or a `@unified` view or buffer. Any of those keeps every operation of the function waiting where it stands, as before. A body is held only where some run has two operations, or one in a loop, since otherwise no wait is saved, and regions a plan fuses count as the one launch they are.
+
+That is enough for a failed guard to end the process where it did before. A guard that fails in a lane traps its kernel, and the failure surfaces at the next wait on its stream, where the runtime aborts the process; the trap also poisons the device context, so nothing queued after it runs. Held work runs on one lane, and the first operation after it through which the host could observe anything waits on that lane first. So the process aborts before the host reads a copy, frees or reuses memory the work may still touch, returns to a C caller or leaves `main`, just as when each region waited. What the lanes wrote before the trap stays in device memory the host never reads. A host guard that fails while held work is queued aborts the process too, with its own message in place of the device's.
+
+The suite's host machine, which counts every CUDA call and keeps track of the work each stream has queued and no wait has covered, ran a function that copies in, runs two regions, reads a total, runs two more and copies back (`tests/runtime/test_execution.py`). Held, it waited five times a call where it had waited seven, left nothing unwaited when it returned, and made no copy to or from host memory and no release while another stream held work nobody had waited for; a copy made by hand under an open run was caught doing so.
+
+A function whose row holds no way to observe at all, not even a copy to or from host memory, an allocation or queued work, needs no wait until it returns, as `smooth` shows:
 
 ```cairn
 fn smooth(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, tmp:rw<f32>[n]@device) {
@@ -77,8 +94,6 @@ fn smooth(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, tmp:rw<f32>[n]@de
   parallel i in n { out[i] = tmp[i] + 1.0; }     // one wait for both, when smooth returns
 }
 ```
-
-The rule reads the function's effect row, which covers everything it calls. The row may not hold a transfer to or from host memory, a device allocation (a `buffer`, or the scratch of a device `reduce`, `scan` or `compact`, whose result returns to the host), queued work or a wait, I/O, a foreign call, a machine register, host assembly, a call through a function value, a lock, or an atomic update outside a device region, and the function may take no `@unified` view. These are everything through which the host reads device memory, waits on the device or lets another host thread see progress, so work queued before the one wait reaches nothing the host reads earlier. An atomic update in a device lane, such as a histogram's, is device work like any other. When the function returns the host sees every result, and a guard that fired in a lane has aborted the process, just as when each region waited. A device operation whose result the host reads, such as a copy to host memory, still waits where it stands, and it waits for everything queued before it.
 
 A device library's C header gives each such function a second entry, `cq_NAME(stream, ...)`. It checks its arguments as `cf_NAME` does, queues the same work on the caller's stream after what the caller queued there, and returns without waiting. It makes no stream, event or allocation, so PyTorch or any CUDA program can call it on its current stream, or capture it in a CUDA graph. The first call of each kernel in a process reads the kernel's attributes once. `cf_NAME` stays synchronous. A function the rule refuses has no `cq_` entry, and the header lists it under `E-ENQUEUE` with the reason:
 

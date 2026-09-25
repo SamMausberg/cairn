@@ -16,7 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from cairn.compiler.cairnc import compile_source
+from cairn.compiler.cairnc import compile_program, compile_source
+from cairn.compiler.lower import execution
 from cairn.compiler.lower.header import binding, header
 from emitted import device_build, hosted_library, library_ran_on_device, printed, sanitized
 
@@ -247,6 +248,61 @@ def test_a_body_is_held_only_where_it_queues_device_work_more_than_once():
     bodies = {part.split("(")[0]: part.split("\n}\n")[0] for part in cpp.split("\nvoid ci_")[1:]}
     assert {name for name, body in bodies.items() if "cr::gpu::Held" in body} == {"smooth", "blocked", "repeat"}
     assert "once" in bodies and "fetch" in bodies
+
+
+# Device work between things the host observes: copies to and from host memory, and an owner's allocation and release.
+RUNS = """
+fn between_copies(n:usize, host:rw<f32>[n], x:rw<f32>[n]@device) {
+  transfer(x, host);
+  parallel i in n { x[i] = x[i] + 1.0; }
+  parallel i in n { x[i] = x[i] * 2.0; }                 // queued behind the first: the copy back waits for both
+  transfer(host, x);
+}
+fn with_an_owner(n:usize, x:rw<f32>[n]@device) {
+  buffer t:f32[n]@device = zeroed;
+  parallel i in n { t[i] = x[i]; }
+  parallel i in n { x[i] = t[i] + 1.0; }                 // t's release at the end waits for both
+}
+fn one_at_a_time(n:usize, host:rw<f32>[n], x:rw<f32>[n]@device) {
+  transfer(x, host);
+  parallel i in n { x[i] = x[i] + 1.0; }
+  transfer(host, x);
+  parallel i in n { x[i] = x[i] * 2.0; }
+  transfer(host, x);
+}
+fn printed(n:usize, x:rw<f32>[n]@device) {
+  parallel i in n { x[i] = x[i] + 1.0; }
+  parallel i in n { x[i] = x[i] * 2.0; }
+  println(n);
+}
+fn helper(n:usize) -> usize = n + 1;
+fn tasked(n:usize, x:rw<f32>[n]@device) {
+  parallel i in n { x[i] = x[i] + 1.0; }
+  parallel i in n { x[i] = x[i] * 2.0; }
+  let t = spawn helper(n);
+  let m = wait(t);
+}
+fn unified(n:usize, x:rw<f32>[n]@device) {
+  buffer u:f32[n]@unified = zeroed;
+  parallel i in n { x[i] = x[i] + 1.0; }
+  parallel i in n { x[i] = x[i] * 2.0; }
+}
+"""
+
+
+def test_a_body_is_held_where_a_run_of_device_work_meets_only_observations_that_wait():
+    """A copy to or from host memory and an owner's allocation and release wait for a held run where they stand, so
+    they only end a run; I/O, a host task and @unified memory would see it unwaited, so they keep a body from being
+    held; a body with no run of two operations between observations gains nothing and is not held."""
+    program, checker, _ = compile_program(RUNS)
+    held = {f.name for f in program.functions if execution.held(checker, f)}
+    assert held == {"between_copies", "with_an_owner"}
+    why = {f.name: execution.unheld(checker, f) for f in program.functions}
+    assert why["between_copies"] == why["with_an_owner"] == why["one_at_a_time"] == ""
+    assert why["printed"] == "it makes a foreign call, which may observe device memory"  # println calls write(2)
+    assert why["tasked"].startswith("it starts a host task") and why["unified"].startswith("it declares a @unified")
+    declared = header(RUNS, "lib", device=True)[0]
+    assert "cq_between_copies" not in declared and "between_copies: it transfers to host memory" in declared
 
 
 def test_the_enqueued_entries_compile_for_sm_120(tmp_path):

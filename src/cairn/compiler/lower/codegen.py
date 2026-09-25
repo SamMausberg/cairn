@@ -514,7 +514,7 @@ class Emitter:
                 tag = f"static_cast<std::uint32_t>(v_{n})" if t.name in self.p.enums else f"v_{n}.tag"
                 self.put(f"if({tag} >= {len(self.c.layouts[t])}) cr::trap();")
         implementations.lower(self, f)  # a plan's implementation, where its condition holds
-        if execution.held(self.c, f):  # one wait for all its device work, when it returns (execution.py)
+        if execution.held(self.c, f, self.lean):  # one wait for all its device work, when it returns (execution.py)
             self.need("cairn_gpu.hpp")
             self.put(execution.HELD)
         self.block(f.body)
