@@ -249,6 +249,8 @@ def dispatch(c: Checker, e: Expr, trait: str, member: Function, position: int, a
     c.host_only(e, "A dynamic reference points at a host table")
     if len(args) != len(member.params):
         fail("E-ARITY", f"{member.name} expects {len(member.params)} arguments.", e)
+    if is_view(held := c.peek(args[position])):  # `size(frames)` of a view of Dyn[T]: a call has one receiver
+        c.expect(held, Type("dyn", member.params[position][1].mode, args=(Type(trait),)), args[position])
     if member.params[position][1].mode == "rw" and not c.writable(args[position]):
         fail("E-WRITE-LEASE", f"{member.name} writes its receiver; it needs an rw<dyn {trait}> reference.", e)
 

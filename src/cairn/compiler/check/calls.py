@@ -47,9 +47,7 @@ def indirect(c: Checker, e: Expr, target: Binding, args: list[Expr]) -> Type:
         if want.mode == "value":
             c.expr(a, want)
             continue
-        if want.mode == "rw" and not c.writable(a):
-            fail("E-WRITE-LEASE", "A mutable borrow needs a mutable local or an rw borrow.", a)
-        c.expect(c.expr(a, consume=False).value, want.value, a)
+        single_argument(c, a, want)  # A function type has no view parameter (E-FN-TYPE).
         lent = c.lend(a, want.mode, borrows)  # No callee row exists to rename: charge the caller now.
         c.effects |= {("write:" if want.mode == "rw" else "read:") + lent} if lent else set()
     c.disjoint(borrows, e)
@@ -240,6 +238,8 @@ def invoke(c: Checker, e: Expr, f: Function, args: list[Expr], targs: tuple, exp
             continue
         named = root(a).tag == "name" and root(a).val in c.env
         if want.name == "dyn" and c.peek(a).name != "dyn":
+            if is_view(c.peek(a)):  # A dynamic reference lends one object, not an array of them.
+                c.expect(c.peek(a), want, a)
             boxed = c.peek(a).value == Type("Dyn", args=want.args)
             table = None if boxed else vtable(c, want.args[0].name, c.peek(a).value, a)
             if not named or (want.mode == "rw" and not c.writable(a)):
@@ -268,12 +268,7 @@ def invoke(c: Checker, e: Expr, f: Function, args: list[Expr], targs: tuple, exp
             asked = Type(want.name, want.mode, extent, want.args, want.place)
             c.expect(actual, Type(want.name, mode, extent, want.args, place), a, asked)
         else:
-            actual = c.expr(a, consume=False)
-            if is_view(actual):  # `h(v)` of an array view where one value's borrow is expected
-                c.expect(actual, want, a)
-            if want.mode == "rw" and not c.writable(a):
-                fail("E-WRITE-LEASE", "A mutable borrow needs a mutable local or an rw borrow.", a)
-            c.expect(actual.value, want.value, a)
+            single_argument(c, a, want)
         mapping[name] = c.lend(a, want.mode, borrows, bool(want.extent))
         if named and want.mode == "rw" and c.env[root(a).val].ty.mode == "value":
             c.effect("write:" + root(a).val)
@@ -300,6 +295,17 @@ def repeatable(c: Checker, e: Expr) -> Expr:
     for a in e.args:
         c.repeatable(a)
     return e
+
+
+def single_argument(c: Checker, a: Expr, want: Type):
+    """A value, place or borrow passed where `want` borrows a single value: one of the value type it names, never a
+    view (`h(v)` for `h(x:ro<u64>)` is a mismatch, and `h(v[i])` fits), and a place it may write when `want` is rw."""
+    actual = c.expr(a, consume=False)
+    if is_view(actual):
+        c.expect(actual, want, a)
+    if want.mode == "rw" and not c.writable(a):
+        fail("E-WRITE-LEASE", "A mutable borrow needs a mutable local or an rw borrow.", a)
+    c.expect(actual.value, want.value, a)
 
 
 def view_argument(c: Checker, a: Expr) -> Type:
