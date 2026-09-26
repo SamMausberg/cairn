@@ -33,7 +33,7 @@ from .projects.toolchain import SANITIZER_ENVIRONMENT, emulator, host_family, re
 FORMAT: str | None = None  # --format as given; None lets the stream decide (see editor/terminal.py)
 LINES = False  # a watched check's records, one per line (JSON Lines), so a reader can take each as it comes
 # The commands that read no project: their function takes the arguments alone.
-ALONE = {"doctor", "cards", "certificates", "rules", "find", "new", "fmt", "completions", "lsp", "mcp", "diff", "verify"}  # fmt: skip
+ALONE = set("doctor cards certificates rules find new fmt completions lsp mcp diff verify".split())
 REFUSED = {"counterexample", "rejected", "invalid-contract", "invalid-domain", "invalid-reference"}  # verify exits 1
 
 

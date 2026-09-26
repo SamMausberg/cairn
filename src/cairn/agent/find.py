@@ -2,15 +2,15 @@
 
 A query runs over the builtins, the packaged `std` modules and the program's own functions. Given the types of the
 values an agent has, and perhaps the type it wants back, a function fits when a call of it with those values checks.
-Each candidate call is written out as a probe function in the program's root module: the values in any order, and
-each parameter they leave open as a further value of its declared type, a template's parameters at the types the
-values and the wanted result hold. One check judges every probe, reporting each refusal on its own
-(compiler/check/refusals.py), so what fits is what the compiler accepts and nothing here repeats a type rule. A probe
-refused only because it drops a linear value it was handed still fits: the call checked, and the drop is the
-probe's. A call that fills every parameter, besides the extents a call may leave out, fits before one that leaves
-some open, and a result that holds the wanted type, as `Option[T]` or `Result[T, E]` holds `T`, after one that is
-it. The probes call from the root module, so a function private to another module of the program is no type query's
-hit. A query gives at most `MOST` values, since the probes grow as every order of them.
+Each candidate call is written out as a probe function in the program's root module: the values in any order, and each
+parameter they leave open as a further value of its declared type, a template's parameters at the types the values and
+the wanted result hold. One check judges every probe, reporting each refusal on its own (compiler/check/refusals.py), so
+what fits is what the compiler accepts and nothing here repeats a type rule; a probe it leaves without a verdict never
+fits. A probe refused only because it drops a linear value it was handed still fits: the call checked, and the drop is
+the probe's. A call that fills every parameter, besides the extents a call may leave out, fits before one that leaves
+some open, and a result that holds the wanted type, as `Option[T]` or `Result[T, E]` holds `T`, after one that is it.
+The probes call from the root module, so a function private to another module of the program is no type query's hit. A
+query gives at most `MOST` values, since the probes grow as every order of them.
 
 Given words, a function matches when its name, its module or the first sentence of the comment above it holds
 them, or a word `ALIASES` takes for one of them; two words that spell one it takes (`hash map`) are that word. Of
@@ -37,7 +37,6 @@ from ..compiler import compilations
 from ..compiler.cairnc import Checker, Diagnostic, Function, Parser, Type, derive, fail, link, specialize
 from ..compiler.check.calls import extents
 from ..compiler.check.effects import allowed
-from ..compiler.check.refusals import reaches
 from ..compiler.check.traits import described
 from ..compiler.primitives.builtins import TABLE
 from ..compiler.syntax.lexing import comment_above
@@ -279,7 +278,7 @@ def declared(ty: Type, extent: str) -> str:
 
 
 class Probes:
-    """The probe functions of one type query, the source that holds them before the program, and their verdicts."""
+    """The probe functions of one type query, the source line of each by its name, and their verdicts."""
 
     def __init__(self, index: Index, takes: list[Type], returns: Type | None):
         self.index, self.takes, self.returns = index, takes, returns
@@ -292,9 +291,10 @@ class Probes:
         # A view or a borrow is passed as it is given; a value is moved into a local the probe owns and lends.
         self.moves = "".join(f"let mut x{i} = a{i}; " for i, t in enumerate(takes) if t.mode == "value")
         self.values = [f"x{i}" if t.mode == "value" else f"a{i}" for i, t in enumerate(takes)]
-        self.text = [f"fn cairn_find({', '.join(self.params)}) {{ {self.moves}}}\n"]  # what a builtin's row adds to
+        self.text = {"cairn_find": f"fn cairn_find({', '.join(self.params)}) {{ {self.moves}}}\n"}  # a row adds to it
         known = [*takes, *([returns] if returns else [])]
-        pool = list(dict.fromkeys(x for t in known for x in (t.value, *(a for a in t.args if isinstance(a, Type)))))
+        held = (x for t in known for x in (t.value, *(a for a in t.args if isinstance(a, Type))))
+        pool = list(dict.fromkeys(x for x in held if x.name != "void"))  # no value is void: nothing is chosen at it
         for entry in index.entries:
             if entry.f is None:
                 for name in (n for n in entry.names if n in TABLE):
@@ -302,7 +302,6 @@ class Probes:
                     self.add(entry, [], f"{name}({', '.join(self.values)})", 0, None, head)
             else:
                 self.filled(entry, pool)
-        self.source = index.imports + "".join(self.text) + index.program
 
     def add(self, entry: Entry, params: list[str], call: str, left: int, void: bool | None, head: str = "") -> None:
         """A probe of each form the query asks for: the call returned as the type wanted, when one is, and the call
@@ -314,7 +313,7 @@ class Probes:
             name = f"cairn_find_{len(self.probes) + 1}"
             self.probes[name] = Probe(entry, (0 if body[0] == "r" or not self.returns else 1, left), head)
             result = f" -> {self.returns.display()}" if body[0] == "r" and self.returns else ""
-            self.text.append(f"fn {name}({', '.join([*self.params, *params])}){result} {{ {self.moves}{body} }}\n")
+            self.text[name] = f"fn {name}({', '.join([*self.params, *params])}){result} {{ {self.moves}{body} }}\n"
 
     def filled(self, entry: Entry, pool: list[Type]) -> None:
         """Every way the values fill a function's parameters, with the extents a call may leave out and without
@@ -345,22 +344,35 @@ class Probes:
                         continue
                     self.add(entry, params, f"{f.name}({', '.join(args)})", len(left), f.ret.name == "void")
 
-    def judged(self) -> list[tuple[Entry, tuple[int, int], str, set[str] | None]]:
-        """Each probe the checker accepts, with its fit, a builtin's call and the row that call adds."""
-        c = Checker(specialize(derive(link(Parser(self.source).parse()))), False, True)
+    def checked(self, names: list[str]) -> tuple[Checker, dict[str, Diagnostic]]:
+        """One check of the values alone and of the probes `names`, and each refusal it kept, by what it is about."""
+        source = "".join([self.index.imports, self.text["cairn_find"], *(self.text[n] for n in names)])
+        c = Checker(specialize(derive(link(Parser(source + self.index.program).parse()))), False, True)
         with contextlib.suppress(Diagnostic):  # each refusal is kept in c.refusals
             c.check()
         if c.stopped:
             fail("E-INTERNAL", f"The check of the candidate calls stopped at {c.stopped}, so no answer is complete.")
-        errors = {about: error for about, _, error, _ in c.refusals}
+        return c, {about: error for about, _, error, _ in c.refusals}
+
+    def judged(self) -> list[tuple[Entry, tuple[int, int], str, set[str] | None]]:
+        """Each probe the checker accepts, with its fit, a builtin's call and the row that call adds. A probe that
+        a refusal reaches, or that got no verdict, is no fit. A refused signature, such as a parameter of a type the
+        values hold that no parameter can have by value, leaves every body without one: those probes are refused, and
+        the rest are judged again without them."""
+        c, errors = self.checked(list(self.probes))
+        if "cairn_find" in c.unjudged and "cairn_find" not in errors:
+            c, again = self.checked([n for n in self.probes if n not in errors])
+            errors |= again
         alone = errors.get("cairn_find")  # the values alone: a type no parameter can have, such as a Group by value
         if alone is not None and alone.data["code"] != "E-LINEAR-LEAK":
             raise alone
+        if "cairn_find" in c.unjudged:
+            fail("E-INTERNAL", "The check of the candidate calls judged no body, so no answer is complete.")
         refused = {about: error.data["code"] for about, error in errors.items()}
         base = c.local_effects.get("cairn_find", set())
         out = []
         for name, probe in self.probes.items():
-            if refused.get(name, "E-LINEAR-LEAK") != "E-LINEAR-LEAK" or reaches(c, name, set(refused) - {name}):
+            if refused.get(name, "E-LINEAR-LEAK") != "E-LINEAR-LEAK" or name in c.unjudged:
                 continue
             self.accepted.add(name)
             fit = probe.fit

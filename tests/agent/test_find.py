@@ -144,12 +144,23 @@ def test_a_query_names_a_type_it_cannot_resolve_or_asks_nothing():
     assert many.value.data["code"] == "E-REQUEST"
 
 
+def test_a_refused_signature_leaves_no_probe_counted_without_a_verdict():
+    """A probe with a parameter no value may be passed as (an Atomic taken from `ro<Atomic[u64]>`), or that returns
+    a borrow, is refused at its signature, and then the check judges no body at all. Those unjudged probes were fits:
+    175 of them for `ro<Atomic[u64]>`, and a wanted borrow or void ended the query in a traceback."""
+    assert find(None, takes=["ro<Atomic[u64]>"]) == {"hits": [], "more": 0}
+    assert find(None, takes=["u64"], returns="ro<u64>") == {"hits": [], "more": 0}
+    nothing = find(None, returns="void")["hits"]  # no Vec[void] of a template chosen at void: calls that return nothing
+    assert nothing and all(" -> " not in line.split("  ")[0] for line in nothing)
+
+
 def test_each_probe_is_judged_as_a_check_of_it_alone_would_judge_it():
     """One check of every probe, reporting every refusal, against a check of each probe on its own: the accepted
-    ones and a spread of the refused ones, a template's instances and a linear value's drop among them."""
+    ones and a spread of the refused ones, a template's instances, a linear value's drop and signatures the checker
+    refuses among them."""
     index, _ = indexed_or_refused(RECORDS)
-    for takes in (["Vec[Rec]"], ["File", "ro<u8>[n]"]):
-        probes, text = judged(index, takes)
+    for takes, returns in ((["Vec[Rec]"], None), (["File", "ro<u8>[n]"], None), (["File"], "ro<u8>")):
+        probes, text = judged(index, takes, returns)
         refused = [name for name in probes.probes if name not in probes.accepted][::40]
         assert probes.accepted and refused
         for name in [*sorted(probes.accepted), *refused]:
@@ -179,7 +190,7 @@ def judged(index, takes: list[str], returns: str | None = None) -> tuple[Probes,
     """The probes of one type query, judged, and each probe's source line by its name."""
     probes = Probes(index, [index.given(t) for t in takes], index.given(returns) if returns else None)
     probes.judged()
-    return probes, {line.split("(")[0][3:]: line for line in probes.text}
+    return probes, probes.text
 
 
 def test_the_command_line_prints_the_record_or_the_lines(tmp_path, capsys, monkeypatch):
