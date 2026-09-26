@@ -6,7 +6,7 @@ Every accepted construct is executed natively under both compilers; every rule h
 import pytest
 
 from cairn.compiler.cairnc import compile_source
-from emitted import SANITIZED, WARNINGS, refused, run
+from emitted import SANITIZED, WARNINGS, refused, run, sanitized
 
 PRELUDE = """
 const LIMIT:usize = 8;
@@ -140,6 +140,70 @@ def test_instances_are_monomorphic_and_named():
 def test_rejections(code, body):
     helper = "fn swap_parts(n:usize, a:rw<u64>[n], b:rw<u64>[n]) { swap(a[0], b[0]); }"
     refused(code, PRELUDE + helper + "fn main() -> i32 {" + body + "}")
+
+
+ONE = """
+trait Show { fn show(self:ro<Self>) -> u64; }
+impl Show for u64 { fn show(self:ro<u64>) -> u64 = self + 1; }
+fn seen(x:ro<u64>) -> u64 = x;
+fn bumped(x:rw<u64>) -> u64 { x = x + 1; return x; }
+fn counted[T](x:ro<T>) -> u64 = 1;
+fn shown(s:ro<dyn Show>) -> u64 = show(s);
+fn grown(s:rw<dyn Show>) -> u64 = show(s);
+"""
+
+# Every way a call lends one value, each given a whole view `v`: a declared function (ro, rw), a generic instance,
+# a trait member (by name and as a method), a dynamic reference (ro, rw), a function value (ro, rw), a dynamic
+# dispatch whose receiver is a view of Dyn, and the box Dyn[T](...). Each was typed and then refused by the C++
+# compiler, or, for a dynamic reference and the box, built and read the view's address as the element.
+LENT = {
+    "fn by_ro(n:usize, v:rw<u64>[n]) -> u64 = seen(v);": "ro<u64>",
+    "fn by_rw(n:usize, v:rw<u64>[n]) -> u64 = bumped(v);": "rw<u64>",
+    "fn by_generic(n:usize, v:rw<u64>[n]) -> u64 = counted(v);": "ro<u64>",
+    "fn by_trait(n:usize, v:rw<u64>[n]) -> u64 = show(v);": "ro<u64>",
+    "fn by_method(n:usize, v:rw<u64>[n]) -> u64 = v.show();": "ro<u64>",
+    "fn by_dyn(n:usize, v:rw<u64>[n]) -> u64 = shown(v);": "ro<dyn Show>",
+    "fn by_dyn_rw(n:usize, v:rw<u64>[n]) -> u64 = grown(v);": "rw<dyn Show>",
+    "fn by_value(n:usize, v:rw<u64>[n], f:ro<fn(ro<u64>) -> u64>) -> u64 = f(v);": "ro<u64>",
+    "fn by_value_rw(n:usize, v:rw<u64>[n], f:ro<fn(rw<u64>) -> u64>) -> u64 = f(v);": "rw<u64>",
+    "fn by_dispatch(n:usize, v:ro<Dyn[Show]>[n]) -> u64 = show(v);": "ro<dyn Show>",
+    "fn by_box(n:usize, v:rw<u64>[n]) -> u64 { let b = Dyn[Show](v); return shown(b); }": "u64",
+}
+
+
+def element(call: str) -> str:
+    """The same call given one element of the view, which is what each of those parameters takes."""
+    return call.replace("(v)", "(v[0])").replace("v.show()", "v[0].show()")
+
+
+@pytest.mark.parametrize("call", LENT)
+def test_a_view_where_one_value_is_expected_is_a_mismatch(call):
+    got = "ro<Dyn[Show]>[n]" if "Dyn[Show]>[n]" in call else "rw<u64>[n]"
+    source = f"{ONE}{call}\nfn main() -> i32 {{ return 0; }}"
+    assert refused("E-TYPE-MISMATCH", source)["message"] == f"Expected {LENT[call]}, got {got}@host."
+    compile_source(element(source))
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_one_element_of_a_view_is_lent_on_every_call_path(tmp_path, cxx):
+    main = """
+fn main() -> i32 {
+  let mut v = Buf[u64](1);
+  v[0] = 4;
+  let mut d = Buf[Dyn[Show]](1);
+  d[0] = Dyn[Show](u64(9));
+  let bumped_once = by_rw(v);
+  let shown_rw = by_dyn_rw(v);
+  let bumped_twice = by_value_rw(v, |x:rw<u64>| -> u64 { x = x + 1; return x; });
+  let boxed = by_box(v);
+  if bumped_once != 5 || shown_rw != 6 || bumped_twice != 6 || v[0] != 6 || boxed != 7 { return 1; }
+  if by_ro(v) != 6 || by_generic(v) != 1 || by_trait(v) != 7 || by_method(v) != 7 || by_dyn(v) != 7 { return 2; }
+  if by_value(v, |x:ro<u64>| -> u64 { return x * 2; }) != 12 || by_dispatch(d) != 10 { return 3; }
+  return 0;
+}
+"""
+    source = ONE + "\n".join(map(element, LENT)) + main
+    assert run(tmp_path, compile_source(source)[0], *sanitized(cxx), cxx=cxx).returncode == 0
 
 
 def test_disjoint_parts_are_accepted_and_guarded():
