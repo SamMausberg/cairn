@@ -4,7 +4,8 @@ threads read another stage, with every stage's state followed by the checker.
 The same program at depth 2 and depth 3 computes the same sums, held to a plain reference in C++, on real host threads
 under ThreadSanitizer with both compilers; a fill moved past its barrier in the emitted C++ makes the sanitizer report
 the race the checker refuses. Depth changes the shared memory a block holds and the number of transfers a wait leaves
-in flight, which the sm_120 PTX shows; nothing here runs on a GPU.
+in flight, which the sm_120 PTX shows, and a program that runs the region on host threads beside device work builds
+for sm_120; nothing here runs on a GPU.
 """
 
 import pytest
@@ -123,6 +124,13 @@ def test_a_deeper_pipeline_leaves_more_transfers_in_flight_on_the_device(tmp_pat
     assert "cp.async.ca.shared.global" in ptx and "cp.async.commit_group" in ptx
     assert "cp.async.wait_group 1" in ptx and "cp.async.wait_group 2" in ptx
     assert "[6144]" in ptx and "[8192]" in ptx  # each instance's static shared memory
+
+
+def test_a_region_on_host_threads_beside_device_work_builds_for_the_device(tmp_path):
+    """nvcc's device pass parses host code too: the host region's runtime is declared there, and a pipeline's
+    operations, written once for the host's context and the device's, are not refused there for the host's."""
+    fill = "fn fill(n:usize, a:rw<u64>[n]@device) {\n  parallel i in n { a[i] = 1; }\n}\n"
+    device_build(tmp_path, compile_source(ROWS + fill)[0])
 
 
 def test_the_canonical_projection_compiles_to_the_same_code():
