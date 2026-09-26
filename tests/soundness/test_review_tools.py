@@ -5,6 +5,7 @@ showed it, and the attacks that were correctly refused or held, kept so that a l
 """
 
 import importlib.util
+import json
 import shutil
 import subprocess
 import tempfile
@@ -109,7 +110,7 @@ def test_a_tuned_plan_goes_to_the_module_that_declares_the_function_and_replaces
     assert written.count("plan") == 1 and "plan f { grain 1; lanes 4; }" in written
     compile_source(load_project(tmp_path).source)  # still accepted
     assert main(["tune", str(tmp_path), "--symbol", "y.f", "--at", "n=3000", "--write", "--format", "json"]) == 0
-    assert '"written": "src/y.cairn"' in capsys.readouterr().out
+    assert json.loads(capsys.readouterr().out)["written"] == "src/y.cairn"
     compile_source(load_project(tmp_path).source)
 
 

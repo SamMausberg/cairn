@@ -350,7 +350,7 @@ def test_fmt_check_exits_one_and_writes_nothing(tmp_path, capsys):
     assert main(["fmt", str(path)]) == 0
     capsys.readouterr()
     assert main(["fmt", "--check", str(path)]) == 0
-    assert json.loads(capsys.readouterr().out)["status"] == "clean"
+    assert capsys.readouterr().out == '{"status":"clean","mode":"check","changed":[],"not_formatted":[]}\n'  # piped
 
 
 def test_fmt_diff_prints_a_patch_and_writes_nothing(tmp_path, capsys):

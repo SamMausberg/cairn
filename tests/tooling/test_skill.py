@@ -7,6 +7,7 @@ import re
 from cairn.agent import skill
 from cairn.agent.teaching import CORE, OWNER, every_card
 from cairn.compiler.cairnc import Diagnostic, compile_source
+from cairn.projects.new import GUIDE
 from cairn.version import __semver__
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -52,6 +53,14 @@ def test_every_card_and_every_code_is_in_the_skill_file_that_holds_its_card():
         assert name in CORE or f"cards/{name}.md" in files
     for code, card in OWNER.items():
         assert code in files["SKILL.md" if card in CORE else f"cards/{card}.md"], (code, card)
+
+
+def test_no_text_an_agent_starts_from_quotes_a_record_in_one_printed_form():
+    """A record is one compact line piped and indented at a terminal, so the skill and the AGENTS.md of every new
+    project name a field and its value (its `status` is `typed`) and never quote the record's text."""
+    texts = {**skill.render(), "AGENTS.md of a new project": GUIDE.read_text(encoding="utf-8")}
+    for name, text in texts.items():
+        assert not re.findall(r'`[^`\n]*"\w+":[^`\n]*`', text), name
 
 
 def test_the_example_in_the_skill_compiles():
