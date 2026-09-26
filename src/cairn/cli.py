@@ -33,7 +33,7 @@ from .projects.toolchain import SANITIZER_ENVIRONMENT, emulator, host_family, re
 FORMAT: str | None = None  # --format as given; None lets the stream decide (see editor/terminal.py)
 LINES = False  # a watched check's records, one per line (JSON Lines), so a reader can take each as it comes
 # The commands that read no project: their function takes the arguments alone.
-ALONE = {"doctor", "cards", "certificates", "rules", "new", "fmt", "completions", "lsp", "mcp", "diff", "verify"}
+ALONE = set("doctor cards certificates rules find new fmt completions lsp mcp diff verify".split())
 REFUSED = {"counterexample", "rejected", "invalid-contract", "invalid-domain", "invalid-reference"}  # verify exits 1
 
 
@@ -181,6 +181,16 @@ def cairn_rules(a: Any) -> int:
         raise Diagnostic("E-RULE", f"{asked!r} is no diagnostic code, card or path; cairn rules --list names "
                          "every card.")  # fmt: skip
     terminal.rules(record) if terminal.human(FORMAT) else report(record)
+    return 0
+
+
+def cairn_find(a: Any) -> int:
+    """The program searched is the one --in names, else a project here; with neither, the library alone."""
+    from .agent.find import find, lines
+
+    within = a.within or ("." if Path("cairn.toml").is_file() else None)
+    source = load_project(within).source if within else None
+    show(find(source, " ".join(a.words), a.takes, a.returns, a.effects, a.limit), lines)
     return 0
 
 
