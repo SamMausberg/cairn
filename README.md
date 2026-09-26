@@ -5,13 +5,14 @@ CAIRN is a systems language whose compiler refuses data races before a program r
 In the kernel below, each block of 256 threads reverses one tile of an array through shared memory, the fast memory that the threads of one block share:
 
 ```cairn
-// Each block of 256 threads reverses one 256-element tile of x into out.
+// Each block of 256 threads reverses one tile of x into out: 256 elements, or the last few of x.
 fn reverse_tiles(g:usize, n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) {
   blocks b in g threads t in 256 {
     shared tile:f32[256] = zeroed;
     let i = b * 256 + t;
-    if i < n { tile[t] = x[i]; }
-    barrier;                                       // every thread's element is in place
+    let short = b * 256 + 256 - min(n, b * 256 + 256);  // how many of the tile's 256 lie past n
+    if t >= short { tile[t] = x[i - short]; }           // a short tile fills the top of tile
+    barrier;                                            // every thread's element is in place
     if i < n { out[i] = tile[255 - t]; }
   }
 }
@@ -20,10 +21,10 @@ fn reverse_tiles(g:usize, n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) {
 Delete the barrier and the program no longer compiles. The compiler runs the block's body for every thread, finds the pair of threads that conflict, and says where the barrier goes:
 
 ```text
-error[E-COOP-UNORDERED]: thread t = 255 reads tile[0] at line 7, which thread t = 0 writes at line 6 in the same phase: nothing makes the write happen first. Put a barrier after line 6 and before line 7 runs.
-  --> racy.cairn:7:25
+error[E-COOP-UNORDERED]: thread t = 255 reads tile[0] at line 8, which thread t = 0 writes at line 7 in the same phase: nothing makes the write happen first. Put a barrier after line 7 and before line 8 runs.
+  --> racy.cairn:8:25
   |
-7 |     if i < n { out[i] = tile[255 - t]; }
+8 |     if i < n { out[i] = tile[255 - t]; }
   |                         ^^^^
   = note: the cooperative card states this rule: cairn rules E-COOP-UNORDERED
 ```
