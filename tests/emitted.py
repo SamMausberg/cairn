@@ -170,10 +170,10 @@ def native(tmp_path: Path, source: str, cxx="clang++", timeout=180):
 
 
 def contract(tmp_path: Path, cpp: str, cxx: str, *extra: str, cuda=False, timeout=240, env=None, under=(),
-             emulate=False, entry: str | None = "main", beside=None, stand_in=None):  # fmt: skip
+             emulate=False, entry: str | None = "main", beside=None, stand_in=None, input=None, args=()):  # fmt: skip
     """`cpp`, with the C++ files `beside` it, built by the project's own command line for `cxx` plus `extra`, then run
-    once `under` a wrapper. With `emulate`, a device program is built for the host, its device work on host threads
-    (projects/emulation.py)."""
+    once `under` a wrapper with `args`, and `input` on its standard input. With `emulate`, a device program is built for
+    the host, its device work on host threads (projects/emulation.py)."""
     if not shutil.which(cxx):
         pytest.skip(f"{cxx} unavailable")
     if cuda and not emulate and (reason := device_reason()):  # A device program runs inside `on_device` or not at all.
@@ -183,7 +183,8 @@ def contract(tmp_path: Path, cpp: str, cxx: str, *extra: str, cuda=False, timeou
     at = line.index(source)
     line[at : at + 1] = units(tmp_path, source, beside)
     subprocess.run([*line, *extra], check=True, timeout=timeout)
-    return subprocess.run([*under, executable], capture_output=True, text=True, timeout=timeout, env=env)
+    return subprocess.run([*under, executable, *args], capture_output=True, text=True, timeout=timeout, env=env,
+                          input=input)  # fmt: skip
 
 
 def device_build(tmp_path: Path, cpp: str, entry: str | None = None, ptx=False, timeout=600, cxx=NVCC_HOST) -> Path:

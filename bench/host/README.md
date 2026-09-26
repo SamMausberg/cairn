@@ -10,6 +10,7 @@ These scripts time code on the host CPU by the wall clock, each against the code
 | `host_regions.py`, `host_regions.cpp` | a host `parallel` region (`cr::par::run`) against its sequential loop: the cost at each size, the size where the region starts to win, and one small region repeated | `evidence/v0_8_2/host_regions/benchmark.json`, merged under `--label` |
 | `host_tasks.py`, `host_tasks.cpp` | repeated task pipelines on `cr::par::Task` and `cr::par::Group` (`--cxx`, default `clang++`), against older headers with `--before DIR` | `evidence/v1_0/runtime/benchmark.json`, merged under `--label` |
 | `scan.py`, `scan.cairn` | the pooled host `scan` against its loop, and `std.sort.radix_sort` against the heapsort, timed inside one process | `--out FILE` (required) |
+| `std_input.py` | reading all of standard input into a `Vec[u8]`, and pushing into one, from a file and through a pipe, by this tree's `std` and, with `--before DIR`, an older checkout's, alternating; wall time and peak memory from GNU time | `--out FILE` (required) |
 
 `host_regions.py` and `host_tasks.py` write into the record they were run for. To measure without touching `evidence/`, give `--out` a path under `results/`. Each writes nothing unless every case agreed with its own sequential result.
 

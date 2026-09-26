@@ -9,8 +9,8 @@ The program's arguments and environment, as it was started. Linux keeps both und
 // i)..end(a, i)], and text[end(a, i)] is its NUL, for a call into C that wants one.
 pub struct Args { text:Vec[u8]; ends:Vec[usize]; }
 
-// effects: alloc, diverge, ffi:__errno_location, ffi:close, ffi:open, ffi:read, ffi_precondition, free, io, local_read,
-// local_write, mmio, stack_storage, trap, zero_init
+// effects: alloc, diverge, ffi:__errno_location, ffi:close, ffi:lseek, ffi:open, ffi:read, ffi_precondition, free, io,
+// local_read, local_write, mmio, stack_storage, trap, zero_init
 pub fn args() -> std.core.Result[std.env.Args, std.io.IoError]
 
 pub fn count(a:ro<std.env.Args>) -> usize  // effects: read:a
@@ -21,8 +21,8 @@ pub fn begin(a:ro<std.env.Args>, i:usize) -> usize  // effects: read:a, trap
 pub fn end(a:ro<std.env.Args>, i:usize) -> usize  // effects: read:a, trap
 
 // The value of the variable called `name` when the program started, or None.
-// effects: alloc, diverge, ffi:__errno_location, ffi:close, ffi:open, ffi:read, ffi_precondition, free, io, local_read,
-// local_write, mmio, read:name, stack_storage, trap, zero_init
+// effects: alloc, diverge, ffi:__errno_location, ffi:close, ffi:lseek, ffi:open, ffi:read, ffi_precondition, free, io,
+// local_read, local_write, mmio, read:name, stack_storage, trap, zero_init
 pub fn var(n:usize, name:ro<u8>[n]@host) -> std.core.Result[std.core.Option[std.vec.Vec[u8]], std.io.IoError]
 ```
 

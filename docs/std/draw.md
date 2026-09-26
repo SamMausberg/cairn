@@ -78,8 +78,9 @@ pub fn json(l:ro<std.draw.Layout>, img:ro<std.image.Image>, at_ns:u64, out:rw<st
 
 // Frame k of a shot: when the program runs under `cairn shot`, which names a directory in CAIRN_SHOT, write frame-k.png
 // and frame-k.json there and answer true; otherwise do nothing and answer false.
-// effects: alloc, diverge, ffi:__errno_location, ffi:clock_gettime, ffi:close, ffi:open, ffi:read, ffi:write,
-// ffi_precondition, free, io, local_read, local_write, mmio, read:img, read:l, stack_storage, trap, zero_init
+// effects: alloc, diverge, ffi:__errno_location, ffi:clock_gettime, ffi:close, ffi:lseek, ffi:open, ffi:read,
+// ffi:write, ffi_precondition, free, io, local_read, local_write, mmio, read:img, read:l, stack_storage, trap,
+// zero_init
 pub fn capture(img:ro<std.image.Image>, l:ro<std.draw.Layout>, k:usize) -> std.core.Result[bool, std.io.IoError]
 ```
 

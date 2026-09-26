@@ -1,0 +1,226 @@
+{
+  "schema": "cairn.bench.std_input/1",
+  "compiler": "clang version 21.1.8 (https://github.com/llvm/llvm-project 2078da43e25a4623cab2d0d60decddf709aaea28)",
+  "machine": {
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "cpus": 16
+  },
+  "load_average": {
+    "before": [
+      7.79,
+      15.64,
+      19.09
+    ],
+    "after": [
+      5.49,
+      14.34,
+      18.54
+    ]
+  },
+  "input_bytes": 80740352,
+  "note": "four other agents ran builds and tests on the machine throughout",
+  "arms": {
+    "after": {
+      "tree": "c12/std-ergonomics-vec-growth at 15f1d81",
+      "programs": {
+        "chunk_loop": {
+          "file": {
+            "median_s": 0.2352,
+            "min_s": 0.217,
+            "max_s": 0.2444,
+            "max_rss_kb": 200080,
+            "runs": [
+              0.2444,
+              0.2367,
+              0.2251,
+              0.217,
+              0.2366,
+              0.2301,
+              0.2352
+            ]
+          },
+          "pipe": {
+            "median_s": 0.256,
+            "min_s": 0.2332,
+            "max_s": 0.2639,
+            "max_rss_kb": 200080,
+            "runs": [
+              0.26,
+              0.2612,
+              0.2557,
+              0.2332,
+              0.2639,
+              0.256,
+              0.2555
+            ]
+          }
+        },
+        "read_to_end": {
+          "file": {
+            "median_s": 0.0852,
+            "min_s": 0.0741,
+            "max_s": 0.0881,
+            "max_rss_kb": 82108,
+            "runs": [
+              0.0875,
+              0.0881,
+              0.0852,
+              0.0741,
+              0.088,
+              0.0834,
+              0.0788
+            ]
+          },
+          "pipe": {
+            "median_s": 0.2747,
+            "min_s": 0.2549,
+            "max_s": 0.3035,
+            "max_rss_kb": 200076,
+            "runs": [
+              0.2714,
+              0.2694,
+              0.2793,
+              0.2793,
+              0.2747,
+              0.2549,
+              0.3035
+            ]
+          }
+        },
+        "push_each": {
+          "file": {
+            "median_s": 0.4344,
+            "min_s": 0.3991,
+            "max_s": 0.4599,
+            "max_rss_kb": 278900,
+            "runs": [
+              0.4599,
+              0.3991,
+              0.4344,
+              0.4362,
+              0.435,
+              0.417,
+              0.4057
+            ]
+          },
+          "pipe": {
+            "median_s": 0.5937,
+            "min_s": 0.5826,
+            "max_s": 0.6008,
+            "max_rss_kb": 331160,
+            "runs": [
+              0.5937,
+              0.5969,
+              0.5826,
+              0.586,
+              0.5843,
+              0.5963,
+              0.6008
+            ]
+          }
+        }
+      }
+    },
+    "before": {
+      "tree": "15f1d81 with copy_variant.patch: extend_from grows by a copy",
+      "programs": {
+        "chunk_loop": {
+          "file": {
+            "median_s": 0.2118,
+            "min_s": 0.2014,
+            "max_s": 0.2266,
+            "max_rss_kb": 200080,
+            "runs": [
+              0.2216,
+              0.2118,
+              0.205,
+              0.2266,
+              0.2054,
+              0.2014,
+              0.2147
+            ]
+          },
+          "pipe": {
+            "median_s": 0.2367,
+            "min_s": 0.219,
+            "max_s": 0.2537,
+            "max_rss_kb": 200068,
+            "runs": [
+              0.2367,
+              0.219,
+              0.2391,
+              0.2332,
+              0.2378,
+              0.2365,
+              0.2537
+            ]
+          }
+        },
+        "read_to_end": {
+          "file": {
+            "median_s": 0.0874,
+            "min_s": 0.0756,
+            "max_s": 0.0898,
+            "max_rss_kb": 82100,
+            "runs": [
+              0.0884,
+              0.086,
+              0.0756,
+              0.0874,
+              0.0874,
+              0.0868,
+              0.0898
+            ]
+          },
+          "pipe": {
+            "median_s": 0.2757,
+            "min_s": 0.2573,
+            "max_s": 0.3197,
+            "max_rss_kb": 200076,
+            "runs": [
+              0.2891,
+              0.2622,
+              0.2791,
+              0.2573,
+              0.274,
+              0.2757,
+              0.3197
+            ]
+          }
+        },
+        "push_each": {
+          "file": {
+            "median_s": 0.4193,
+            "min_s": 0.4047,
+            "max_s": 0.457,
+            "max_rss_kb": 278936,
+            "runs": [
+              0.457,
+              0.4047,
+              0.4219,
+              0.4174,
+              0.4269,
+              0.4187,
+              0.4193
+            ]
+          },
+          "pipe": {
+            "median_s": 0.5962,
+            "min_s": 0.563,
+            "max_s": 0.6056,
+            "max_rss_kb": 331156,
+            "runs": [
+              0.6056,
+              0.5945,
+              0.563,
+              0.5962,
+              0.5815,
+              0.6018,
+              0.5982
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -117,18 +117,41 @@ pub fn rename(n:usize, from:ro<u8>[n], m:usize, to:ro<u8>[m]) -> Result[usize, I
   }
 }
 
-// Everything left to read, however it arrives: a pipe, a socket, /proc, a file whose size lies. Reads in
-// 4096-byte steps into the end of `into`, growing it as it goes; the count is what was added.
+// Everything left to read, however it arrives: a pipe, a socket, /proc, a file whose size lies. Each read
+// fills the room `into` has spare, and a full `into` doubles; the count is what was added.
+// Cost: after the first read, `f` is asked how much is left, so the rest of a regular file arrives in one
+// allocation; a pipe's `into` doubles as it fills. A read that fails first, such as a directory's
+// (EISDIR, 21), is returned before any size is asked, since ext4 gives a directory's end as 2^63 - 1.
 pub fn read_to_end(f:ro<File>, into:rw<Vec[u8]>) -> Result[usize, IoError] {
   let start = into.len;
+  let mut sized = false;
   while true {
-    vec.reserve(into, into.len + 4096);
+    if into.len == len(into.data) { vec.reserve(into, into.len + 4096); }
     let lo = into.len;
-    let got = try read(f, into.data[lo..lo + 4096]);
+    let got = try read(f, into.data[lo..len(into.data)]);
     if got == 0 { return Result.Ok(into.len - start); }
     into.len = lo + got;
+    if !sized {
+      sized = true;
+      let left = try remaining(f);
+      vec.reserve(into, into.len + left + 1); // the rest, and room for the read that finds the end
+    }
   }
   return Result.Ok(into.len - start);
+}
+
+// The bytes between where `f` stands and its end, or 0 when it has no end to ask for: a pipe, a
+// terminal, a /proc file. The position is put back, so nothing is read. Any seekable descriptor
+// answers, a directory too, so only a descriptor a read has worked on is asked.
+fn remaining(f:ro<File>) -> Result[usize, IoError] {
+  unsafe {
+    let here = sys.lseek(f.fd, 0, CUR);
+    if here < 0 { return Ok(0); }
+    let end = sys.lseek(f.fd, 0, END);
+    if end < 0 { return Ok(0); }
+    if sys.lseek(f.fd, here, SET) != here { return failed(); }
+    return Ok(usize(max(end, here) - here));
+  }
 }
 
 // The whole file, sized once and read in one pass; the Vec is exactly as large as the file.
