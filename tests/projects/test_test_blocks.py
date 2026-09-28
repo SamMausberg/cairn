@@ -16,7 +16,7 @@ from cairn.compiler.cairnc import Parser, compile_source
 from cairn.editor.lsp.document import Document, symbols
 from cairn.projects.build import build, dispatcher
 from cairn.projects.project import load_project
-from cairn.verify.runner import run_tests
+from cairn.verify.runner import reason, run_tests
 from emitted import build as build_cpp
 from emitted import code_of, device_build, refused, sanitized
 
@@ -164,6 +164,15 @@ def test_a_test_that_prints_a_pass_and_then_exits_badly_has_failed(tmp_path, cxx
     record = run_tests(load_project(project(tmp_path, tests=tests)), cxx=cxx)
     (liar,) = record["tests"]
     assert liar["status"] == "failed" and liar["reason"] == "exited with status 3" and liar["stdout"] == "pass\n"
+
+
+def test_a_cuda_error_is_the_reason_unless_it_is_the_launch_failure_a_trap_leaves():
+    def stopped(stderr: str) -> str:
+        return reason(subprocess.CompletedProcess(["t", "0"], -6, stdout="", stderr=stderr))
+
+    no_image = "cairn: cuda: no kernel image is available for execution on the device"
+    assert stopped(no_image + "\n") == no_image
+    assert stopped("cairn: cuda: unspecified launch failure\n") == "stopped by SIGABRT: a guard failed"
 
 
 def test_a_test_that_runs_too_long_is_stopped_and_fails(tmp_path):

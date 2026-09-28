@@ -337,6 +337,18 @@ fn main() -> i32 { let lease = acquire(7); if true { release(lease); } return 0;
 lease is consumed on some paths only.
 ```
 
+The deferred call reads its arguments when it runs, not where `defer` is written. It sees every write made before then: to a counter it is lent, to an element, or to an owner through `take`, `swap` or `=`. A local the call names cannot move until its block ends (`E-LEASED`), since the call would read what the move left behind. To keep a value as it was, bind it to a local and defer the call on that.
+
+```cairn rejects E-LEASED
+fn report(v:u8, seen:rw<u64>) { seen += u64(v); }
+fn sink(b:Buf[u8]) {}
+fn main() -> i32 { let mut seen:u64 = 0; let b = Buf[u8](4); { defer report(b[2], seen); sink(b); } return 0; }
+```
+
+```text
+b is read by the defer at line 3 when its block ends, so it cannot move before then: make that call before the move, or bind what it reads to a local first.
+```
+
 ## Effects
 
 Every function has an effect row: the set of things it may do when it runs, such as allocate, write through a borrow, start a thread or abort on a failed guard. The row is the function's own effects joined with its callees' rows, where each callee's reads and writes of its parameters are renamed to the caller's arguments: if `fill` writes its parameter `out`, the call `fill(frame)` writes `frame`. A row says what may happen. It says nothing about what the function computes. `cairn doc` prints the row beside each function it documents, and the build receipt lists every function's row under `functions.<name>.effects`.
