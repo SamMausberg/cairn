@@ -89,8 +89,8 @@ def region(c: Checker, s: Stmt, exprs: list[Expr], run, target: str = "") -> Any
     for name, stride, _, node in c.lanes.accesses:  # Lanes' blocks of one stride are disjoint; of two, they meet.
         if name in written and (stride is None or strides.setdefault(name, stride) != stride):
             fail("E-PARALLEL-RACE", f"{name} is written by lanes, so every lane may touch only {name}[{binder}], "
-                 f"or only its own block {name}[{binder} * S + {within}] with {within} below one constant S.",
-                 node)  # fmt: skip
+                 f"or only its own block {name}[{binder} * S + {within}] with {within} below one constant S."
+                 + unbounded(node, name, binder), node)  # fmt: skip
     s.block = max((stride or 1 for _, stride, _, _ in c.lanes.accesses), default=1)  # A lane costs its block.
     s.touched = tuple((name, stride, write) for name, stride, write, _ in c.lanes.accesses)  # what fusion reads
     s.touched += tuple((name, None, True) for name in updated)  # an atomic update is no lane's own element
@@ -188,6 +188,25 @@ def walk(ss: list[Stmt]):
     for s in ss:
         yield s
         yield from walk(nested(s))
+
+
+def unbounded(node: Any, name: str, binder: str) -> str:
+    """For a lane's block written as `x[b * S + j]` with `j` a `let mut` local: why its bound is unknown, and the
+    smallest rewrite that makes it known. Facts hold only of values that cannot change (facts.py), so a `while j < S`
+    around the write teaches nothing about `j`, and neither does an `if j < S`."""
+    index = node.args[-1] if node.tag == "index" else None
+    if index is None or index.tag != "binary" or index.val != "+":
+        return ""
+    for block, offset in (index.args, index.args[::-1]):
+        if block.tag != "binary" or block.val != "*" or offset.tag != "name" or offset.ref != "mut":
+            continue
+        for lane, size in (block.args, block.args[::-1]):
+            if lane.tag == "name" and lane.val == binder and size.tag in {"name", "int"}:
+                j, S = offset.val, size.val
+                return (f" {j} is a let mut local, and a bound is known only of a for binder or an immutable let: bind "
+                        f"it where it is written, let at = {j}; if at < {S} {{ {name}[{binder} * {S} + at] = ...; }}, "
+                        f"or loop with for {j} in 0..{S}.")  # fmt: skip
+    return ""
 
 
 def s_parallel(c: Checker, s: Stmt, queued: bool = False):

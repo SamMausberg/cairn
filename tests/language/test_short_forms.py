@@ -485,3 +485,26 @@ def test_an_owner_replaced_under_its_loop_is_still_guarded(tmp_path, cxx):
 def test_an_element_loop_copies_named_elements_only(code, body):
     head = "fn make() -> Buf[u64] = Buf[u64](2);\nfn sink(b:Buf[u64]) {}\n"
     refused(code, head + f"fn main() -> i32 {{ {body} return 0; }}\n")
+
+
+@pytest.mark.parametrize(
+    ("walked", "said", "rewrite"),
+    [
+        ("slots.data[k].buf", "slots.data[k].buf is reached through an index", "for i in 0..slots.data[k].buf.len { "
+         "let x = slots.data[k].buf.data[i]; }"),
+        ("rows[k]", "rows[k] is reached through an index", "for i in 0..len(rows[k]) { let x = rows[k][i]; }"),
+        ("rows[k][1..3]", "rows[k][1..3] is a part", "for i in 1..3 { let x = rows[k][i]; }"),
+        ("make()", "make() is a value", "let v = make();"),
+    ],
+)  # fmt: skip
+def test_an_element_loop_over_what_no_name_holds_is_refused_with_the_loop_to_write(walked, said, rewrite):
+    """Binding a path through an index to a name would move an owner out of its place, and binding a part would alias
+    it, so the refusal gives the index loop for those, and a name only for a value; each rewrite is accepted."""
+    head = "import std.vec (Vec);\nstruct Slot { buf:Vec[u8]; }\nfn make() -> Buf[u64] = Buf[u64](2);\n"
+    head += "fn f(slots:ro<Vec[Slot]>, k:usize, n:usize, rows:ro<Buf[u64]>[n]) -> u64 {\n  let mut t:u64 = 0;\n"
+    message = refused("E-ELEMENT-LOOP", head + f"  for x in {walked} {{ t += u64(x); }}\n  return t;\n}}\n")["message"]
+    assert message.startswith(said) and rewrite in message and "for x in walks only a name or a field path" in message
+    fixed = (
+        rewrite.replace("}", "t += u64(x); }") if rewrite.startswith("for") else f"{rewrite} for x in v {{ t += x; }}"
+    )
+    compile_source(head + f"  {fixed}\n  return t;\n}}\n")

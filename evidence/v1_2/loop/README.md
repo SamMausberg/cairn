@@ -37,6 +37,18 @@ A refusal used to end the check of its function, so independent mistakes in one 
 
 Five of the 69 checks gain further refusals: `block_scan`'s three other `transfer` calls that pass a `Buf` where `[n]` is expected, in three checks of two subjects, and `sieve`'s three other calls of the `println` an import put in place of the builtin, in two checks. Every further refusal the repository's programs gained was read, and each is a mistake of its own: a helper the program never declares, called again on another line, or a template's placeholder. A record is about 470 bytes a refusal larger, and a check the agent no longer runs is a whole request.
 
+## Three refusals give the change to make
+
+Two refusals of correct programs named no change that works, and `cairn rules CODE` printed its card in the order it was written. `for x in slots.data[k].buf` now gets the index loop to write, a lane's block written through a `let mut` offset gets the reason its bound is unknown and the rewrite, and `cairn rules CODE` puts the sentences that name the code first. Each refusal is larger by the rewrite it now carries; the programs are those of `tests/language/test_short_forms.py` and `tests/soundness/test_blocks.py`.
+
+| output, piped | main at 16e49c3 | after |
+|---|---|---|
+| check of `for x in slots.data[k].buf` | 244 | 353 |
+| check of a lane's `let mut` offset | 311 | 515 |
+| `cairn rules E-ELEMENT-LOOP` | 1,438 | 1,446 |
+| `cairn rules E-PARALLEL-RACE` | 4,722 | 4,859 |
+| `cairn rules E-EFFECT-ORDER` | 779 | 780 |
+
 ## Commands
 
 ```sh

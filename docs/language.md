@@ -118,7 +118,7 @@ The control forms are `if`, `else if` and `else`, `while`, `for i in lo..hi`, `f
 
 A `while` loop whose condition stays true runs forever, as does a function that keeps calling itself, and the row of the function holding either says `diverge` ([memory.md](memory.md#effects)). The build keeps such a loop even when it computes nothing. C++ lets a compiler assume that every loop without input, output, volatile or atomic access ends, so the host compilers are told not to (`-fno-finite-loops`) and device code marks each such loop ([internals.md](internals.md#undefined-behaviour-the-lowering-rules-out)).
 
-`for x in xs { }` walks the elements of a view, a `Buf`, an `Array` or a fixed array, and `for i, x in xs { }` names the position too. It means `for i in 0..len(xs) { let x = xs[i]; }` and pays the guards that loop pays. Each element is copied, so the elements must be copyable (`E-ELEMENT-LOOP`). An owner in an array is reached through `xs[i]`, which you take, swap or lend.
+`for x in xs { }` walks the elements of a view, a `Buf`, an `Array` or a fixed array, and `for i, x in xs { }` names the position too. It means `for i in 0..len(xs) { let x = xs[i]; }` and pays the guards that loop pays. Each element is copied, so the elements must be copyable (`E-ELEMENT-LOOP`). An owner in an array is reached through `xs[i]`, which you take, swap or lend. `xs` is a name or a field path. A place reached through an index, such as `slots.data[k].buf`, and a part are walked by the index loop the refusal writes out, `for i in 0..slots.data[k].buf.len { let x = slots.data[k].buf.data[i]; }`, since binding either to a name would move an owner out of its place or alias a part.
 
 ```cairn
 fn checksum(n:usize, bytes:ro<u8>[n]) -> u32 {

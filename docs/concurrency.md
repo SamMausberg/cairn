@@ -179,7 +179,7 @@ fn shade(n:usize, out:rw<u64>[n]) { parallel i in n { out[0] = u64(i); } }
 out is written by lanes, so every lane may touch only out[i], or only its own block out[i * S + j] with j below one constant S.
 ```
 
-A lane may own a block of elements in place of one. With a constant stride `S`, lane `b` may touch `out[b * S + j]` for any `j` the checker shows is below `S`, and it may lend a part of its block to a helper. An access the checker cannot place inside the lane's block is `E-PARALLEL-RACE`.
+A lane may own a block of elements in place of one. With a constant stride `S`, lane `b` may touch `out[b * S + j]` for any `j` the checker shows is below `S`, and it may lend a part of its block to a helper. An access the checker cannot place inside the lane's block is `E-PARALLEL-RACE`. The checker knows a bound only of a value that cannot change, so `j` is a `for` binder or an immutable `let`: under `while j < S`, a `let mut j` has no bound it knows, and the refusal gives the rewrite, `let at = j; if at < S { out[b * S + at] = v; }`.
 
 ```cairn
 const BLOCK:usize = 4096;

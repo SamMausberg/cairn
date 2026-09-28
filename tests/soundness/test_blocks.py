@@ -79,6 +79,18 @@ def test_the_race_names_the_block_form_with_an_offset_apart_from_the_lane(lane, 
     assert f"may touch only out[{lane}], or only its own block {form} one constant S." in said
 
 
+def test_a_block_offset_in_a_let_mut_is_refused_with_the_rewrite_that_is_accepted():
+    """A `while j < BLOCK` teaches nothing about a `let mut j`, whose value may change, so the block form is refused;
+    the refusal says so and gives the rewrite, which is accepted."""
+    loop = "let mut j:usize = 0; while j < BLOCK { WRITE j += 3; }"
+    said = refused("E-PARALLEL-RACE", region(loop.replace("WRITE", "out[b * BLOCK + j] = 1;")))["message"]
+    assert said.endswith(" j is a let mut local, and a bound is known only of a for binder or an immutable let: bind "
+                         "it where it is written, let at = j; if at < BLOCK { out[b * BLOCK + at] = ...; }, or loop "
+                         "with for j in 0..BLOCK.")  # fmt: skip
+    compile_source(region(loop.replace("WRITE", "let at = j; if at < BLOCK { out[b * BLOCK + at] = 1; }")))
+    assert "let mut" not in refused("E-PARALLEL-RACE", region(REFUSED["an_unbounded_offset"]))["message"]
+
+
 # Per-block histograms, then a sequential merge: the shape the lane rule used to force into one thread.
 HISTOGRAM = """
 const BLOCK:usize = 4096;

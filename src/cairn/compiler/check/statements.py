@@ -6,10 +6,11 @@ from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
 from ..syntax.parser import copied
-from ..syntax.tree import BOOL, USIZE, VOID, Arm, Expr, Function, Stmt, Type, fail, is_view, nested, root
+from ..syntax.tree import BOOL, USIZE, VOID, Arm, Diagnostic, Expr, Function, Stmt, Type, fail, is_view, nested, root
 from . import facts
 from .calls import COMPUTES
 from .concurrency import PINNED
+from .effects import spelled
 from .places import FORGED, field_path, path, settle
 from .scope import Binding
 
@@ -302,7 +303,7 @@ def elements(c: Checker, s: Stmt):
     takes a name nothing in scope or in the body uses. Each element is copied out, so it must be copyable."""
     xs = s.exprs[0]
     if xs.tag not in {"name", "field"} or not field_path(xs):
-        fail("E-ELEMENT-LOOP", f"for {s.name} in ... walks a named array: bind the value to a name first.", xs)
+        fail("E-ELEMENT-LOOP", unnamed(c, s, xs), xs)
     ty, walked = c.peek(copied(xs)), path(xs)
     if not is_view(ty) and ty.name in c.p.lends:  # what the record lends, as the index loop over it
         return lent_elements(c, s, xs, ty, walked)
@@ -314,6 +315,31 @@ def elements(c: Checker, s: Stmt):
     index = s.binder or fresh(c, s, s.name + "_index")
     read = Expr("index", "", [copied(xs), Expr("name", index, [], xs.line, xs.col)], xs.line, xs.col)
     written_out(s, index, read, Expr("call", "len", [copied(xs)], xs.line, xs.col))
+
+
+def unnamed(c: Checker, s: Stmt, xs: Expr) -> str:
+    """What to write for `for x in xs` over something that is neither a name nor a field path. A place reached through
+    an index or a part is walked by its index loop, since binding it to a name would move an owner out of its place or
+    alias a part; any other value is bound to a name first."""
+    steps: set[str] = set()
+    reached = xs
+    while reached.tag in {"field", "index", "slice"}:
+        steps, reached = steps | {reached.tag}, reached.args[0]
+    whole, only = spelled(xs), f"for {s.name} in walks only a name or a field path"
+    if reached.tag != "name" or not {"index", "slice"} & steps:
+        return f"{whole} is a value, and {only}: bind it first, let v = {whole};, and walk v."
+    if xs.tag == "slice":  # a part: the index loop over its bounds
+        base, lo, hi = (spelled(x) for x in xs.args[:3])
+        return f"{base}[{lo}..{hi}] is a part, and {only}: write for i in {lo}..{hi} {{ let {s.name} = {base}[i]; }}."
+    try:
+        ty = c.peek(copied(xs))
+    except Diagnostic:  # the path's own fault is refused where the index loop meets it
+        ty = VOID
+    lent = c.p.lends.get(ty.name) if not is_view(ty) else None
+    count, one = f"len({whole})", f"{whole}[i]"
+    if lent and lent[1] == "0":  # a Vec: v.len elements of v.data
+        count, one = f"{whole}.{lent[2]}", f"{whole}.{lent[0]}[i]"
+    return f"{whole} is reached through an index, and {only}: write for i in 0..{count} {{ let {s.name} = {one}; }}."
 
 
 def copyable(c: Checker, s: Stmt, element: Type, walked: str, count: str, one: str, xs: Expr):

@@ -65,7 +65,7 @@ A script that reads one diagnostic reads what it always read, and the exit statu
 ## cairn rules
 
 ```sh
-cairn rules E-LEASED          # the card that states the rule behind a code
+cairn rules E-LEASED          # the card that states the rule behind a code, that rule first
 cairn rules tasks             # a card by name
 cairn rules src/main.cairn    # the cards a program selects beyond base, integers and calls
 cairn rules --list            # every card, its codes and the words that select it
@@ -73,7 +73,7 @@ cairn rules --list            # every card, its codes and the words that select 
 
 A rule card is a short statement of what one part of the language accepts and refuses, with the diagnostic code of each rule. `cairn rules` prints the compiler's cards, offline and without compiling anything. Every code the compiler, the hosts and `cairn` emit belongs to exactly one card, so a refusal always leads to the rule behind it. One card states each part of the language. The tool cards state what the hosts, the command line and the compiler's own limits refuse: `hosts`, `migrations`, `sketches`, `validation`, `commands`, `harness` and `limits`.
 
-Given a file or a project, `cairn rules` prints the cards the program's words select, which are the cards a host sends an agent that edits it. A code no card states, such as one a recipe's `require` chose, and a word that is no code, card or path are refused with `E-RULE`. The record, `cairn.rules/1`, gives each card's name, kind, codes and text.
+Given a file or a project, `cairn rules` prints the cards the program's words select, which are the cards a host sends an agent that edits it. A code no card states, such as one a recipe's `require` chose, and a word that is no code, card or path are refused with `E-RULE`. The record, `cairn.rules/1`, gives each card's name, kind, codes and text. Asked for a code, it moves the card's sentences that name the code to the head of the text, so the rule behind a refusal is read first, and keeps every other sentence where it stood.
 
 ## A manifest is named by its path
 
