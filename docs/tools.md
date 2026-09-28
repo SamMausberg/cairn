@@ -361,7 +361,7 @@ An implementation session on a project keeps failing cases in `regressions/<refe
 
 ## cairn explain
 
-`cairn explain [path] [--symbol f]` shows where each function pays at run time, at the `.cairn` line of each cost: the guards the C++ still checks, the owners it allocates, the calls that allocate, spawn, join, lock or do I/O, the points where it waits, and clang's verdict on every loop. It reads the emitted C++ and clang's optimization record, and runs nothing.
+`cairn explain [path] [--symbol f]` shows where each of the program's own functions pays at run time, at the `.cairn` line of each cost: the guards the C++ still checks, the owners it allocates, the calls that allocate, spawn, join, lock or do I/O, the points where it waits, and clang's verdict on every loop. It reads the emitted C++ and clang's optimization record, and runs nothing. A library function the program reaches is explained when `--symbol` names it, as `--symbol std.vec.push[u64]`, and the calls that cost its callers are listed under theirs.
 
 ```text
 $ cairn explain examples/apps/analytics --symbol analytics.query.above_loop
