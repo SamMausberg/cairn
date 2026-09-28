@@ -13,7 +13,7 @@
  "test, failing, at a terminal": 156,
  "new": 107,
  "rules E-EFFECT-ORDER": 937,
- "doc --std --module std.io": 6461,
+ "doc --std --module std.io": 6363,
  "explain": 70820,
  "explain --symbol count": 5183,
  "state": 2338,
