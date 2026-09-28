@@ -53,7 +53,7 @@ def test_words_find_what_the_subjects_searched_for_first(words, first):
 
 def test_words_answer_with_every_word_they_can_and_a_line_each():
     parsed = find(None, "parse integer")
-    assert named(parsed) == ["std.text.parse_i64", "std.text.parse_u64"] and parsed["more"] == 0
+    assert named(parsed) == ["std.text.parse_i64", "std.text.parse_u64", "std.text.parse_fixed"] and parsed["more"] == 0
     [line] = [h for h in parsed["hits"] if h.startswith("std.text.parse_i64")]
     assert line == ("std.text.parse_i64(n:usize, s:ro<u8>[n]) -> Result[i64, ParseError]  pure  // Signed decimal: an "
                     "optional leading '-', then digits.")  # fmt: skip

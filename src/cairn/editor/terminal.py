@@ -1,7 +1,8 @@
 """What a person at a terminal reads: a diagnostic beside its source line, and a result in one line.
 
 Piped output stays the JSON record, so scripts, tests and agents read the same fields. A terminal gets this rendering
-unless `--format json` or `CAIRN_FORMAT=json` asks for the record; `NO_COLOR` turns colour off.
+unless `--format json` or `CAIRN_FORMAT=json` asks for the record; `NO_COLOR` turns colour off. `cairn run` gets it
+piped too, since what a run answers is the program's own output (`cairn_build` in cli.py).
 """
 
 from __future__ import annotations

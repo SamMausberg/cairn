@@ -19,7 +19,8 @@ COMMANDS = {
     "emit": "Print the C++ the program lowers to.",
     "expand": "Print what every derive generated, as CAIRN source.",
     "build": "Build a native artifact in a fresh directory, with a receipt.",
-    "run": "Build, then run under process limits, or under the target's emulator; ARGS after -- go to the program.",
+    "run": "Build, then run under process limits, or under the target's emulator, with the program's own streams and "
+    "exit status; ARGS after -- go to the program.",
     "shot": "Run headless and collect every frame std.draw captured: its PNG, its layout record and its time.",
     "test": "Run the project's test blocks, each in a process of its own, and its finite task contracts.",
     "inspect": "Print the packet an editing agent gets for one symbol.",
@@ -179,7 +180,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version=__version__)
     shared = argparse.ArgumentParser(add_help=False)
     shared.add_argument("--format", choices=["human", "json"], help="human: rendered for a person; json: the "
-                        "record. Default: human on a terminal, json when piped, or CAIRN_FORMAT.")  # fmt: skip
+                        "record. Default: human on a terminal and for run, json when piped, or CAIRN_FORMAT.")  # fmt: skip
     sub = p.add_subparsers(dest="command", required=True)
     sub.add_parser("doctor", help="Report local tools; never downloads them.", parents=[shared])
     sub.add_parser("cards", help="List the device cards predict and tune price device work on: NVIDIA's published "

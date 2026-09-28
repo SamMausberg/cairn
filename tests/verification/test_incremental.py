@@ -286,6 +286,23 @@ def test_a_kept_walk_answers_an_edit_and_the_edit_keeps_one_for_the_next():
     assert canonical(reparsed.parsed()) == canonical(Parser(added).parse()) and reparsed.edit == "middle"
 
 
+def test_a_fault_the_walk_meets_is_answered_by_a_whole_check(monkeypatch):
+    """compiler/compilations.py: a fault met while the walk checks the edited body (E-INTERNAL, which keeps the fault)
+    may be the walk's own, so the edit is checked whole and that check answers."""
+    cache = Cache()
+    Compilation(PROGRAM, cache=cache).program()
+    added = spliced(PROGRAM, walks(cache)[0].walked.spans["middle"], TARGETED["add a call"][1])
+
+    def faulted(*_, **__):
+        error = Diagnostic("E-INTERNAL", "The compiler failed while checking this statement.")
+        error.abandoned = TypeError("a fault of the walk's own")
+        raise error
+
+    monkeypatch.setattr(incremental, "recheck", faulted)
+    compiled = Compilation(added, cache=cache)
+    assert same(answer(compiled.program), answer(lambda: compile_program(added))) and compiled.edit == ""
+
+
 def test_an_edit_outside_one_body_is_checked_whole():
     _, walk = walked(PROGRAM)
     two = PROGRAM.replace("x + 1;", "x + 2;").replace("add_wrap(x, x)", "add_wrap(x, 1)")
