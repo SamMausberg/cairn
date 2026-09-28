@@ -84,8 +84,8 @@ pub fn print_u64(value:u64)
 pub fn print_i64(value:i64)
 
 // All of standard input from where it stands, appended to `into` as read_to_end appends a file's; the count is what was
-// added, and standard input stays open. Cost: input redirected from a file arrives in one allocation, and a pipe's
-// `into` doubles as it fills.
+// added, and standard input stays open. Cost: after the first read, the rest of input redirected from a file arrives in
+// one allocation, and a pipe's `into` doubles as it fills.
 // effects: alloc, diverge, ffi:__errno_location, ffi:lseek, ffi:read, ffi_precondition, free, io, local_read,
 // local_write, mmio, read:into, trap, write:into, zero_init
 pub fn read_stdin_to_end(into:rw<std.vec.Vec[u8]>) -> std.core.Result[usize, std.io.IoError]

@@ -197,7 +197,8 @@ pub fn print_i64(value:i64) {
 
 // All of standard input from where it stands, appended to `into` as read_to_end appends a file's; the
 // count is what was added, and standard input stays open.
-// Cost: input redirected from a file arrives in one allocation, and a pipe's `into` doubles as it fills.
+// Cost: after the first read, the rest of input redirected from a file arrives in one allocation, and a
+// pipe's `into` doubles as it fills.
 pub fn read_stdin_to_end(into:rw<Vec[u8]>) -> Result[usize, IoError] {
   let stdin = File(0); // lent to read_to_end and taken apart again, never closed: the process owns it
   let got = read_to_end(stdin, into);

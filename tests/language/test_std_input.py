@@ -126,11 +126,11 @@ def test_lines_words_and_fields_are_the_bounds_python_splits_at(tmp_path, cxx):
         assert done.returncode == 0, (data, done.returncode, done.stderr[-2000:])
         printed = done.stdout.decode().splitlines()
         assert printed[:-1] == pieces(data), data
-    path = tmp_path / "input"  # a regular file on standard input is sized first: one allocation, 4096 spare
+    path = tmp_path / "input"  # a regular file on standard input is sized after its first read: 1 byte spare
     path.write_bytes(b"12 -7\n" * 50000)
     with open(path, "rb") as source:
         done = subprocess.run([exe], stdin=source, capture_output=True, timeout=60, env=ASAN)
-    assert done.returncode == 0 and done.stdout.decode().splitlines()[-1] == "capacity 4096", done.stderr[-2000:]
+    assert done.returncode == 0 and done.stdout.decode().splitlines()[-1] == "capacity 1", done.stderr[-2000:]
 
 
 FIELDS = ["0", "7", "12", "12.5", "12.50", "12.505", "0.01", ".5", "5.", ".", "1.2.3", "1,5", "+3", " 3", "-3",
