@@ -1,0 +1,70 @@
+commit 449189bf19a7715ea04086fbc2d30fab988085a1
+started 2026-09-28T17:35:24Z
+name, compute_cap, driver_version, memory.used [MiB], utilization.gpu [%], temperature.gpu, display_active
+NVIDIA GH200 480GB, 9.0, 580.105.08, 4 MiB, 0 %, 32, Disabled
+Cuda compilation tools, release 13.0, V13.0.88
+Build cuda_13.0.r13.0/compiler.36424714_0
+$ CAIRN_GPU_TESTS=1 python -m pytest -q -p no:xdist --device-runs -rA $(GPU_TESTS)
+.s..............s...................s...............                     [100%]
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED tests/language/test_assembly.py::test_typed_ptx_in_a_lane_and_a_cooperative_region_runs_on_the_device
+PASSED tests/projects/test_app_analytics.py::test_the_device_agrees_with_the_host
+PASSED tests/projects/test_app_matmul.py::test_the_tensor_cores_keep_the_contract_on_the_device
+PASSED tests/projects/test_apps.py::test_device_apps_agree_with_the_host[simulator]
+PASSED tests/projects/test_apps.py::test_device_apps_agree_with_the_host[gpu_pipeline]
+PASSED tests/projects/test_cooperative_examples.py::test_the_device_configuration_agrees_with_its_plain_loops
+PASSED tests/projects/test_demos.py::test_the_device_plate_has_the_host_bits
+PASSED tests/projects/test_foreign.py::test_the_device_implementation_runs_against_its_reference_on_the_gpu
+PASSED tests/projects/test_reduction_example.py::test_the_device_configuration_agrees_with_its_plain_loop
+PASSED tests/runtime/test_device_arithmetic.py::test_the_device_checks_agree_on_a_device
+PASSED tests/runtime/test_enqueue.py::test_the_enqueued_entries_run_on_a_device_directly_and_replayed_in_a_graph
+PASSED tests/runtime/test_execution.py::test_the_pipeline_keeps_its_results_on_the_device
+PASSED tests/runtime/test_finish_counter.py::test_every_launch_finishes_once_on_a_device_replayed_and_direct_at_once
+PASSED tests/runtime/test_native_runtime.py::test_gpu_runtime
+PASSED tests/runtime/test_native_runtime.py::test_gpu_runtime_deaths
+PASSED tests/runtime/test_native_runtime.py::test_gpu_reuse
+PASSED tests/runtime/test_native_runtime.py::test_gpu_reuse_deaths
+PASSED tests/soundness/test_atomics.py::test_the_device_program_agrees_on_the_device
+PASSED tests/soundness/test_concurrency.py::test_the_same_lane_body_runs_on_the_device
+PASSED tests/soundness/test_concurrency.py::test_lane_local_storage_and_sums_run_on_the_device
+PASSED tests/soundness/test_concurrency.py::test_parts_are_guarded_inside_device_lanes_and_device_scratch_is_in_the_row
+PASSED tests/soundness/test_concurrency.py::test_a_view_is_lent_as_what_its_memory_also_is
+PASSED tests/soundness/test_concurrency.py::test_queued_device_work_is_ordered_by_tickets_and_overlaps_the_host
+PASSED tests/soundness/test_concurrency.py::test_unsigned_reduce_plus_is_checked_in_any_order_on_host_and_device
+PASSED tests/soundness/test_device_paths.py::test_every_vector_plan_computes_what_the_scalar_lanes_compute[]
+PASSED tests/soundness/test_device_paths.py::test_every_vector_plan_computes_what_the_scalar_lanes_compute[plan fill { vector 2; }]
+PASSED tests/soundness/test_device_paths.py::test_every_vector_plan_computes_what_the_scalar_lanes_compute[plan fill { vector 2; block 64; per_lane 8; unroll 2; }]
+PASSED tests/soundness/test_finish.py::test_the_device_program_agrees_on_the_device
+PASSED tests/soundness/test_plans.py::test_every_device_plan_computes_what_the_unplanned_launch_computes[]
+PASSED tests/soundness/test_plans.py::test_every_device_plan_computes_what_the_unplanned_launch_computes[plan fill { block 32; }]
+PASSED tests/soundness/test_plans.py::test_every_device_plan_computes_what_the_unplanned_launch_computes[plan fill { block 1024; per_lane 64; unroll 8; }]
+PASSED tests/soundness/test_plans.py::test_every_device_plan_computes_what_the_unplanned_launch_computes[plan fill { per_lane 65536; }]
+PASSED tests/soundness/test_plans.py::test_every_device_plan_computes_what_the_unplanned_launch_computes[plan fill { unroll 3; }]
+PASSED tests/soundness/test_reduce_into.py::test_the_device_program_agrees_on_the_device
+PASSED tests/soundness/test_scan.py::test_a_device_scan_is_the_host_prefix
+PASSED tests/soundness/test_staging.py::test_every_stage_plan_computes_what_the_unplanned_region_computes[]
+PASSED tests/soundness/test_staging.py::test_every_stage_plan_computes_what_the_unplanned_region_computes[plan blur { stage 2; }]
+PASSED tests/soundness/test_staging.py::test_every_stage_plan_computes_what_the_unplanned_region_computes[plan blur { stage 2; block 32; per_lane 16; unroll 2; }]
+PASSED tests/soundness/test_staging.py::test_every_stage_plan_computes_what_the_unplanned_region_computes[plan blur { stage 32; block 1024; }]
+PASSED tests/soundness/test_tensor.py::test_the_tensor_cores_agree_with_the_reference_within_the_contract[f16]
+PASSED tests/soundness/test_tensor.py::test_the_tensor_cores_agree_with_the_reference_within_the_contract[bf16]
+PASSED tests/soundness/test_tensor.py::test_the_tensor_cores_agree_with_the_reference_within_the_contract[f8e4m3]
+PASSED tests/soundness/test_tensor.py::test_the_tensor_cores_agree_with_the_reference_within_the_contract[f8e5m2]
+PASSED tests/soundness/test_tensor_kernels.py::test_each_kernel_keeps_the_contract_on_the_device[tile64]
+PASSED tests/soundness/test_tensor_kernels.py::test_each_kernel_keeps_the_contract_on_the_device[tile32]
+PASSED tests/soundness/test_votes.py::test_the_device_program_agrees_on_the_device
+PASSED tests/soundness/test_wide.py::test_the_device_program_agrees_on_the_device
+PASSED tests/soundness/test_written.py::test_the_device_program_agrees_on_the_device
+PASSED tests/verification/test_device_validation.py::test_each_sanitizer_tool_is_a_result_of_its_own_on_the_device
+SKIPPED [2] tests/emitted.py:248: a run that traps on the device on purpose needs CAIRN_GPU_TRAPS=1 beside `make gpu`, on a GPU that drives no display
+SKIPPED [1] tests/runtime/test_native_runtime.py:221: a run that traps on the device on purpose needs CAIRN_GPU_TRAPS=1 beside `make gpu`, on a GPU that drives no display
+49 passed, 3 skipped, 678 deselected in 212.25s (0:03:32)
+
+real	3m32.446s
+user	2m57.229s
+sys	0m35.322s
+exit 0
+finished 2026-09-28T17:38:57Z
+memory.used [MiB], utilization.gpu [%], temperature.gpu
+52 MiB, 0 %, 35
