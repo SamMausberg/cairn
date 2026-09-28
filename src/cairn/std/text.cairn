@@ -119,15 +119,19 @@ pub fn next_field(n:usize, s:ro<u8>[n], sep:u8, c:rw<Cursor>) -> bool {
 // A decimal with at most `places` digits after an optional '.', as a count of units of 10^-places: with
 // two places "12.5" and "12.50" are 1250 and "12" is 1200. Digits only, as parse_u64 takes them, with one
 // or more on each side of a point; a digit past `places` is Invalid, and a value past U64_MAX is Overflow.
+// An error names the first fault from the left.
 // Cost: one pass; `places` less the digits written must be at most 19, or the scale traps.
 pub fn parse_fixed(n:usize, s:ro<u8>[n], places:usize) -> Result[u64, ParseError] {
   if n == 0 { return Err(Empty); }
   let mut point = n;
   match find_byte(n, s, '.', 0) { Some(at) => point = at; None => {} }
-  if point == 0 || point + 1 == n { return Err(Invalid(point)); }
-  let raw = try digits(s, 0, point, U64_MAX);
+  if point == 0 { return Err(Invalid(0)); }
   let shown = n - min(n, point + 1);
-  if shown > places { return Err(Invalid(point + 1 + places)); }
+  let mut end = n;
+  if shown > places { end = point + 1 + places; } // the first byte past the places allowed
+  let raw = try digits(s[0..end], 0, point, U64_MAX);
+  if point + 1 == n { return Err(Invalid(point)); } // a point with no digit after it
+  if end < n { return Err(Invalid(end)); }
   let mut unit:u64 = 1;
   for _ in shown..places { unit *= 10; }
   if raw > U64_MAX / unit { return Err(Overflow(n - 1)); }

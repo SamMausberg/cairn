@@ -57,8 +57,8 @@ pub fn next_field(n:usize, s:ro<u8>[n]@host, sep:u8, c:rw<std.text.Cursor>) -> b
 
 // A decimal with at most `places` digits after an optional '.', as a count of units of 10^-places: with two places
 // "12.5" and "12.50" are 1250 and "12" is 1200. Digits only, as parse_u64 takes them, with one or more on each side of
-// a point; a digit past `places` is Invalid, and a value past U64_MAX is Overflow. Cost: one pass; `places` less the
-// digits written must be at most 19, or the scale traps.
+// a point; a digit past `places` is Invalid, and a value past U64_MAX is Overflow. An error names the first fault from
+// the left. Cost: one pass; `places` less the digits written must be at most 19, or the scale traps.
 // effects: ffi_precondition, read:s, trap
 pub fn parse_fixed(n:usize, s:ro<u8>[n]@host, places:usize) -> std.core.Result[u64, std.text.ParseError]
 

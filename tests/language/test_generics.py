@@ -53,6 +53,15 @@ def test_a_nat_parameter_is_a_static_extent_and_literals_take_the_expected_resul
     refused("E-TYPE-MISMATCH", source.replace("fill[4](a, 7)", "fill[8](a, 7)"))
 
 
+def test_a_value_without_elements_where_a_generic_view_is_expected_is_a_mismatch():
+    """`sort.sort(x)` of a scalar or a record ended the check with an internal IndexError; it is a type mismatch."""
+    for given in ("let mut x:u8 = 3;", "let mut x = P(1);"):
+        source = (
+            f"import std.sort as sort;\nstruct P {{ a:u8; }}\nfn main() -> i32 {{ {given} sort.sort(x); return 0; }}"
+        )
+        assert "has no elements: it does not fit rw<T>[n]" in refused("E-TYPE-MISMATCH", source)["message"]
+
+
 GENERIC_BOUNDS = """
 import std.core (Ord, Option);
 trait Score { fn score(self:ro<Self>) -> u64; }
