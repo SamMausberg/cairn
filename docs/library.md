@@ -78,7 +78,7 @@ fn main() -> i32 {
 
 `std.core` implements `Ord` and `Eq` for every integer type, `Eq` for `bool`, and `Hash` for the unsigned integers. For a type of your own, write an `impl` or generate one with [std.derived](#stdderived). Every trait member is `pure`, so an implementation of `less` that prints is refused with `E-EFFECT-CEILING`.
 
-`std.core` also names each integer type's least and greatest value, from `U8_MAX` to `USIZE_MAX` and from `I8_MIN` to `I64_MAX`, so `if total > U64_MAX - x { ... }` tests an add before it traps. Import them by name, as `import std.core (Option, U64_MAX);`, or write `core.U64_MAX`.
+`std.core` also names each integer type's least and greatest value, from `U8_MAX` to `USIZE_MAX` and from `I8_MIN` to `I64_MAX`, so `if total > U64_MAX - x { ... }` tests an add before it traps. Import them by name, as `import std.core (Option, U64_MAX);`, or import the module, `import std.core;`, and write `core.U64_MAX`.
 
 ## std.vec
 
@@ -228,7 +228,7 @@ fn main() -> i32 {
 
 `close` returns nothing, because a function that consumes a linear value cannot return a status. If you need one, report it through a borrow.
 
-A path in `std.io` ends in a NUL byte, because C reads a pointer and no length; [std.fs](#stdfs) takes paths without one. `read` is one system call and returns 0 at the end of the file. `read_full` and `write` loop until the kernel has done all of it. `read_to_end` asks a regular file how much is left first, so the file arrives in one allocation, and a pipe's `Vec` doubles as it fills. `read_stdin_to_end(input)` reads standard input the same way and leaves it open. Nothing here buffers. For output, the [print builtins](language.md#print-and-format) usually serve.
+A path in `std.io` ends in a NUL byte, because C reads a pointer and no length; [std.fs](#stdfs) takes paths without one. `read` is one system call and returns 0 at the end of the file. `read_full` and `write` loop until the kernel has done all of it. After its first read, `read_to_end` asks the file how much is left, so the rest of a regular file arrives in one allocation and a pipe's `Vec` doubles as it fills; a directory fails that read with EISDIR (21) before any size is asked. `read_stdin_to_end(input)` reads standard input the same way and leaves it open. Nothing here buffers. For output, the [print builtins](language.md#print-and-format) usually serve.
 
 ## std.fs
 

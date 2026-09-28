@@ -7,192 +7,216 @@
   },
   "load_average": {
     "before": [
-      15.94,
-      45.02,
-      54.33
+      7.79,
+      15.64,
+      19.09
     ],
     "after": [
-      15.4,
-      41.72,
-      52.88
+      5.49,
+      14.34,
+      18.54
     ]
   },
   "input_bytes": 80740352,
-  "note": "before is this branch with extend_from growing by a copy (mem.copy into the bigger Buf) instead of reserve's exchange; after is this branch; both built from scratch trees; four other agents shared the machine",
+  "note": "four other agents ran builds and tests on the machine throughout",
   "arms": {
     "after": {
-      "tree": "c12/std-ergonomics-vec-growth",
+      "tree": "c12/std-ergonomics-vec-growth at 15f1d81",
       "programs": {
         "chunk_loop": {
           "file": {
-            "median_s": 0.3017,
-            "min_s": 0.2745,
-            "max_s": 0.3545,
-            "max_rss_kb": 199944,
+            "median_s": 0.2352,
+            "min_s": 0.217,
+            "max_s": 0.2444,
+            "max_rss_kb": 200080,
             "runs": [
-              0.3545,
-              0.3524,
-              0.2745,
-              0.2784,
-              0.3017
+              0.2444,
+              0.2367,
+              0.2251,
+              0.217,
+              0.2366,
+              0.2301,
+              0.2352
             ]
           },
           "pipe": {
-            "median_s": 0.3465,
-            "min_s": 0.3206,
-            "max_s": 0.441,
-            "max_rss_kb": 199968,
+            "median_s": 0.256,
+            "min_s": 0.2332,
+            "max_s": 0.2639,
+            "max_rss_kb": 200080,
             "runs": [
-              0.441,
-              0.3822,
-              0.3418,
-              0.3465,
-              0.3206
+              0.26,
+              0.2612,
+              0.2557,
+              0.2332,
+              0.2639,
+              0.256,
+              0.2555
             ]
           }
         },
         "read_to_end": {
           "file": {
-            "median_s": 0.1048,
-            "min_s": 0.0905,
-            "max_s": 0.1244,
-            "max_rss_kb": 82104,
+            "median_s": 0.0852,
+            "min_s": 0.0741,
+            "max_s": 0.0881,
+            "max_rss_kb": 82108,
             "runs": [
-              0.1244,
-              0.0905,
-              0.1102,
-              0.1048,
-              0.0918
+              0.0875,
+              0.0881,
+              0.0852,
+              0.0741,
+              0.088,
+              0.0834,
+              0.0788
             ]
           },
           "pipe": {
-            "median_s": 0.3495,
-            "min_s": 0.3194,
-            "max_s": 0.3916,
-            "max_rss_kb": 200072,
+            "median_s": 0.2747,
+            "min_s": 0.2549,
+            "max_s": 0.3035,
+            "max_rss_kb": 200076,
             "runs": [
-              0.3916,
-              0.3495,
-              0.3465,
-              0.3855,
-              0.3194
+              0.2714,
+              0.2694,
+              0.2793,
+              0.2793,
+              0.2747,
+              0.2549,
+              0.3035
             ]
           }
         },
         "push_each": {
           "file": {
-            "median_s": 0.5422,
-            "min_s": 0.5025,
-            "max_s": 0.6206,
-            "max_rss_kb": 278888,
+            "median_s": 0.4344,
+            "min_s": 0.3991,
+            "max_s": 0.4599,
+            "max_rss_kb": 278900,
             "runs": [
-              0.6206,
-              0.5422,
-              0.5507,
-              0.5025,
-              0.527
+              0.4599,
+              0.3991,
+              0.4344,
+              0.4362,
+              0.435,
+              0.417,
+              0.4057
             ]
           },
           "pipe": {
-            "median_s": 0.7461,
-            "min_s": 0.7061,
-            "max_s": 0.9058,
+            "median_s": 0.5937,
+            "min_s": 0.5826,
+            "max_s": 0.6008,
             "max_rss_kb": 331160,
             "runs": [
-              0.9058,
-              0.7461,
-              0.7536,
-              0.7381,
-              0.7061
+              0.5937,
+              0.5969,
+              0.5826,
+              0.586,
+              0.5843,
+              0.5963,
+              0.6008
             ]
           }
         }
       }
     },
     "before": {
-      "tree": "scratch copy of the branch with the copy variant (see README)",
+      "tree": "15f1d81 with copy_variant.patch: extend_from grows by a copy",
       "programs": {
         "chunk_loop": {
           "file": {
-            "median_s": 0.2667,
-            "min_s": 0.2188,
-            "max_s": 0.296,
-            "max_rss_kb": 200072,
+            "median_s": 0.2118,
+            "min_s": 0.2014,
+            "max_s": 0.2266,
+            "max_rss_kb": 200080,
             "runs": [
-              0.296,
-              0.2891,
-              0.265,
-              0.2667,
-              0.2188
+              0.2216,
+              0.2118,
+              0.205,
+              0.2266,
+              0.2054,
+              0.2014,
+              0.2147
             ]
           },
           "pipe": {
-            "median_s": 0.3441,
-            "min_s": 0.2502,
-            "max_s": 0.3814,
-            "max_rss_kb": 200044,
+            "median_s": 0.2367,
+            "min_s": 0.219,
+            "max_s": 0.2537,
+            "max_rss_kb": 200068,
             "runs": [
-              0.3814,
-              0.346,
-              0.282,
-              0.3441,
-              0.2502
+              0.2367,
+              0.219,
+              0.2391,
+              0.2332,
+              0.2378,
+              0.2365,
+              0.2537
             ]
           }
         },
         "read_to_end": {
           "file": {
-            "median_s": 0.0941,
-            "min_s": 0.0775,
-            "max_s": 0.1483,
-            "max_rss_kb": 82108,
+            "median_s": 0.0874,
+            "min_s": 0.0756,
+            "max_s": 0.0898,
+            "max_rss_kb": 82100,
             "runs": [
-              0.1218,
-              0.0941,
-              0.0788,
-              0.1483,
-              0.0775
+              0.0884,
+              0.086,
+              0.0756,
+              0.0874,
+              0.0874,
+              0.0868,
+              0.0898
             ]
           },
           "pipe": {
-            "median_s": 0.3533,
-            "min_s": 0.3043,
-            "max_s": 0.4106,
-            "max_rss_kb": 200040,
+            "median_s": 0.2757,
+            "min_s": 0.2573,
+            "max_s": 0.3197,
+            "max_rss_kb": 200076,
             "runs": [
-              0.3966,
-              0.4106,
-              0.3533,
-              0.3497,
-              0.3043
+              0.2891,
+              0.2622,
+              0.2791,
+              0.2573,
+              0.274,
+              0.2757,
+              0.3197
             ]
           }
         },
         "push_each": {
           "file": {
-            "median_s": 0.538,
-            "min_s": 0.5106,
-            "max_s": 0.61,
+            "median_s": 0.4193,
+            "min_s": 0.4047,
+            "max_s": 0.457,
             "max_rss_kb": 278936,
             "runs": [
-              0.61,
-              0.6063,
-              0.5106,
-              0.5171,
-              0.538
+              0.457,
+              0.4047,
+              0.4219,
+              0.4174,
+              0.4269,
+              0.4187,
+              0.4193
             ]
           },
           "pipe": {
-            "median_s": 0.7103,
-            "min_s": 0.6669,
-            "max_s": 0.871,
+            "median_s": 0.5962,
+            "min_s": 0.563,
+            "max_s": 0.6056,
             "max_rss_kb": 331156,
             "runs": [
-              0.871,
-              0.7925,
-              0.7103,
-              0.6669,
-              0.6956
+              0.6056,
+              0.5945,
+              0.563,
+              0.5962,
+              0.5815,
+              0.6018,
+              0.5982
             ]
           }
         }
