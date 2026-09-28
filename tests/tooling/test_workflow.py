@@ -1,6 +1,6 @@
 """The CI workflow's own rules: actions pinned by commit, read-only permissions but for publishing the docs site,
 nothing run on a GPU, one check that needs every job, and a device job that reaches every test compiling device code;
-and the owner's `make gpu`, which reaches every test running device code.
+and `make gpu`, which reaches every test running device code.
 
 GitHub runs the workflow, not this suite, so these read its text: they fail on the change that would break a rule,
 before a run shows it or, for the pins and the permissions, where no run would.
@@ -126,7 +126,7 @@ def test_the_device_job_reaches_every_test_module_that_compiles_device_code():
 
 
 def test_make_gpu_runs_every_test_that_runs_device_code():
-    """The owner's single device run is `make gpu`: a module outside GPU_TESTS would run its device code nowhere, and
+    """The single device test run is `make gpu`: a module outside GPU_TESTS would run its device code nowhere, and
     one inside it that runs none only lengthens that run. Its --device-runs keeps a test whose body or fixture calls
     a device-run helper, so no other function of such a module may call one."""
     running, modules = modules_saying(DEVICE_RUNS), makefile_list("GPU_TESTS")

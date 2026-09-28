@@ -285,7 +285,7 @@ def answer(kind: str, record: dict[str, Any], **fields: Any) -> dict[str, Any]:
 
 
 def runnable(record: dict[str, Any]) -> str:
-    """Why this export's program may not run here, or "": device code runs only under the owner's make targets."""
+    """Why this export's program may not run here, or "": device code runs only under the device make targets."""
     if record.get("device_target"):
         from ..perf.on_device import allowed
 

@@ -60,7 +60,7 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"tune"}, "--measure", {"type": int, "default": 0, "metavar": "K", "help": "Time the K best-ranked plans and "
                              "the current one on this host, halving each round."}),
     ({"tune"}, "--device", {"action": "store_true", "help": "Time device plans on the device; only make "
-                            "tune-device, the owner's target, allows it to run."}),
+                            "tune-device, a device make target, allows it to run."}),
     ({"tune"}, "--write", {"action": "store_true", "help": "Write the chosen plan into the file that declares the "
                            "function."}),
     ({"tune"}, "--accept-emulated", {"action": "store_true", "help": "Let an implementation whose validation ran "
