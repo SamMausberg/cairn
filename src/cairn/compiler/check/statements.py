@@ -9,6 +9,7 @@ from ..syntax.parser import copied
 from ..syntax.tree import BOOL, USIZE, VOID, Arm, Expr, Function, Stmt, Type, fail, is_view, nested
 from . import facts
 from .calls import COMPUTES
+from .concurrency import PINNED
 from .places import FORGED, field_path, path, settle
 from .scope import Binding
 
@@ -136,10 +137,24 @@ def s_compact(c: Checker, s: Stmt):
 
 
 def s_assign(c: Checker, s: Stmt):
-    ty = c.place(s.exprs[0], write=True)
+    """`x = e` lands e where x's old value was. A place is written only while it holds a value (a local moved
+    before this statement is E-MOVED), so a linear old value is lost unless e itself consumed it, as `l = renew(l)`
+    does; either way the place holds a live value afterwards."""
+    target, before = s.exprs[0], set(c.moved)
+    ty = c.place(target, write=True)
     if c.releases(ty):  # Whatever the place held is released where the new value lands.
         c.effect("free")
     c.expr(s.exprs[1], ty)
+    consumed = target.tag == "name" and target.val in c.moved - before
+    if c.kind(ty) == "linear" and not consumed:
+        shown, own = path(target), target.tag == "name" and c.env[target.val].ty.mode == "value"
+        fix = (f"wait({shown}) consumes it, so declare the new one under another name" if ty.name in PINNED else
+               f"swap the new value in with swap({shown}, fresh) and consume what comes out"
+               + (f", or consume {shown} and bind the new value to another name" if own and shown not in c.deferred
+                  else ""))  # fmt: skip
+        fail("E-LINEAR-LEAK", f"Assigning over {shown} would lose the linear {ty.display()} it holds: {fix}.", s)
+    if consumed:  # it holds e now
+        c.moved.discard(target.val)
 
 
 def s_break(c: Checker, s: Stmt):
