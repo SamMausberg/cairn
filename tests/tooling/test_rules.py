@@ -1,6 +1,7 @@
 """`cairn rules`: the rule card of a code, a card by name, the cards a program selects, and every card, offline."""
 
 import json
+import re
 
 import pytest
 
@@ -10,6 +11,11 @@ from cairn.cli import main
 TASKS = """fn fill(n:usize, out:rw<u64>[n]) { for i in 0..n { out[i] = u64(i); } }
 fn halves(n:usize, data:rw<u64>[n]) { let left = spawn fill(data[0..n]); wait(left); }
 """
+
+
+def sentences(text: str) -> list[str]:
+    """A card's sentences in any order: what `cairn rules CODE` must keep, whatever it puts first."""
+    return sorted(s for paragraph in text.splitlines() for s in re.split(r"(?<=\.) +", paragraph))
 
 
 def rules(capsys, *asked, status=0):
@@ -23,7 +29,25 @@ def test_a_code_prints_the_card_that_owns_it(capsys, code, card):
     record = rules(capsys, code)
     assert record["schema"] == "cairn.rules/1" and record["code"] == code
     [shown] = record["cards"]
-    assert shown["name"] == card and code in shown["codes"] and shown["text"] == every_card()[card]
+    assert (
+        shown["name"] == card and code in shown["codes"] and sentences(shown["text"]) == sentences(every_card()[card])
+    )
+    written = every_card()[card]  # a card that names the code leads with it; one that does not reads as written
+    assert code in shown["text"].splitlines()[0] if code in written else shown["text"] == written
+
+
+def test_a_code_leads_with_the_sentences_of_its_card_that_name_it(capsys):
+    """The rule behind a refusal comes first, and the card keeps every sentence once."""
+    assert main(["rules", "E-EFFECT-ORDER", "--format", "json"]) == 0
+    [card] = json.loads(capsys.readouterr().out)["cards"]
+    first, *rest = card["text"].splitlines()
+    assert first.startswith("A call that writes through a borrow or allocates is a whole statement")
+    assert "E-EFFECT-ORDER" in first and not any("E-EFFECT-ORDER" in paragraph for paragraph in rest)
+    assert sentences(card["text"]) == sentences(CARDS["calls"])
+    assert main(["rules", "E-ELEMENT-LOOP", "--format", "json"]) == 0  # the base card names it where for x in is
+    assert "E-ELEMENT-LOOP" in json.loads(capsys.readouterr().out)["cards"][0]["text"].splitlines()[0]
+    assert main(["rules", "calls", "--format", "json"]) == 0  # a card asked by name reads as written
+    assert json.loads(capsys.readouterr().out)["cards"][0]["text"] == CARDS["calls"]
 
 
 def test_a_card_prints_by_its_name(capsys):
@@ -62,6 +86,6 @@ def test_a_person_reads_the_card_under_a_line_naming_its_code(capsys):
     assert main(["rules", "E-LEASED", "--format", "human"]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines[1] == "E-LEASED is a rule of the tasks card: E-LEASED, E-SPAWN"
-    assert lines[3] == CARDS["tasks"].splitlines()[0]
+    assert lines[3].startswith("Until then every place lent to the task is leased (E-LEASED)")  # the rule first
     assert main(["rules", "--list", "--format", "human"]) == 0
     assert capsys.readouterr().out.splitlines()[0].split()[:2] == ["base", "E-BUILTIN-NAME,"]

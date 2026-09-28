@@ -116,7 +116,7 @@ A function with a block body returns through explicit `return` statements, and e
 
 The control forms are `if`, `else if` and `else`, `while`, `for i in lo..hi`, `for x in xs`, `break`, `continue` and nested `{ }` blocks. A `for` evaluates `lo` and then `hi`, each once, and an empty or reversed range runs no iteration. `&&` and `||` evaluate their right side only when the left side does not decide the result.
 
-`for x in xs { }` walks the elements of a view, a `Buf`, an `Array` or a fixed array, and `for i, x in xs { }` names the position too. It means `for i in 0..len(xs) { let x = xs[i]; }` and pays the guards that loop pays. Each element is copied, so the elements must be copyable (`E-ELEMENT-LOOP`). An owner in an array is reached through `xs[i]`, which you take, swap or lend.
+`for x in xs { }` walks the elements of a view, a `Buf`, an `Array` or a fixed array, and `for i, x in xs { }` names the position too. It means `for i in 0..len(xs) { let x = xs[i]; }` and pays the guards that loop pays. Each element is copied, so the elements must be copyable (`E-ELEMENT-LOOP`). An owner in an array is reached through `xs[i]`, which you take, swap or lend. `xs` is a name or a field path. A place reached through an index, such as `slots.data[k].buf`, and a part are walked by the index loop the refusal writes out, `for i in 0..slots.data[k].buf.len { let x = slots.data[k].buf.data[i]; }`, since binding either to a name would move an owner out of its place or alias a part.
 
 ```cairn
 fn checksum(n:usize, bytes:ro<u8>[n]) -> u32 {
