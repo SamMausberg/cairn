@@ -151,7 +151,7 @@ Test blocks run only as host processes, so a freestanding project's test blocks 
 
 ## Building and running
 
-`cairn build` compiles a program into a fresh directory and prints a record of the build. The record leaves out the checker's receipt, its account of every function. The file `receipt.json` in the build directory keeps that receipt whole, and the record's `receipt` field names the file. `cairn run` builds the same way, then runs the program under process limits (`--timeout`, and `--memory-mib` for heap and thread stacks), or under the target's emulator for a [freestanding image](#the-freestanding-target). Arguments after `--` go to the program. `--keep-guards` writes every guard, including those the checker showed cannot fail, and `--debug` adds debug symbols that point at the CAIRN source.
+`cairn build` compiles a program into a fresh directory and prints a record of the build: its status, the command, the artifact and its directory, and the compiler's exit status and output when the build failed. The file `receipt.json` in the build directory keeps the whole record, with the checker's receipt of every function, the project's hashes, the compiler's version and the artifact's hash, and the record's `receipt` field names the file. `cairn run` builds the same way, then runs the program under process limits (`--timeout`, and `--memory-mib` for heap and thread stacks), or under the target's emulator for a [freestanding image](#the-freestanding-target). Arguments after `--` go to the program. `--keep-guards` writes every guard, including those the checker showed cannot fail, and `--debug` adds debug symbols that point at the CAIRN source.
 
 ### cairn run --sanitize
 
