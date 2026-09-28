@@ -187,7 +187,8 @@ fn main() -> i32 {
 }
 """
 
-# A Buf of 256 MiB of which two bytes are written adds little to the process's peak resident set.
+# A Buf of 256 MiB of which two bytes are written adds little to the process's peak resident set. The Buf is printed
+# afterwards: clang++ drops an allocation nothing reads, and then the test would pass whatever the runtime does.
 RESIDENT = """
 import std.core (Option, Result);
 import std.fs;
@@ -222,6 +223,7 @@ fn main() -> i32 {
   let after = peak_kib();
   if before == 0 || after < before { return 1; }
   println(after - before);
+  eprint(big[0..1]);                     // the Buf escapes, so no compiler drops the allocation
   return 0;
 }
 """
