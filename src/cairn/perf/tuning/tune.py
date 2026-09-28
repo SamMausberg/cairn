@@ -191,6 +191,8 @@ def row(name: str, c: Candidate, regions: list[str], validated: dict[str, Any] |
                                                "dynamic_shared_bytes", "instructions") if k in r}
                             if r["status"] == "read" else {"status": r["status"]})  # fmt: skip
         out["resources"]["key"] = r["key"][:16]
+        if r.get("spill_bytes"):  # ptxas reports their bytes in the code, not as they run: no price is put on them
+            out["resources"]["spills"] = "not priced"
         if "sass_sha256" in r:  # candidates whose code is the same share this
             out["resources"]["sass"] = r["sass_sha256"][:16]
         out["resources"]["kept"] = bool(r.get("kept"))
@@ -514,6 +516,7 @@ def lines(result: dict[str, Any], shown_rows: int = 8) -> str:
     for i, row in enumerate(result["candidates"][:shown_rows], 1):
         read = row.get("resources", {})
         seen = f"  {read['registers']} registers, {read['spill_bytes']} spilled" if "registers" in read else ""
+        seen += f" ({read['spills']})" if "spills" in read else ""
         held = row.get("validated")
         judged = f" for {held['judged_against']}" if isinstance(held, dict) and "judged_against" in held else ""
         if isinstance(held, str):
