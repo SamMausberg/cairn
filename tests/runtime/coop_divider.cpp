@@ -19,7 +19,7 @@
 [[maybe_unused]] static long long __mul64hi(long long a, long long b) {
   return static_cast<long long>((static_cast<__int128>(a) * b) >> 64);
 }
-[[noreturn]] static void __trap() { std::abort(); }
+[[maybe_unused, noreturn]] static void __trap() { std::abort(); }
 [[maybe_unused]] static unsigned __float_as_uint(float x) {
   unsigned u;
   std::memcpy(&u, &x, sizeof u);
@@ -30,11 +30,11 @@
   std::memcpy(&u, &x, sizeof u);
   return u;
 }
-[[noreturn]] static unsigned long long atomicCAS(unsigned long long*, unsigned long long, unsigned long long) {
+[[maybe_unused, noreturn]] static unsigned long long atomicCAS(unsigned long long*, unsigned long long, unsigned long long) {
   std::abort();
 }
-[[noreturn]] static unsigned long long atomicAdd(unsigned long long*, unsigned long long) { std::abort(); }
-[[noreturn]] static unsigned long long atomicExch(unsigned long long*, unsigned long long) { std::abort(); }
+[[maybe_unused, noreturn]] static unsigned long long atomicAdd(unsigned long long*, unsigned long long) { std::abort(); }
+[[maybe_unused, noreturn]] static unsigned long long atomicExch(unsigned long long*, unsigned long long) { std::abort(); }
 #endif
 #include "cairn_coop.hpp"
 #if defined(DEVICE)
