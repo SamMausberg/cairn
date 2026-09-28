@@ -7,7 +7,7 @@ owners replaced by assignment, narrowing conversions, parts with their extents l
 products by a constant, quotients `let q = a / C` and the multiples of `C` below them, sums taken apart again, and
 arithmetic next to the largest usize. Each batch is emitted twice, once as the compiler emits it and once with
 `keep_guards`, which writes every guard, and both are built with clang++ under AddressSanitizer and
-UndefinedBehaviorSanitizer (and, with `--gcc`, with g++). A driver runs every function on every input of a grid that
+UndefinedBehaviorSanitizer (and, with `--gcc`, with g++, under the same sanitizers with `--sanitize-gcc`). A driver runs every function on every input of a grid that
 includes empty views and `k` next to the largest usize, each in a child process, and prints what it returned,
 `trap` for an abort, or the status of anything else, such as a sanitizer report. The two builds must print the same
 line for every case: a dropped guard that could fail shows up as a missing trap, a different value or a report.
@@ -36,6 +36,7 @@ MAX = 2**64 - 1
 SIZES = (0, 1, 2, 5)
 KS = (0, 1, 3, 7, MAX - 1, MAX)
 SANITIZE = ["-std=c++20", "-O1", "-g", "-fno-exceptions", "-fsanitize=address,undefined", "-fno-sanitize-recover=all"]
+SANITIZED = {"clang++"}  # the compilers that build under SANITIZE; any other builds with its first four flags
 HELPER = (
     "fn total(c:usize, v:ro<u64>[c]) -> u64 { let mut t:u64 = 0; for i in 0..c { t = add_wrap(t, v[i]); } return t; }\n"
 )
@@ -159,7 +160,7 @@ def run(sources: list[str], names: list[str], keep: bool, cxx: str, work: Path) 
     for name, text in RUNTIME_FILES.items():
         (work / name).write_text(text)
     (work / "p.cpp").write_text(cpp + driver(names))
-    flags = SANITIZE if cxx == "clang++" else SANITIZE[:4]
+    flags = SANITIZE if cxx in SANITIZED else SANITIZE[:4]
     subprocess.run([cxx, *flags, str(work / "p.cpp"), "-o", str(work / "p")], check=True, timeout=600)
     done = subprocess.run([str(work / "p")], capture_output=True, text=True, timeout=1200)
     return done.stdout.split("\n")[:-1]
@@ -227,13 +228,17 @@ def main() -> int:
     p.add_argument("--seed", type=int, default=20260922)
     p.add_argument("--workers", type=int, default=3)
     p.add_argument("--gcc", action="store_true", help="also build every batch with g++, without sanitizers")
+    p.add_argument("--sanitize-gcc", action="store_true", help="with --gcc, build under the sanitizers clang++ uses")
     p.add_argument("--output", type=Path)
     a = p.parse_args()
     compilers = ["clang++", *(["g++"] if a.gcc else [])]
+    if a.sanitize_gcc:
+        SANITIZED.add("g++")
     if not all(shutil.which(c) for c in compilers):
         print(json.dumps({"status": "unknown", "reason": f"needs {' and '.join(compilers)}"}))
         return 2
-    report: dict = {"seed": a.seed, "sizes": list(SIZES), "k": [str(k) for k in KS], "compilers": {}}
+    report: dict = {"seed": a.seed, "sizes": list(SIZES), "k": [str(k) for k in KS], "compilers": {},
+                    "sanitized": [c for c in compilers if c in SANITIZED]}  # fmt: skip
     with tempfile.TemporaryDirectory(prefix="cairn_guards_") as root:
         for cxx in compilers:
             jobs = [
