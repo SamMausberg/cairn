@@ -70,7 +70,7 @@ Checking is one pass per function over one typed tree, and each generic instance
 | Constant folding | `compiler/check/constants.py` | `constant`, `fold` |
 | I/O rings and their lowering | `compiler/primitives/rings.py` | `check_ring`, `method`, `waited`, `lower` |
 | Alternative implementations and their dispatch | `compiler/plans/implementations.py` | `declared`, `condition`, `select`, `joined`, `called`, `lower` |
-| Facts about `usize` values that let lowering drop a guard | `compiler/check/facts.py` | `binder`, `defined`, `assume`, `index`, `arithmetic`, `conversion` |
+| Facts about `usize` values that let lowering drop a guard | `compiler/check/facts.py` | `binder`, `defined`, `quotient`, `assume`, `index`, `arithmetic`, `product`, `conversion` |
 | The independent check of each guard lowering leaves out | `verify/elision.py` | `audit`, `decide`, `part` |
 | A plan's `fuse`: which regions join, and their scratch | `compiler/plans/fusion.py` | `chains`, `quiet`, `compatible`, `scratch` |
 | A plan's `vector` and its lowering | `compiler/plans/chunks.py` | `chunkable`, `vectored`, `lower` |
