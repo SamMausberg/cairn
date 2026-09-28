@@ -295,6 +295,46 @@ def test_a_defer_reads_what_its_arguments_hold_when_its_block_ends(cxx, tmp_path
     ]
 
 
+TREES = """
+struct Tree { kids:Buf[Tree]; val:u64; }
+
+fn main() -> i32 {
+  let mut t = Tree(Buf[Tree](2), 1);
+  let mut u = Tree(Buf[Tree](1), 2);
+  swap(u, t.kids[0]);
+  swap(t.kids[1], t.kids[1]);
+  swap(t.kids[0], t.kids[1]);
+  let k:usize = 1;
+  swap(t.kids[k], t.kids[1]);
+  let x = take(t.kids[0]);
+  let mut w = Tree(Buf[Tree](1), 4);
+  w.kids[0] = Tree(Buf[Tree](1), 3);
+  swap(w.kids[0].kids[0], t);
+  t = take(w.kids[0]);
+  let mut b = Buf[Tree](2);
+  b[0] = Tree(Buf[Tree](1), 5);
+  swap(b[1], b[0].kids[0]);
+  if t.val != 3 || t.kids[0].val != 1 || x.val != 0 || u.val != 0 || w.kids[0].val != 0 || b[0].val != 5 {
+    return 1;
+  }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_a_swap_of_places_neither_inside_the_other_holds_no_cycle(cxx, tmp_path):
+    """Two roots, one element with itself, two elements of one array at the same index or not, a place moved into
+    a tree that is no part of it, and an element with the child of another at a different literal index: each swap
+    leaves every tree owned once, so the leak checker finds nothing to report at exit. The swaps refused because one
+    place may lie inside the other are in tests/soundness/test_soundness.py."""
+    round_trips(TREES)
+    done = run(
+        tmp_path, compile_source(TREES)[0], *SANITIZED, *WARNINGS, cxx=cxx, env={"ASAN_OPTIONS": "detect_leaks=1"}
+    )
+    assert done.returncode == 0, done.stderr[-3000:]
+
+
 def test_semantics_models_scratch_storage_and_a_moved_owner():
     from cairn.verify.scalar.semantics import equivalent
 
