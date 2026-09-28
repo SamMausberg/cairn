@@ -159,12 +159,31 @@ fn open_only() -> Result[usize, IoError] {
 fn main() -> i32 = 0;
 """
 
+REOPENED_FILE = """
+import std.core (Result);
+import std.io (IoError);
+fn reopen() -> Result[usize, IoError] {
+  let mut f = try io.open(6, "a.txt\\x00", io.READ);
+  match io.open(6, "b.txt\\x00", io.READ) {
+    Result.Ok(g) => { f = g; }
+    Result.Err(e) => {}
+  }
+  io.close(f);
+  return Result.Ok(0);
+}
+fn main() -> i32 = 0;
+"""
+
 
 @pytest.mark.parametrize(
     "code,source", [("E-MOVED", CLOSED_FILE), ("E-LINEAR-LEAK", LEAKED_SOCKET), ("E-LINEAR-LEAK", UNCLOSED_FILE)]
 )
 def test_the_type_system_protects_files_and_sockets(code, source):
     refused(code, source)
+
+
+def test_a_file_assigned_over_would_leak_its_descriptor():
+    assert refused("E-LINEAR-LEAK", REOPENED_FILE)["message"].startswith("Assigning over f would lose the linear")
 
 
 def test_io_effects_name_the_foreign_symbol():
