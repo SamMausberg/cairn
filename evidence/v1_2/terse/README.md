@@ -14,7 +14,7 @@ Every output says the project's directory as `/home/agent/task`, so a count does
 
 ## Before and after
 
-`before.json` is main at 0af5987. `after.json` is the same corpus with the track's six pull requests merged: #136 the measurement, #141 compact records, #146 the check record, #147 build, run and test, #148 MCP, #149 `cairn explain`.
+`before.json` is main at 0af5987. `after.json` is the same corpus with the track's six pull requests merged into 0af5987: #136 the measurement, #141 compact records, #146 the check record, #147 build, run and test, #148 MCP, #149 `cairn explain`. Measured again on main at dda8208 with #146 to #149 merged, on an aarch64 machine with clang 14 and in bytes only, every case printed what `after.json` records except the three that depend on the compiler: `build` (11 bytes fewer) and the two `explain` cases (252 and 219 fewer).
 
 | surface | tokens before | tokens after | cut |
 |---|---|---|---|
