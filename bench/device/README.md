@@ -26,6 +26,15 @@ CAIRN_GPU_TESTS=1 python3 bench/device/device.py run reduce   # one pair on the 
 
 `run PAIR REPS SKIP` leaves out every variant whose `side/name` holds the text SKIP. `build` and `sass` need nvcc and cuobjdump and launch nothing. `run` runs code on the GPU: it refuses without `CAIRN_GPU_TESTS=1`, holds `/tmp/cairn-gpu.lock`, and stops the program after 30 seconds. Each program runs for a few seconds.
 
-`--src DIR` builds the CAIRN side with the compiler and runtime under another `src`, so two revisions can be timed against the same hand-written side. The CUDA side is compiled with `nvcc -O3 -arch=sm_120`, with its CUB in a namespace of its own. The CAIRN side is compiled with CAIRN's own device command line, `--fmad=false` included.
+`--src DIR` builds the CAIRN side with the compiler and runtime under another `src`, so two revisions can be timed against the same hand-written side. The CUDA side is compiled with `nvcc -O3 -arch=sm_120`, with its CUB in a namespace of its own. The CAIRN side is compiled with CAIRN's own device command line, `--fmad=false` included. `--arch sm_90` builds both sides for another architecture instead.
+
+`interleave.py` times builds of several revisions against each other. `run ROUNDS before=DIR1,after=DIR2 PAIR ... --record OUT` runs `device.py run` once per pair and build in each round, rotating the order of the builds from round to round, and keeps every process's JSON with the GPU's state before it started, and like `run` it refuses without `CAIRN_GPU_TESTS=1`; `summary OUT` gives each variant's median over the processes of each process's median, and the range of those medians.
+
+```sh
+python3 bench/device/device.py build layernorm --arch sm_90 --src old/src --out results/before
+python3 bench/device/device.py build layernorm --arch sm_90 --out results/after
+CAIRN_GPU_TESTS=1 python3 bench/device/interleave.py run 20 before=results/before,after=results/after layernorm --record results/rounds
+python3 bench/device/interleave.py summary results/rounds
+```
 
 Recorded runs, with the machine and every command, are in [evidence/v1_1/device_perf](../../evidence/v1_1/device_perf/README.md).
