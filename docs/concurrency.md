@@ -304,7 +304,7 @@ fn main() -> i32 {
 }
 ```
 
-Over a `@device` output, `compact` is stream compaction with scratch in device memory, and its row gains `gpu_alloc` and `gpu_free`. Its one store without a bounds check rests on the collector's seventeen certificates, arithmetic facts proved in Lean ([verification.md](verification.md#the-collector-certificates-and-the-loop-model)).
+On the host `compact` lowers to one loop, and its one store without a bounds check rests on the collector's seventeen certificates: arithmetic facts about that loop, which a small checker accepts before every emission and Lean checks ([verification.md](verification.md#the-collector-certificates-and-the-loop-model)). Over a `@device` output, `compact` is stream compaction with scratch in device memory, and its row gains `gpu_alloc` and `gpu_free`. Each selected element goes to the count of selected elements before it, which is below `n`. That device store has no certificate, and it is tested, not proved.
 
 ## scan
 
@@ -427,7 +427,9 @@ fn spread(n:usize, out:rw<u64>[n]) { parallel i in n { out[i] = mix(u64(i)); } }
 plan spread { grain 1; lanes 8; }     // a few dozen slow lanes: one index per claim, eight threads
 ```
 
-A plan only picks one of the ways to split a region's indices that its lanes already allow, since the lanes cannot race. So a plan changes how long a region takes, and it never changes the region's result, effect row or guards. Without a plan the pool claims at least 8192 elements at a time, which suits cheap bodies. A body that costs microseconds per index wants a grain of 1.
+A plan only picks one of the ways to split a region's indices that its lanes already allow, since the lanes cannot race. So a plan changes how long a region takes, and the rules are made so that it never changes the region's result, effect row or guards. The suite tests that, each planned region against the region as written on the host and on a GPU, and no Lean model covers the plan rules.
+
+Without a plan the pool claims at least 8192 elements at a time, which suits cheap bodies. A body that costs microseconds per index wants a grain of 1.
 
 A device region takes three items. `block B` sets the threads per block, whole warps from 32 to 1024. `per_lane K` gives each thread about `K` indices, from 1 to 65536. `unroll U`, from 1 to 32, unrolls each thread's index loop. Every index still runs exactly once. Without a plan a device region launches blocks of 256 threads with one index per thread.
 
@@ -517,7 +519,7 @@ fn count(n:usize, out:rw<u64>[n], x:ro<u64>[n]) {
 plan count { fuse 2; }
 ```
 
-Keeping the schedule apart from the algorithm, as Halide does, means every plan [`cairn tune`](tools.md#cairn-tune) tries computes what the function computes without a plan, and the tuner only ranks the plans. Whether that makes tuning cheaper than rewriting the loop has not been measured.
+Keeping the schedule apart from the algorithm, as Halide does, means [`cairn tune`](tools.md#cairn-tune) only ranks plans, and never has to ask whether a plan computes what the function computes without one. Whether that makes tuning cheaper than rewriting the loop has not been measured.
 
 ## I/O rings
 

@@ -14,7 +14,7 @@ Every function has an inferred effect row, which records the costs the first rul
 
 An owner is a value that holds heap storage, such as a `Buf`, and releases it when it goes out of scope. Using an owner as a value moves it ([memory.md](memory.md#owners-and-moves)).
 
-A guard is a check the compiler writes into the program where an operation could go wrong at run time: an index past the end of an array, an integer overflow, a division by zero. A failed guard aborts the process at once. Nothing unwinds and nothing is rolled back.
+A guard is a check the compiler writes before an operation that could fail at run time: an index past the end of an array, an integer overflow, a division by zero. A failed guard traps, which means it aborts the process at once, and nothing unwinds or is rolled back.
 
 ## Values and arithmetic
 
@@ -108,7 +108,9 @@ The compiler leaves a guard out where the checker has shown that it cannot fail.
 
 The checker takes these facts from the index a loop binds, the index a lane binds (a lane runs one index of a `parallel` region, [concurrency.md](concurrency.md#parallel-regions)), immutable `let` bindings, conditions, early exits and the `where` test of a `compact` ([concurrency.md](concurrency.md#reduce-and-compact)). Each fact is about `usize` values that cannot change, and a `let mut` local never supplies one. A deferred call is checked where `defer` is written and runs when its block ends, and no local it names can move in between ([memory.md](memory.md#linear-values-and-defer)), so the facts it was checked under still hold when it runs. A part `x[lo..hi]` loses its guard once `lo <= hi <= len(x)` is established.
 
-Leaving a guard out never changes what a program does. The function's row still says `trap`, and the build receipt, the JSON record `cairn build` writes, counts the site under `discharged_check_sites`. Every guard left out carries the facts that justify it, and an independent audit checks each one before a line of C++ is emitted. `--keep-guards` on `emit`, `build` and `run` writes every guard. [verification.md](verification.md#the-guard-elision-rule) says what of this is proved.
+A guard is left out only where it cannot fail, so leaving it out does not change what a program does. The function's row still says `trap`, and the build receipt, the JSON record `cairn build` writes, counts the site under `discharged_check_sites`. Every guard left out carries the facts that justify it, and an independent audit checks each one before a line of C++ is emitted. `--keep-guards` on `emit`, `build` and `run` writes every guard.
+
+Lean proves, for a model of the rule, that a guard cannot fail where the facts it cites are true, and a differential run compares that model with the checker on generated questions. That those facts are true where they are cited rests on the audit, which is written by hand and not proved, and on differential runs of generated programs built with and without every guard. [verification.md](verification.md#the-guard-elision-rule) says what each covers.
 
 ## Functions and control flow
 

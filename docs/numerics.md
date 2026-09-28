@@ -201,7 +201,7 @@ A device program built with `--emulate` ([devices.md](devices.md#emulating-devic
 
 | What a program computes | An emulated run against a device run |
 |---|---|
-| integer arithmetic, conversions and every guard | the same: each is the same C++ on both sides, and a failed guard aborts either way |
+| integer arithmetic, conversions and every guard | the same: each is the same C++ on both sides, and a failed guard aborts the process either way, on a device at the next wait; no test that makes a guard fail on a GPU has run since 0.8.3 |
 | `+ - * /` and `sqrt` on `f32` and `f64` | the same bits: the host builds with `-ffp-contract=off -fno-fast-math` and nvcc with `--fmad=false`, so nothing becomes a fused multiply-add, and CUDA's default division and square root are correctly rounded and keep subnormals, as the host's are and do |
 | `floor`, `ceil`, `trunc`, `abs`, storage float conversions, `quantize` | the same: each is exact, or one integer routine on both sides |
 | `exp`, `log`, `sin` and the other libm functions | never in device code: a lane cannot call `std.math` (`E-PARALLEL-CALL`), so neither libm nor CUDA's libdevice runs there |

@@ -193,7 +193,7 @@ The build directory holds the generated `program.cpp`, the runtime headers, the 
             "implicit_synchronization": 0, "status": "prototype-checked-not-proved"}
 ```
 
-A guard is a check the program makes at run time. `syntactic_check_sites` counts the guards the source asks for, here the shift count and the checked `+`. `discharged_check_sites` counts those the checker proved cannot fail, which the C++ leaves out: the shift count is the literal 1, below the width. Nothing bounds `x` and `y`, so the guard of `+` stays, and `trap` in the row says the function has a guard that can abort.
+A guard is a check the compiler writes before an operation that could fail at run time, such as an index bound or an integer overflow. `syntactic_check_sites` counts the guards the source asks for, here the shift count and the checked `+`. `discharged_check_sites` counts those the checker showed cannot fail, which the C++ leaves out: the shift count is the literal 1, below the width. Nothing bounds `x` and `y`, so the guard of `+` stays, and `trap` in the row says the function has a guard that can abort.
 
 A function that allocates, writes through a borrow, starts a task or uses the device says so in the same list, and so does every function that calls it.
 

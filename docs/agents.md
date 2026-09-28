@@ -92,7 +92,7 @@ assert packet["dependencies"]["step"]["evidence"] == "smt-equivalent"
 {"protocol": "cairn.edit/2", "handle": "e1", "kind": "expand", "symbols": ["append", "Header"]}
 ```
 
-`explain` returns [`cairn explain`](tools.md#cairn-explain) for the functions the packet shows, on the last accepted candidate. The agent sees whether its edit left a guard in a loop or stopped it vectorizing, without running anything. A guard is a check, such as a bounds or an overflow check, that the compiler writes wherever it cannot prove an operation safe.
+`explain` returns [`cairn explain`](tools.md#cairn-explain) for the functions the packet shows, on the last accepted candidate. The agent sees whether its edit left a guard in a loop or stopped it vectorizing, without running anything. A guard is a check the compiler writes before an operation that could fail at run time, such as an index bound or an integer overflow, and leaves out only where the checker shows it cannot fail.
 
 `predict`, as in `{"protocol": "cairn.edit/2", "handle": "e1", "kind": "predict", "sizes": [{"n": 1e7}]}`, returns [`cairn predict`](tools.md#cairn-predict) for the functions the packet shows, and after an admission the predicted ratio against the original at each size. A prediction is not evidence of speed, and the host still decides what is measured.
 
@@ -199,7 +199,7 @@ A plan edit (`cairn.plan/1`, `agent/hosts/plans.py`) lets the agent change only 
 {"protocol": "cairn.plan/1", "session": "<the packet's digest>", "items": {"grain": 1, "lanes": 8}}
 ```
 
-A reply names items and whole numbers, never source text. The host writes the plan, checks the program again, and requires the checker's record of every function to be unchanged apart from this function's plan, which must be the one the reply set. It refuses an item the regions do not take or a value out of range (`E-PLAN`); anything else in the reply, a plan sent to an edit host or a body sent to a plan host (`E-REQUEST`); and a session already spent or reopened (`E-SESSION`). A plan changes no result, so an accepted plan needs no test to be correct, only a measurement to be worth keeping.
+A reply names items and whole numbers, never source text. The host writes the plan, checks the program again, and requires the checker's record of every function to be unchanged apart from this function's plan, which must be the one the reply set. It refuses an item the regions do not take or a value out of range (`E-PLAN`); anything else in the reply, a plan sent to an edit host or a body sent to a plan host (`E-REQUEST`); and a session already spent or reopened (`E-SESSION`). The plan rules are made so that a plan changes no result, so the host asks of an accepted plan only a measurement to be worth keeping. Those rules are tested, planned regions against the regions as written, and not proved.
 
 A session opens on a function of any module, named with its module (`lib.spread`). A name that two modules declare is `E-SYMBOL`, with the qualified names. `PlanHost().open(load_project(path), "lib.spread")` says under `written_in` the module, file and line after which the plan is written, under the name its module gives the function. A plan that named the function from another module, such as `plan lib.spread { ... }` in the root, is removed so the plan is not written twice.
 

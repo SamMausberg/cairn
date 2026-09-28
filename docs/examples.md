@@ -292,7 +292,7 @@ step_device   ffi_precondition, par:device, read:src, trap, write:out
 main          ... gpu_alloc, gpu_free, transfer:h2d, transfer:d2h, par:host, par:device
 ```
 
-Measured on 2026-09-19 on a GH200 with 64 cores, CUDA 12.8 and clang 15.0.7, host threads beat the loop by about 10x and the device by about 85x, after 283 ms to create the CUDA context on the first device allocation.
+The times above are one run's, on a GH200 on 2026-09-19 with CUDA 12.8 and clang 15.0.7, where making the CUDA context on the first device allocation took 283 ms. No record under `evidence/` keeps that run, so they show what the program prints and are not a measured speedup. That the three back ends agree bit for bit is what `make gpu` checks, and it held on an RTX 5070 Ti in the 1.1.0 session and on a GH200 at `449189b` ([evidence/v1_2/gpu_gh200](../evidence/v1_2/gpu_gh200/README.md)).
 
 ## examples/apps/gpu_pipeline
 

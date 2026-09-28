@@ -8,7 +8,7 @@ The standard library is twenty modules, written in CAIRN and shipped inside the 
 
 Three habits run through the whole API. A lookup returns an index, never a borrow: `map.find` returns `Option[usize]`, and you read `m.vals[slot]` yourself. A position you keep while the collection changes is a handle that is checked when you use it (`arena.Handle`, `map.Slot`). A function that allocates has `alloc` in its effect row, the list of what it may do that a caller can observe ([memory.md](memory.md#effects)), and so does every function that calls it.
 
-A guard is a check the compiled code makes before an operation, such as an index bound. When a guard fails, the program traps: it aborts at once, without running cleanup. Where this page says a call traps, or names a guard failure, the program ends this way.
+A guard is a check the compiler writes before an operation that could fail at run time, such as an index bound or an integer overflow. When a guard fails, the program traps: it aborts at once, without running cleanup. Where this page says a call traps, or names a guard failure, the program ends this way.
 
 | Module | What it is for | Allocates |
 | --- | --- | --- |

@@ -15,11 +15,11 @@ make lint test
 
 ## Tests and checks
 
-Run `make lint test` before and after you touch code, or `make lint test JOBS=4` for an agent on a shared machine, as [AGENTS.md](AGENTS.md#development) says. Run `make native` when you touch the runtime or the lowering, `make lean` when you touch a rule the calculus models, and `make gpu` or `make embedded` where the hardware is present. `make gpu`, `make tune-device` and `make calibrate-device` are the only targets that run code on a device. They run one at a time, and only the owner of the machine starts them.
+Run `make lint test` before and after you touch code, or `make lint test JOBS=4` for an agent on a shared machine, as [AGENTS.md](AGENTS.md#development) says. Run `make native` when you touch the runtime or the lowering, `make lean` when you touch a rule the calculus models, and `make gpu` or `make embedded` where the hardware is present. Code runs on a device only through `make gpu`, `make tune-device`, `make calibrate-device`, or a narrow run of the device tests a change touches. Each holds the lock `/tmp/cairn-gpu.lock`, so runs queue one behind another, and where the GPU also drives a display only the owner of the machine starts them ([AGENTS.md](AGENTS.md#development)).
 
 A pull request needs one check green, `ci-passed`, which passes only when every job the workflow ran passed. On a pull request those jobs are the lint and example checks, the suite, the proofs, device code compiled under CUDA 13.2 with both host compilers, and the installed package. The compatibility jobs run on `main` and every Monday: device code under CUDA 12.9, the oldest supported and the newest compilers, Python 3.11, 3.13 and 3.14, and an AArch64 host ([internals.md](docs/internals.md#continuous-integration)).
 
-A pull request also needs a rejection test for every rule it adds and a behaviour test for every observable change.
+A pull request also needs a rejection test for every rule it adds and a behaviour test for every observable change. A language change needs all seven things AGENTS.md lists: a precise elaboration and a failure policy; the effects it adds; a rejection test naming its diagnostic code; a behaviour test run natively under both compilers with the sanitizer that bites; a rule card in `agent/teaching.py`; an entry in the reference page that owns it and in `docs/project/capabilities.json`; and the canonical projection still round-tripping to identical native code.
 
 ## Documentation
 

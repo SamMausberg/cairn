@@ -37,7 +37,7 @@ error[E-LEASED]: data is lent to left until wait(left).
 
 Every refusal names the rule card that owns its code, and [`cairn rules`](#cairn-rules) prints that card. When the compiler can state the smallest fix without guessing, the refusal carries it as `= help`: a close name for a misspelled one (`did you mean total?`), the conversion between two numeric types, the part `b[0..n]` of an [owner](memory.md#owners-and-moves) passed where `n` elements are expected, the annotation an integer literal's binding needs, the library function an import by name put in place of a builtin, or the change a rule asks for. A code whose message already states the fix gets no help, so nothing is said twice. The JSON record keeps every field it had and adds the card and the fix as `card` and `repair_hint`, from `check`, `build`, `run`, `test`, `validate` and every other command.
 
-A guard is a check the compiler writes wherever it cannot prove an operation safe, such as a bounds or an overflow check. A program stopped by a failed guard is reported as stopped by `SIGABRT`.
+A guard is a check the compiler writes before an operation that could fail at run time, such as an index bound or an integer overflow, and leaves out only where the checker shows it cannot fail. A program stopped by a failed guard is reported as stopped by `SIGABRT`.
 
 A fault of the compiler itself, met while it checks a statement, is refused as `E-INTERNAL` at that statement's line, and the message names the fault's class. It says nothing about the program: the check did not finish, so nothing is accepted, and the refusal is a compiler bug to report with the program.
 
@@ -396,7 +396,7 @@ $ cairn explain examples/apps/analytics --symbol analytics.query.above_loop
            "reasons": ["Cannot vectorize early exit loop", ...]}, ...]
 ```
 
-`sites` counts what needed a guard, `discharged` what the checker proved cannot fail, and `emitted` what the lowering wrote. `emitted` can exceed the difference, because a part's base is written once for its data and once for its size. Here `out[used]` keeps its guard, since nothing bounds `used` by the extent of `out`, and clang names that guard's early exit as the reason the loop stays scalar. Loop verdicts come from clang only; under g++ or with device code the report says why it has none. An agent gets the same report from `cairn inspect --symbol f --explain`, or by sending `{"protocol": "cairn.edit/2", "handle": "e1", "kind": "explain"}` after an edit.
+`sites` counts what needed a guard, `discharged` what the checker showed cannot fail, and `emitted` what the lowering wrote. `emitted` can exceed the difference, because a part's base is written once for its data and once for its size. Here `out[used]` keeps its guard, since nothing bounds `used` by the extent of `out`, and clang names that guard's early exit as the reason the loop stays scalar. Loop verdicts come from clang only; under g++ or with device code the report says why it has none. An agent gets the same report from `cairn inspect --symbol f --explain`, or by sending `{"protocol": "cairn.edit/2", "handle": "e1", "kind": "explain"}` after an edit.
 
 For a [cooperative region](devices.md#cooperative-regions) the function's entry adds `cooperative`: the block's threads, and each shared array and pipeline with its bytes. At their lines it lists every barrier, every warp collective and fragment operation, and every pipeline copy and wait, with the copies the wait leaves in flight (`wait_group`, the checker's count). The same barriers, waits and warp operations appear under `synchronization`.
 
@@ -488,7 +488,7 @@ The same kernel is bound by shared memory on the data center cards and by device
 
 ## cairn tune
 
-`cairn tune [path] --symbol f --at n=1e7` chooses the [plan](concurrency.md#plans) of `f` by a bounded search. A plan says how a function's parallel regions run, such as how many lanes a host region uses or how a device block is shaped, and it never changes a result. So every candidate the checker accepts is correct, and the search asks only which is fastest. A function is named with its module, as in `--symbol lib.spread`. `--write` puts the chosen plan after the function's declaration and removes any plan that named the function elsewhere. It writes only if the whole project still checks, and keeps each file's byte-order mark and line endings as [`cairn mcp`](#cairn-mcp) does.
+`cairn tune [path] --symbol f --at n=1e7` chooses the [plan](concurrency.md#plans) of `f` by a bounded search. A plan says how a function's parallel regions run, such as how many lanes a host region uses or how a device block is shaped, and the plan rules are made so that it never changes a result. The search therefore asks only which accepted candidate is fastest. Those rules are tested, planned regions against the regions as written, and no Lean model covers them. A function is named with its module, as in `--symbol lib.spread`. `--write` puts the chosen plan after the function's declaration and removes any plan that named the function elsewhere. It writes only if the whole project still checks, and keeps each file's byte-order mark and line endings as [`cairn mcp`](#cairn-mcp) does.
 
 ### The search
 
