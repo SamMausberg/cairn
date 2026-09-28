@@ -11,7 +11,10 @@ from test_predict import MACHINE
 from cairn.cli import main
 from cairn.compiler.cairnc import compile_program
 from cairn.perf.tuning.plan_source import replanned, written
-from cairn.perf.tuning.tune import distinct, space, tune
+from cairn.perf.tuning.search import Candidate, priced
+from cairn.perf.tuning.tune import distinct, lines, space, tune
+from cairn.perf.tuning.tune import row as shown_row
+from cairn.perf.work import count
 
 MIX = """fn mix(v:u64) -> u64 {
   let mut w = v;
@@ -31,6 +34,28 @@ def test_every_candidate_is_a_plan_the_checker_accepts():
     predicted = [row["predicted_ns"] for row in result["candidates"]]
     assert predicted == sorted(predicted) and result["chosen"] == result["candidates"][0]
     assert result["current"] == "(no plan for spread)" and "none needed checking" in result["predicted"]
+
+
+DEVICE = "fn scale(n:usize, x:rw<f32>[n]@device, a:f32) { parallel i in n { x[i] = a * x[i]; } }\n"
+
+
+def test_a_candidate_that_spills_is_priced_as_without_the_spills_and_says_so():
+    """What ptxas reports of spills enters no price, so two readings that differ only in their spills rank alike, and
+    a spilling candidate says so in its row and on its line."""
+    p, checker, _ = compile_program(DEVICE)
+    cost = count(p, checker, {"scale"})["scale"]
+    read = {"status": "read", "registers": 40, "shared_bytes": 0, "dynamic_shared_bytes": 0, "key": "k"}
+    sizes = [{"n": 1e7}]
+    alike = [priced(cost, MACHINE, sizes, None, {**read, "spill_bytes": spilled}) for spilled in (0, 64)]
+    assert alike[0] == alike[1]
+    rows = [shown_row("scale", Candidate(written({}), predicted_ns=alike[0][0], resources={**read, "spill_bytes": n}),
+                      []) for n in (64, 0)]  # fmt: skip
+    assert rows[0]["resources"]["spill_bytes"] == 64 and rows[0]["resources"]["spills"] == "not priced"
+    assert rows[1]["resources"]["spill_bytes"] == 0 and "spills" not in rows[1]["resources"]
+    result = tune(DEVICE, "scale", sizes, MACHINE)
+    shown = [line for line in lines({**result, "candidates": rows}).splitlines() if " registers, " in line]
+    assert [line.split("predicted")[1] for line in shown] == ["  40 registers, 64 spilled (not priced)",
+                                                               "  40 registers, 0 spilled"]  # fmt: skip
 
 
 def test_a_function_without_a_host_region_has_nothing_to_tune():

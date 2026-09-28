@@ -106,10 +106,14 @@ def test_a_watched_check_prints_one_json_record_per_line(tmp_path):
             assert not left.strip() or isinstance(json.loads(left), dict)
 
 
-def test_a_check_outside_a_watch_still_prints_the_indented_record(tmp_path, capsys):
+def test_a_check_outside_a_watch_still_prints_the_indented_record_at_a_terminal(tmp_path, capsys, monkeypatch):
     from cairn.cli import main
 
     source = tmp_path / "prog.cairn"
     source.write_text(GOOD)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)  # a person who asked for the record
     assert main(["check", str(source), "--format", "json"]) == 0
     assert capsys.readouterr().out.startswith('{\n  "status": "typed"')
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: False)  # piped, one compact line
+    assert main(["check", str(source), "--format", "json"]) == 0
+    assert capsys.readouterr().out.startswith('{"status":"typed","functions":1,')
