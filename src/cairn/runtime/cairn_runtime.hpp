@@ -17,12 +17,17 @@ extern "C" [[noreturn]] void cr_exit(int status) noexcept;
 #include <utility>
 // CR_HD marks a guard that must also hold inside a device lane; CR_DEVICE marks a lambda the
 // emitter hands to cr::gpu::launch. Both are empty without nvcc, so host code is unchanged.
+// CR_EITHER goes before a CR_HD template that takes the host's block context or the device's: nvcc's
+// device pass parses a host region too, and instantiates it there for the host's context, which it
+// must not refuse for its host calls, since nothing runs that instantiation on the device.
 #if defined(__CUDACC__)
 #define CR_HD __host__ __device__
 #define CR_DEVICE __device__
+#define CR_EITHER _Pragma("nv_exec_check_disable")
 #else
 #define CR_HD
 #define CR_DEVICE
+#define CR_EITHER
 #endif
 namespace cr {
 // A failed guard aborts the process. In a device lane __trap() ends the kernel and poisons the
