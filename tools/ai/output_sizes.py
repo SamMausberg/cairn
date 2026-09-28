@@ -166,7 +166,7 @@ SAYS: dict[str, tuple[Callable[[dict], Any], Any]] = {
     "explain --symbol count": (explained, ("observed", ["count"])),
     "state": (status, "typed"),
     "inspect --symbol count": (symbol, "count"),
-    "find, by words": (called, ["std.text.parse_i64", "std.text.parse_u64"]),
+    "find, by words": (called, ["std.text.parse_i64", "std.text.parse_u64", "std.text.parse_fixed"]),
     "find, by types": (called, ["next_u64"]),
     REPLAY: (verdicts, "69 checks, 69 verdicts"),
     "mcp check, accepted": (verdict, "typed"),

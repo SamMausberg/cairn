@@ -312,7 +312,7 @@ def test_find_names_the_program_s_own_functions_before_the_library_s(client, pro
     assert not failed and record["hits"][0].startswith("lib.bump(x:u64) -> u64  pure")
     assert not any(line.startswith("lib.mix") for line in record["hits"])  # private to lib: no call from outside
     record, failed = client.tool("find", words="parse integer", limit=1)
-    assert not failed and record["hits"][0].startswith("std.text.parse_i64(") and record["more"] == 1
+    assert not failed and record["hits"][0].startswith("std.text.parse_i64(") and record["more"] == 2
     for wrong in ({"takes": "u64"}, {"returns": 0}, {"returns": False, "words": "sort"}, {"effects": 0, "words": "x"}):
         record, failed = client.tool("find", **wrong)
         assert failed and record["code"] == "E-REQUEST", wrong
