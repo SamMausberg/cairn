@@ -199,7 +199,7 @@ def branches(c: Checker, node: Any, runs: list) -> Any:
         outcomes.append((run(), c.moved, c.leases, c.before))
     falls = [moved for ended, moved, *_ in outcomes if not ended]
     everywhere: set[str] = set.intersection(*falls) if falls else set()
-    for n in set().union(*falls) - everywhere:
+    for n in set().union(*falls) - everywhere - c.unsure:
         if n in c.env and c.kind(c.env[n].ty) == "linear":
             fail("E-LINEAR-BRANCH", f"{n} is consumed on some paths only.", node)
     # A branch that returned cannot reach what follows; one that jumped (break/continue) can.

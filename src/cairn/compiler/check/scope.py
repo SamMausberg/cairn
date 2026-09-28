@@ -21,6 +21,7 @@ class Scope:
     moved: set[str] = field(default_factory=set)
     deferred: set[str] = field(default_factory=set)
     holds: dict[str, int] = field(default_factory=dict)  # a local a pending defer reads -> that defer's line
+    unsure: set[str] = field(default_factory=set)  # owners a refused statement named and may have consumed
     loop_depth: int = 0
     unsafe_depth: int = 0
     device_depth: int = 0

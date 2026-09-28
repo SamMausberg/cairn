@@ -121,7 +121,7 @@ def test_a_timing_whose_target_does_not_run_on_the_gpu_here_is_refused_before_an
 def test_only_the_device_make_targets_set_the_gate():
     makefile = (ROOT / "Makefile").read_text()
     targets = {m.group(1) for m in re.finditer(r"^([\w-]+):\n(?:\t.*\n)*?\t[^\n]*CAIRN_GPU_TESTS=1", makefile, re.M)}
-    assert targets == {"gpu", "tune-device", "calibrate-device"}
+    assert targets == {"gpu", "tune-device", "calibrate-device", "device-limits"}
 
 
 def test_device_plans_are_priced_but_not_timed_without_the_target(monkeypatch):
