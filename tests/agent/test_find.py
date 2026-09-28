@@ -124,6 +124,17 @@ def test_an_effect_ceiling_keeps_what_stays_within_it():
     assert named(find(None, "println", takes=["u64"], effects="pure, io, ffi:write")) == ["println"]
 
 
+def test_a_builtin_s_write_of_a_value_given_is_on_its_line():
+    """`swap` and `format` write the borrow they are given, as `std.mem.fill` does, and the line says so by the type
+    the query gave; a value given by value is the probe's own local, whose writes `pure` allows."""
+    swapped = [h for h in find(None, "swap", takes=["rw<u64>", "u64"])["hits"] if h.startswith("swap(")]
+    assert swapped and all(h.split("  //")[0].endswith("pure + write:rw<u64>") for h in swapped)
+    [formatted] = [h for h in find(None, takes=["rw<Vec[u8]>", "u64"])["hits"] if h.startswith("format(")]
+    assert "write:rw<Vec[u8]>" in formatted.split("  //")[0]
+    [owned] = [h for h in find(None, takes=["Vec[u8]", "u64"])["hits"] if h.startswith("format(")]
+    assert "write:" not in owned.split("  //")[0]
+
+
 def test_every_builtin_has_one_line():
     covered = [name for names in BUILTINS for name in names.split()]
     assert sorted(covered) == sorted(TABLE) and len(covered) == len(set(covered))

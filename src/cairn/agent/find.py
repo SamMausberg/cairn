@@ -21,7 +21,8 @@ still judges every builtin a type query reaches.
 A hit is one line: the qualified name and signature, the effects of its row beyond what `pure` allows, and the first
 sentence of its comment. An effect ceiling keeps the functions whose rows, less their reads and writes of what they
 are passed, stay within it as `E-EFFECT-CEILING` judges a row; the modes of the values given decide those reads and
-writes. A builtin's row belongs to a call, so a type query gives it and a word query does not.
+writes. A builtin's row belongs to a call, so a type query gives it and a word query does not; a write of a value
+the query gave is named by that value's type.
 """
 
 from __future__ import annotations
@@ -382,9 +383,16 @@ class Probes:
                     continue
                 fit = (int(ty.value != self.returns), fit[1])
             own = c.local_effects.get(name) if probe.head and name not in refused else None
-            row = None if own is None else {e for e in own - base if not e.startswith(("read:", "write:"))}
+            row = None if own is None else {self.said(e) for e in own - base if not e.startswith("read:")}
             out.append((probe.entry, fit, probe.head, row))
         return out
+
+    def said(self, effect: str) -> str:
+        """A builtin call's effect as its hit says it: a write of a borrow it was given names that value by the type
+        the query gave, as the call's head does, since the probe's name for it means nothing to the agent."""
+        kind, _, of = effect.partition(":")
+        given = re.fullmatch(r"a(\d+)", of) if kind == "write" else None
+        return f"write:{short(self.takes[int(given[1])])}" if given else effect
 
 
 # The answer -----------------------------------------------------------------------------------------------------
