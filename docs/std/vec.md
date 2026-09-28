@@ -12,6 +12,10 @@ pub fn new[T:affine]() -> Vec[T]  // effects: alloc, free, trap, zero_init
 pub fn with_capacity[T:affine](capacity:usize) -> Vec[T]  // effects: alloc, free, trap, zero_init
 pub fn capacity[T:affine](v:ro<Vec[T]>) -> usize  // effects: read:v
 
+// A Vec holding a copy of `src`, in one allocation of exactly its length: `vec.from(input.data[lo..hi])`.
+// effects: alloc, ffi_precondition, free, local_read, local_write, read:src, trap, zero_init
+pub fn from[T:copy](n:usize, src:ro<T>[n]@host) -> Vec[T]
+
 // Doubling keeps pushes amortized constant; elements move by swap, so owners are never copied. Cost: one allocation,
 // and one pass over the elements held with no guard in it.
 // effects: alloc, ffi_precondition, free, local_read, local_write, read:v, trap, write:v, zero_init
@@ -47,6 +51,20 @@ pub fn extend_from[T:copy](v:rw<Vec[T]>, n:usize, src:ro<T>[n]@host)
 
 // Release the tail now instead of at the owner's scope exit; capacity is kept.
 pub fn truncate[T:affine](v:rw<Vec[T]>, count:usize)  // effects: free, read:v, trap, write:v
+
+// effects: diverge, ffi_precondition, local_read, local_write, read:a, read:b, stack_storage, trap, zero_init
+impl Eq for Vec[T]: fn same[T:Eq + affine](a:ro<Vec[T]>, b:ro<Vec[T]>) -> bool
+
+// effects: diverge, ffi_precondition, local_read, local_write, read:a, read:b, stack_storage, trap, zero_init
+impl Ord for Vec[T]: fn less[T:Ord + affine](a:ro<Vec[T]>, b:ro<Vec[T]>) -> bool
+
+// effects: diverge, ffi_precondition, local_read, local_write, read:value, stack_storage, trap, zero_init
+impl Hash for Vec[T]: fn hash[T:Hash + affine](value:ro<Vec[T]>) -> u64
+
+// The hash of a Vec holding `xs`, FNV-1a over its elements' own hashes, so a view finds the Vec that holds the same
+// elements (map.find_view) without a Vec being made for it. Cost: one pass over `xs`.
+// effects: diverge, ffi_precondition, local_read, local_write, read:xs, stack_storage, trap, zero_init
+pub fn hash_view[T:Hash](n:usize, xs:ro<T>[n]@host) -> u64
 ```
 
 A generic function's effects are what it may do for any arguments within its bounds, besides what their own trait members do.

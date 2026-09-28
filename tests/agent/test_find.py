@@ -53,7 +53,7 @@ def test_words_find_what_the_subjects_searched_for_first(words, first):
 
 def test_words_answer_with_every_word_they_can_and_a_line_each():
     parsed = find(None, "parse integer")
-    assert named(parsed) == ["std.text.parse_i64", "std.text.parse_u64"] and parsed["more"] == 0
+    assert named(parsed) == ["std.text.parse_i64", "std.text.parse_u64", "std.text.parse_fixed"] and parsed["more"] == 0
     [line] = [h for h in parsed["hits"] if h.startswith("std.text.parse_i64")]
     assert line == ("std.text.parse_i64(n:usize, s:ro<u8>[n]) -> Result[i64, ParseError]  pure  // Signed decimal: an "
                     "optional leading '-', then digits.")  # fmt: skip
@@ -79,7 +79,7 @@ def test_an_answer_is_bounded_and_counts_what_it_left_out():
 def test_types_find_the_calls_the_checker_accepts_best_fit_first():
     assert named(find(None, takes=["ro<u8>[n]"], returns="i64")) == ["std.text.parse_i64"]  # a Result holding it
     assert named(find(None, takes=["i64"], returns="usize"))[0] == "usize"  # the conversion, exact, first
-    assert named(find(None, returns="Vec[u8]"))[:2] == ["std.vec.new", "std.vec.with_capacity"]
+    assert named(find(None, returns="Vec[u8]"))[:3] == ["std.vec.new", "std.vec.from", "std.vec.with_capacity"]
     searched = named(find(None, takes=["ro<u8>[n]", "ro<u8>[n]"], returns="usize"))
     assert searched[0] == "std.text.find" and "std.sort.search" not in searched  # a view is no key of one value
     assert searched.index("std.fs.rename") > 0  # pure before what does I/O

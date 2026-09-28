@@ -3,10 +3,12 @@
 Every accepted construct is executed natively under both compilers; every rule has a rejection.
 """
 
+import subprocess
+
 import pytest
 
 from cairn.compiler.cairnc import compile_source
-from emitted import SANITIZED, WARNINGS, refused, round_trips, run, sanitized
+from emitted import SANITIZED, WARNINGS, artifact, refused, round_trips, run, sanitized
 
 PRELUDE = """
 const LIMIT:usize = 8;
@@ -402,6 +404,44 @@ def test_owned_dynamic_values_hold_heterogeneous_owners(tmp_path):
 )
 def test_owned_dynamic_rejections(code, tail):
     refused(code, DYNAMIC + tail)
+
+
+FRAME = """trait Frame { fn size(self:ro<Self>) -> u64; }
+struct Packet { payload:u32; }
+impl Frame for Packet { fn size(self:ro<Packet>) -> u64 = u64(self.payload) + 5; }
+struct Holder { d:Dyn[Frame]; }
+fn pass(d:Dyn[Frame]) -> Dyn[Frame] = d;
+fn loud(d:Dyn[Frame]) -> Dyn[Frame] { println("handed on"); return d; }
+"""
+# Each receiver is an expression that moves the value it calls through, so running it twice lends an empty Dyn.
+RECEIVERS = {
+    "call": "let q = Dyn[Frame](Packet(40));\n  let s = pass(q).size();",
+    "printing call": "let q = Dyn[Frame](Packet(40));\n  let s = loud(q).size();",
+    "take": "let mut h = Holder(Dyn[Frame](Packet(40)));\n  let s = take(h.d).size();",
+}
+
+
+@pytest.mark.parametrize("sanitizer", [None, "address"], ids=["plain", "address"])
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+@pytest.mark.parametrize("receiver", RECEIVERS.values(), ids=RECEIVERS.keys())
+def test_a_dynamic_call_runs_its_receiver_once(tmp_path, receiver, cxx, sanitizer):
+    """The receiver was written into both the table lookup and the object pointer, so it ran twice: `loud` printed
+    twice, and the second run found the value moved and trapped."""
+    source = FRAME + "fn main() -> i32 {\n  " + receiver + "\n  if s != 45 { return 1; }\n  return 0;\n}\n"
+    path = tmp_path / "receiver.cairn"
+    path.write_text(source)
+    done = subprocess.run([artifact(path, cxx, kind="exe", sanitizer=sanitizer)], capture_output=True, text=True,
+                          timeout=120)  # fmt: skip
+    assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
+    assert done.stdout == ("handed on\n" if "loud" in receiver else "")
+
+
+def test_a_dynamic_call_through_a_local_names_it_in_place():
+    """A local has no effect to repeat, so its call reads as before; anything else is bound once."""
+    local = FRAME + "fn main() -> i32 { let q = Dyn[Frame](Packet(40)); return i32(q.size()) - 45; }"
+    assert "v_q.view().vt->m0(v_q.view().self)" in compile_source(local)[0]
+    called = compile_source(FRAME + "fn main() -> i32 {\n  " + RECEIVERS["printing call"] + "\n  return 0;\n}")[0]
+    assert called.count("cf_loud(std::move(v_q))") == 1
 
 
 def test_an_empty_owned_dynamic_value_traps_when_lent(tmp_path):

@@ -24,7 +24,7 @@ A guard is a check the compiled code makes before an operation, such as an index
 | `std.derived` | `derive eq`, `derive ord`, `derive hash` | no |
 | `std.sort` | a heapsort in place, a stable radix sort of unsigned keys, and binary search | no |
 | `std.arena` | `Arena[T]`: values named by handles that notice when their value was removed | yes |
-| `std.mem` | `fill`, `copy`, `equal` over views | no |
+| `std.mem` | `fill`, `copy`, `equal`, `compare` over views | no |
 | `std.wire` | `derive wire`: records of unsigned fields to bytes and back | no |
 | `std.math` | the C math library on `f64`, whose last bit varies between machines | no |
 | `std.zlib` | the system zlib: compressing a whole view, CRC-32, Adler-32 | only `compress` |
@@ -102,46 +102,44 @@ fn main() -> i32 {
 }
 ```
 
+`vec.from(s)` makes a `Vec` that holds a copy of the view `s`. A `Vec` is equal to, ordered against and hashed as the elements it holds, so two `Vec[u8]` compare as their bytes do and a `Vec[u8]` keys a map.
+
 When a `Vec` runs out of room, its capacity doubles and its elements move with `swap`, so an owner is never copied and `push` costs amortized O(1). The move is one pass over two views of the same extent, so no index in it is guarded, and `extend_from` copies a view into one part. `pop` and `remove` move an element out as an `Option[T]`. `get` takes only copyable elements, and `set` takes any. Both trap on an index at or past `len`.
 
 ## std.text
 
-`std.text` turns numbers into bytes and back, and searches bytes the way a line protocol needs. A function cannot return a borrow, so a search returns an index, and you pass the part `s[lo..hi]` on yourself.
+`std.text` turns numbers into bytes and back, and walks and searches bytes the way a line protocol needs. A function cannot return a borrow, so a search returns an index, and a walk sets the bounds `lo..hi` of the next piece in a `Cursor`. You pass the part `s[lo..hi]` on yourself, and nothing is copied.
 
 ```cairn
-import std.core (Option, Result);
+import std.core (Result);
 import std.text as text;
-
-// The decimal field that starts at `from` and ends at the next comma or at the end of the line.
-fn field(n:usize, line:ro<u8>[n], from:usize) -> Result[u64, text.ParseError] {
-  match text.find_byte(n, line, 44, from) {
-    Some(at) => return text.parse_u64(at - from, line[from..at]);
-    None => return text.parse_u64(n - from, line[from..n]);
-  }
-}
 
 fn main() -> i32 {
   let line = "23,19,x9";
-  match field(line, 0) {
-    Ok(value) => { if value != 23 { return 1; } }
-    Err(_) => return 2;
-  }
-  match field(line, 6) {
-    Ok(_) => return 3;
-    Err(why) => {
-      match why {
-        Invalid(at) => { if at != 0 { return 4; } }   // offset of the byte at fault
-        Overflow(_) => return 5;
-        Empty => return 6;
+  let mut total:u64 = 0;
+  let mut f = text.cursor();
+  while text.next_field(line, ',', f) {                  // f.lo..f.hi: 23, then 19, then x9
+    match text.parse_u64(line[f.lo..f.hi]) {
+      Ok(value) => total += value;
+      Err(why) => {
+        match why {
+          Invalid(at) => { if f.lo + at != 6 { return 1; } }   // the byte at fault, counted in the part
+          Overflow(_) => return 2;
+          Empty => return 3;
+        }
       }
     }
   }
+  if total != 42 { return 4; }
+  match text.parse_fixed("12.5", 2) { Ok(cents) => { if cents != 1250 { return 5; } } Err(_) => return 6; }
   stack out:u8[4] = zeroed;
   let used = text.write_hex(out, 48879, 4);             // a call that writes gets its own statement
   if used != 4 || out[0] != 98 { return 7; }            // "beef"
   return 0;
 }
 ```
+
+`next_line` gives each line without its `\n` or `\r\n`, `next_word` each run of bytes that are not white space, and `next_field` each piece between separators, empty ones included. `parse_fixed(s, places)` reads a decimal such as `12.50` as a whole number of hundredths when `places` is 2.
 
 The `write_` functions write into storage you pass and return the number of bytes they used, or 0 when the value does not fit. The `push_` functions append to a `Vec[u8]`, so they allocate. A parser that fails reports the offset of the byte at fault, and `parse_u64` takes digits alone, with no sign and no spaces. `hash_bytes` is FNV-1a.
 
@@ -232,7 +230,7 @@ fn main() -> i32 {
 
 `close` returns nothing, because a function that consumes a linear value cannot return a status. If you need one, report it through a borrow.
 
-A path in `std.io` ends in a NUL byte, because C reads a pointer and no length; [std.fs](#stdfs) takes paths without one. `read` is one system call and returns 0 at the end of the file. `read_full` and `write` loop until the kernel has done all of it. After its first read, `read_to_end` asks the file how much is left, so the rest of a regular file arrives in one allocation and a pipe's `Vec` doubles as it fills; a directory fails that read with EISDIR (21) before any size is asked. Nothing here buffers. For output, the [print builtins](language.md#print-and-format) usually serve.
+A path in `std.io` ends in a NUL byte, because C reads a pointer and no length; [std.fs](#stdfs) takes paths without one. `read` is one system call and returns 0 at the end of the file. `read_full` and `write` loop until the kernel has done all of it. After its first read, `read_to_end` asks the file how much is left, so the rest of a regular file arrives in one allocation and a pipe's `Vec` doubles as it fills; a directory fails that read with EISDIR (21) before any size is asked. `read_stdin_to_end(input)` reads standard input the same way and leaves it open. Nothing here buffers. For output, the [print builtins](language.md#print-and-format) usually serve.
 
 ## std.fs
 
@@ -316,48 +314,35 @@ Each function is one system call, except that `sleep` calls again for the rest o
 
 ## std.map
 
-`Map[K, V]` is a hash table with open addressing, linear probing and tombstones. The map owns its keys and values, so `Map[u64, Vec[u8]]` is ordinary.
+`Map[K, V]` is a hash table with open addressing, linear probing and tombstones. The map owns its keys and values, so `Map[u64, Vec[u8]]` is ordinary, and so is a map keyed by words, `Map[Vec[u8], u64]`.
 
 ```cairn
 import std.core (Option);
 import std.map as map;
 import std.text as text;
-
-fn bump(counts:rw<map.Map[u64, u64]>, key:u64) {
-  match map.find(counts, key) {
-    Some(slot) => counts.vals[slot] += 1;
-    None => map.insert(counts, key, 1);
-  }
-}
-
-// One count per distinct word, keyed by the word's FNV digest: a Vec has no Hash of its own.
-fn tally(n:usize, line:ro<u8>[n], counts:rw<map.Map[u64, u64]>) {
-  let mut start:usize = 0;
-  while start < n {
-    let mut stop = n;
-    match text.find_byte(n, line, 32, start) { Some(at) => stop = at; None => {} }
-    if stop > start { bump(counts, text.hash_bytes(stop - start, line[start..stop])); }
-    start = stop + 1;
-  }
-}
+import std.vec (Vec);
 
 fn main() -> i32 {
-  let mut counts = map.new[u64, u64]();
   let line = "put get put del get put";
-  tally(line, counts);
+  let mut counts = map.new[Vec[u8], u64]();
+  let mut w = text.cursor();
+  while text.next_word(line, w) {
+    let at = map.entry_view(counts, line[w.lo..w.hi], 0);   // copies the word into a key the first time only
+    counts.vals[at] += 1;
+  }
   if map.count(counts) != 3 { return 1; }
-  match map.find(counts, text.hash_bytes(3, "put")) {
+  match map.find_view(counts, "put") {
     Some(slot) => { if counts.vals[slot] != 3 { return 2; } }
     None => return 3;
   }
-  let mut seen:u64 = 0;
-  for slot in 0..map.slots(counts) { if map.live(counts, slot) { seen += counts.vals[slot]; } }
-  if seen != 6 { return 4; }
+  let mut order = vec.new[usize]();
+  map.sorted(counts, order);                                  // the slots of del, get, put
+  if order.len != 3 || counts.vals[order.data[0]] != 1 { return 4; }
   return 0;
 }
 ```
 
-`insert` releases the old value when it replaces one, and `remove` moves the value out.
+`insert` releases the old value when it replaces one, and `remove` moves the value out. `entry(m, key, value)` returns the slot of `key`'s entry, inserting `value` first when there is none, and `entry_view` and `find_view` look up a `Vec` key by a view of its elements, so the key is copied only when it is inserted. `sorted(m, out)` appends the live slots to `out` in the order of their keys.
 
 A slot index from `find` stays good only until the next `insert` or `remove`, because growth rehashes and a slot can be reused. For a position you keep longer, `slot(m, key)` returns a `Slot` stamped when its key was placed. `resolve(m, s)` returns `None` once that key is removed or the map has rehashed, and you then look the key up again. It never returns another entry's index. `update(m, key, f)` lends the value to a closure, and the closure may not reach the map (`E-ALIAS`).
 
@@ -512,7 +497,7 @@ fn main() -> i32 {
 
 ## std.mem
 
-`fill`, `copy` and `equal` work over whole views. `fill` and `copy` assign, so they take only copyable elements. `equal` takes any element type that implements `Eq`, and it stops at the first difference.
+`fill`, `copy`, `equal` and `compare` work over whole views. `fill` and `copy` assign, so they take only copyable elements. `equal` takes any element type that implements `Eq`, `compare` any that implements `Ord`, and both stop at the first difference. `compare` orders two views lexicographically, a shorter one first on a common prefix, and returns -1, 0 or 1.
 
 ```cairn
 import std.mem as mem;
@@ -528,7 +513,7 @@ fn main() -> i32 {
 }
 ```
 
-`copy` is no memmove. It refuses two overlapping parts of one array (`E-ALIAS`), so shift a buffer with an ordinary loop. `equal` takes two extents, because the two lengths may differ.
+`copy` is no memmove. It refuses two overlapping parts of one array (`E-ALIAS`), so shift a buffer with an ordinary loop. `equal` and `compare` take two extents, because the two lengths may differ.
 
 ## std.wire
 

@@ -88,7 +88,8 @@ WHY_FLAGS = (
     "multiply-adds (--fmad=false on the device, -ffp-contract=off on the host) and no fast math. SOL-ExecBench's "
     "default cuda_cflags are -O3 --use_fast_math, so compile_options replaces them. The program needs C++20, which a "
     "later -std overrides torch's -std=c++17 with, and nvcc's extended lambdas; one -arch names the device target, "
-    "so torch adds no architecture of its own."
+    "so torch adds no architecture of its own. -fno-finite-loops keeps a loop the program may never leave, which "
+    "C++ lets a compiler delete."
 )
 NOT_RUN = ["nothing ran on a GPU", "no official evaluator ran", "nothing was submitted", "no score was measured"]
 

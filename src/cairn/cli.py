@@ -12,6 +12,7 @@ import json
 import os
 import platform
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -68,6 +69,14 @@ def printed(built: dict) -> dict:
     if kept.get("exit_code") == 0:
         del kept["exit_code"]
     return {**kept, "receipt": str(Path(built["directory"]) / "receipt.json")} if "directory" in built else kept
+
+
+def limit(code: int, a: Any, capped: bool) -> str:
+    """What a limit of `cairn run` may have to do with how its program ended. `--timeout` is also the CPU time its
+    threads may use together, and an allocation past `--memory-mib` traps as a failed guard does, with nothing said."""
+    if code == -signal.SIGXCPU:
+        return f": its threads used the {a.timeout} s of CPU time --timeout allows"
+    return f", or an allocation passed the {a.memory_mib} MiB cap" if code == -signal.SIGABRT and capped else ""
 
 
 def preconditions(items: list[str]) -> dict[str, str]:
@@ -552,13 +561,23 @@ def cairn_test(a: Any, project: Project) -> int:
 
 
 def cairn_build(a: Any, project: Project) -> int:
-    """`cairn build`, and the build `cairn run` starts from: what it built, or with `run` what the program did."""
+    """`cairn build`, and the build `cairn run` starts from: what it built, or with `run` what the program did.
+
+    `run` hands the program its own standard input, output and error, piped or not, and exits with its status, so its
+    output can be diffed as it is; a signal is 128 plus its number, as a shell reports it. What `cairn` has to add goes
+    to standard error in one line or a refusal: a check or build that failed, how the program ended when that was not
+    a zero status, and the limit it may have met. `--format json` or `CAIRN_FORMAT=json` asks for the record instead,
+    with the program's streams inside it. An agent's shell is never a terminal, and the record put what a run printed
+    inside a JSON string, which cannot be compared with an expected output without a parser."""
     from .projects.build import build
 
     result = build(project, output=a.out, cxx=a.cxx, arch=a.arch, kind="exe" if a.command == "run" else a.kind,
                    timeout=a.timeout, target=a.target, debug=a.debug, incremental=a.incremental,
                    keep_guards=a.keep_guards, header=getattr(a, "header", False), device_target=a.device_target,
                    emulate=a.emulate, sanitizer=a.sanitize)  # fmt: skip
+    if a.command == "run" and result["status"] != "native-built" and terminal.human(FORMAT):
+        terminal.summary(printed(result), sys.stderr)  # standard output is the program's, which never ran
+        return 2
     if a.command == "build" or result["status"] != "native-built":
         report(printed(result), brief=True)
         return 0 if result["status"] == "native-built" else 2
@@ -580,13 +599,17 @@ def cairn_build(a: Any, project: Project) -> int:
     run: dict = {"stdin": subprocess.DEVNULL} if machine else {"preexec_fn": limits}
     if a.sanitize:
         run["env"] = {**os.environ, **SANITIZER_ENVIRONMENT[a.sanitize]}
-    if terminal.human(FORMAT):  # A person sees the program itself: its streams are the terminal's.
+    if terminal.human(FORMAT):  # the program's own streams and exit status
         if emulated:
             print(f"note: {result['emulation']['claim']}", file=sys.stderr, flush=True)
-        code = subprocess.run(started, timeout=a.timeout, check=False, **run).returncode
+        try:
+            code = subprocess.run(started, timeout=a.timeout, check=False, **run).returncode
+        except subprocess.TimeoutExpired:
+            print(f"error: {project.name} was stopped after --timeout {a.timeout} s", file=sys.stderr)
+            return 124  # what timeout(1) exits with
         if code:
-            print(f"error: {project.name} {terminal.ended(code)}", file=sys.stderr)
-        return 0 if code == 0 else 1
+            print(f"error: {project.name} {terminal.ended(code)}{limit(code, a, capped)}", file=sys.stderr)
+        return code if code >= 0 else 128 - code  # a signal as a shell reports it: SIGABRT is 134
     # A program may print bytes that are not UTF-8 (an image, a zlib stream); the record escapes them.
     cp = subprocess.run(started, capture_output=True, text=True, errors="backslashreplace", timeout=a.timeout, **run)
     report({"status": "program-exited", "exit_code": cp.returncode, "stdout": cp.stdout, "stderr": cp.stderr,
@@ -614,6 +637,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.arguments and a.command != "run":
         p.error("only `cairn run PATH -- ARGS` passes arguments on to a program")
     FORMAT = getattr(a, "format", None)
+    if a.command == "run":  # its answer is what the program printed; the record only when asked for
+        FORMAT = FORMAT or os.environ.get("CAIRN_FORMAT") or "human"
     project = None
     try:
         if a.command in ALONE:

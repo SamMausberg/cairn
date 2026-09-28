@@ -146,12 +146,26 @@ def place(c: Checker, e: Expr, write: bool = False) -> Type:
         if carrier:  # len(c.price) == c.rows holds of every value, so neither half moves on its own.
             fail("E-EXTENT-FIELD", f"{e.val} takes part in the declared extent of {at.name}.{carrier}; "
                  "assign, take or swap the whole record.", e)  # fmt: skip
-        ty = c.expr(e, consume=False)
+        resolved(c, e.args[0])
+        ty = c.expr(e, consume=False)  # reads the field, and so looks at its base again
         c.reaching -= reached
         if reached and outer:  # A new value in this cell replaces what a lease of its elements holds.
             c.leased(c.where(e), "rw" if write else "ro", e, elements=write)
         return ty
     fail("E-LVALUE", "Assignment requires a mutable variable, field, or rw element.", e)
+
+
+def resolved(c: Checker, e: Expr):
+    """Each call in `e`, a place just checked, typed ahead as `Checker.peek` types an argument: a second look at the
+    place meets the call again, and a call is resolved once, since its resolution replaces what the parser wrote in
+    its `ref`. The index around it is looked at again, as it always was."""
+    stack = [e]
+    while stack:
+        x = stack.pop()
+        if x.tag == "call":
+            c.early[id(x)] = x
+        else:
+            stack += x.args
 
 
 def stable(c: Checker, name: str) -> bool:

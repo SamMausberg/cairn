@@ -45,6 +45,42 @@ template<class T> CR_HD inline T unbits(std::uint64_t b) noexcept {
   return v;
 }
 
+// The high 64 bits of a 64-bit product: mul.hi on the device, a 128-bit product on the host.
+CR_HD inline std::uint64_t mulhi(std::uint64_t a, std::uint64_t b) noexcept {
+#if defined(__CUDA_ARCH__)
+  return __umul64hi(a, b);
+#else
+  return static_cast<std::uint64_t>((static_cast<unsigned __int128>(a) * b) >> 64);
+#endif
+}
+
+// Division by a grid extent a launch fixes. A region of two or three grid dimensions splits its block number into one
+// name per dimension, and a division by a value known only when the region starts is a 64-bit division each block,
+// which the device runs as a subroutine. The launch makes one Divider an extent, on the host, and each block divides
+// by a multiply-high, a subtraction and two shifts (Granlund and Montgomery, PLDI 1994, figure 4.1): with l the least
+// integer such that d <= 2^l and m = floor(2^64 (2^l - d) / d) + 1, which is below 2^64, every n has
+// n / d = (t + ((n - t) >> min(l, 1))) >> max(l - 1, 0), t being the high half of m * n. The host, the device and
+// an emulated device run this one formula; tests/runtime/coop_divider.cpp holds both branches to / and %.
+class Divider {
+  std::uint64_t m_ = 0;
+  unsigned first_ = 0, second_ = 0;
+
+public:
+  explicit Divider(std::uint64_t d) noexcept {
+    if(d == 0) return;  // a grid with an empty dimension has no block, so nothing divides by it
+    unsigned l = 0;
+    while(l < 64 && (std::uint64_t(1) << l) < d) ++l;
+    const unsigned __int128 one = 1;
+    m_ = static_cast<std::uint64_t>((one << 64) * ((one << l) - d) / d + 1);
+    first_ = l < 1 ? l : 1;
+    second_ = l > 0 ? l - 1 : 0;
+  }
+  CR_HD std::uint64_t div(std::uint64_t n) const noexcept {
+    const std::uint64_t t = mulhi(m_, n);
+    return (t + ((n - t) >> first_)) >> second_;
+  }
+};
+
 // Pipeline stages (compiler/cooperative/pipelines.py): D stages of S elements in the block's shared memory, filled in ring order
 // and read in the same order. The checker has shown every fill lands in a stage nobody still reads and every read
 // follows its stage's wait, so the stage an operation means is the count of fills, or of waits, modulo D. Each thread
