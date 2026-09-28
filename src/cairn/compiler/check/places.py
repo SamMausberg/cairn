@@ -220,6 +220,11 @@ def consume(c: Checker, e: Expr):
             fail("E-MOVED", f"{e.val} was already moved or scheduled for cleanup.", e)
         if c.env[e.val].ty.mode != "value":
             fail("E-MOVE-BORROW", f"{e.val} is borrowed; take() or swap() its contents instead.", e)
+        if e.val in c.holds:  # statements.s_defer: the pending call would read what the move leaves behind
+            line = c.holds[e.val]
+            fail("E-LEASED", f"{e.val} is read by the defer at line {line} when its block ends, so it cannot move "
+                 "before then: make that call before the move, or bind what it reads to a local first.", e,
+                 deferred_at=line)  # fmt: skip
         c.moved.add(e.val)
         e.ref = "move"
     elif e.tag == "index" or (e.tag == "field" and not isinstance(e.ref, tuple)):  # Enum.None is a value.

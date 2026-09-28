@@ -21,7 +21,7 @@ pub fn insert[T:affine](a:rw<Arena[T]>, value:T) -> Handle
 // None when the handle is stale: wrong slot, removed value, or an older generation.
 pub fn find[T:affine](a:ro<Arena[T]>, h:Handle) -> Option[usize]  // effects: read:a, trap
 
-// effects: alloc, free, local_read, local_write, read:a, trap, write:a, zero_init
+// effects: alloc, ffi_precondition, free, local_read, local_write, read:a, trap, write:a, zero_init
 pub fn remove[T:affine](a:rw<Arena[T]>, h:Handle) -> Option[T]
 ```
 

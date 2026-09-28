@@ -17,7 +17,7 @@ help:
 	@echo 'proof     certificates, the Lean build, the differential run, scalar module equivalence'
 	@echo 'lean      the Lean half of proof alone'
 	@echo 'gpu       runs device code: CUDA runtime, lanes, device plans, apps, the device benchmark'
-	@echo 'tune-device      times device plans: FILE=... SYMBOL=... AT=n=1e7 (runs device code)'
+	@echo 'tune-device      times device plans: FILE=... SYMBOL=... AT=n=1e7, CARD=h100 for this GPU (runs device code)'
 	@echo 'calibrate-device measures the device into results/perf_model/device.json (runs device code)'
 	@echo 'device-limits    asks the device for the limits its card takes from NVIDIA (starts CUDA, launches nothing)'
 	@echo 'device-build  every test that compiles device code, where nvcc is installed; nothing runs on a device'
@@ -106,8 +106,10 @@ gpu:
 
 # The two other targets that run device code. Only the owner runs them, never while anything else uses the device:
 # each device run holds /tmp/cairn-gpu.lock, rests two seconds after, and one process makes at most 64 of them.
+# CARD names the card that prices the plans and gives their target, which must run on the GPU here (E-TARGET-MISMATCH).
 tune-device:
-	CAIRN_GPU_TESTS=1 $(CAIRN) tune $(FILE) --symbol $(SYMBOL) --at $(AT) --measure 3 --device --format json
+	CAIRN_GPU_TESTS=1 $(CAIRN) tune $(FILE) --symbol $(SYMBOL) --at $(AT) --measure 3 --device --format json \
+	  $(if $(CARD),--card $(CARD))
 
 calibrate-device:
 	CAIRN_GPU_TESTS=1 PYTHONPATH=src $(PYTHON) -m cairn.perf.on_device --out results/perf_model/device.json
@@ -127,7 +129,8 @@ DEVICE_TESTS = tests/language/test_assembly.py tests/language/test_assert_eq.py 
   tests/projects/test_app_matmul.py tests/projects/test_cooperative_examples.py tests/projects/test_demos.py \
   tests/projects/test_emulation.py::test_the_device_command_is_unchanged_when_emulation_is_off \
   tests/projects/test_export.py tests/projects/test_harness.py tests/projects/test_harness_torch.py \
-  tests/projects/test_foreign.py tests/projects/test_test_blocks.py \
+  tests/projects/test_foreign.py tests/projects/test_generated_refusals.py tests/projects/test_nvcc_accepts.py \
+  tests/projects/test_test_blocks.py \
   tests/runtime/test_device_arithmetic.py tests/runtime/test_enqueue.py tests/runtime/test_execution.py \
   tests/runtime/test_native_runtime.py \
   tests/soundness/test_cooperative.py tests/soundness/test_device_paths.py tests/soundness/test_fragments.py \

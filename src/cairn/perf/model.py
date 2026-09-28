@@ -140,7 +140,7 @@ def tensor(r: Region, card: Device, sizes: dict[str, float], missing: set[str]) 
     """A tensor-core multiply by its roofline: a launch, then the larger of its bytes at the memory's sustained
     bandwidth and its operations at the published tensor peak. Every format mma_unordered takes runs at the f16
     rate, since an 8-bit float is widened to f16. How close the kernel comes to that peak is not known until the
-    owner's device calibration runs, so the prediction is the roofline's, not the kernel's."""
+    device calibration runs, so the prediction is the roofline's, not the kernel's."""
     runs = value(r.runs, sizes, missing)
     moved = sum(value(b, sizes, missing) for b in (*r.body.reads.values(), *r.body.writes.values()))
     work = sum(value(k, sizes, missing) for k in r.body.ops.values())
@@ -317,7 +317,7 @@ def confidence(c: Cost, missing: set[str], found: list[Piece], profile: Profile,
     if any(p.what.startswith("device tensor-core") for p in found):
         guesses.append(
             "a tensor-core multiply is priced at the published tensor peak, its roofline; the kernel's own "
-            "efficiency, which only the owner's device calibration measures, makes it slower"
+            "efficiency, which only the device calibration measures, makes it slower"
         )
     if profile.origin != "measured":
         approximations.append(f"the machine profile is a {profile.origin}, not a measurement")

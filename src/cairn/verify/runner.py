@@ -35,9 +35,16 @@ def written(project: Project, chosen: str = "", exact: bool = False) -> list[Fun
     return [f for f in picked if (label(f) == chosen if exact else chosen in label(f))]
 
 
+# The error a trap in a device lane leaves for the next CUDA call, so it reads as the guard that failed.
+LAUNCH_FAILURE = "cairn: cuda: unspecified launch failure"
+
+
 def reason(done: subprocess.CompletedProcess) -> str:
-    """Why a test failed, in one line: the assert that failed when it said so, else how its process ended."""
-    said = [line for line in done.stderr.splitlines() if line.startswith("assertion failed ")]
+    """Why a test failed, in one line: the assert that failed when it said so, else the CUDA error the runtime
+    stopped on, other than a trap's launch failure, else how its process ended."""
+    lines = done.stderr.splitlines()
+    said = [line for line in lines if line.startswith("assertion failed ")]
+    said = said or [line for line in lines if line.startswith("cairn: cuda: ") and line != LAUNCH_FAILURE]
     if said:
         return said[-1]
     if done.returncode < 0 and -done.returncode in signal.valid_signals():
@@ -60,7 +67,8 @@ def run_tests(project: Project, *, cxx: str = "clang++", chosen: str = "", exact
         return record
     built = build(project, output=output, cxx=cxx, timeout=min(300, max(timeout, 60)),
                   tests=tuple(f.name for f in tests), device_target=device_target, emulate=emulate)  # fmt: skip
-    record["build"] = {k: built.get(k) for k in ("status", "artifact", "directory", "exit_code", "stderr", "message")}
+    said = ("status", "artifact", "directory", "exit_code", "stderr", "message")  # an empty or zero one says nothing
+    record["build"] = {k: built[k] for k in said if built.get(k) not in (None, "", 0)}
     record.update({"emulation": built["emulation"]} if "emulation" in built else {})
     if built["status"] != "native-built":
         return {**record, "status": built["status"]}
@@ -81,10 +89,15 @@ def run_tests(project: Project, *, cxx: str = "clang++", chosen: str = "", exact
             done = subprocess.CompletedProcess(late.cmd, -signal.SIGKILL, out, err)
             result["reason"] = f"timed out after {timeout} s"
         passed = done.returncode == 0 and "reason" not in result
-        result.update(status="passed" if passed else "failed", exit_code=done.returncode)
+        result["status"] = "passed" if passed else "failed"
         if not passed:
-            result.setdefault("reason", reason(done))
-        result.update(stdout=done.stdout[:8000], stderr=done.stderr[:8000], elapsed_seconds=time.monotonic() - started)
+            result.update(exit_code=done.returncode, reason=result.get("reason") or reason(done))
+        # What the test printed, where it says more than the reason, which is an assert's own line of stderr.
+        if done.stdout:
+            result["stdout"] = done.stdout[:8000]
+        if done.stderr.strip() not in ("", result.get("reason")):
+            result["stderr"] = done.stderr[:8000]
+        result["elapsed_seconds"] = round(time.monotonic() - started, 3)
         return result
 
     workers = jobs or min(8, os.cpu_count() or 1)

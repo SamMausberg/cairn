@@ -1,6 +1,7 @@
 // A growable owner. Growth is the only allocation and it is visible in every caller's effect row.
 module std.vec;
 import std.core (Option, Eq);
+import std.mem;
 
 // Lent where a view is expected: `io.print(line)` passes the elements it holds, `line.data[0..line.len]`.
 pub struct Vec[T:affine] { data:Buf[T]; len:usize; lends data[0..len]; }
@@ -10,12 +11,16 @@ pub fn with_capacity[T:affine](capacity:usize) -> Vec[T] = Vec(Buf[T](capacity),
 pub fn capacity[T:affine](v:ro<Vec[T]>) -> usize = len(v.data);
 
 // Doubling keeps pushes amortized constant; elements move by swap, so owners are never copied.
+// Cost: one allocation, and one pass over the elements held with no guard in it.
 pub fn reserve[T:affine](v:rw<Vec[T]>, wanted:usize) {
   if wanted <= len(v.data) { return; }
   let mut bigger = Buf[T](max(wanted, max(4, len(v.data) * 2)));
-  for i in 0..v.len { swap(bigger[i], v.data[i]); }
+  exchange(v.len, bigger[0..v.len], v.data[0..v.len]);
   v.data = bigger;
 }
+
+// Over two views of one extent no index needs a guard, so the loop is a bulk exchange.
+fn exchange[T:affine](n:usize, a:rw<T>[n], b:rw<T>[n]) { for i in 0..n { swap(a[i], b[i]); } }
 
 pub fn push[T:affine](v:rw<Vec[T]>, item:T) {
   reserve(v, v.len + 1);
@@ -81,10 +86,12 @@ pub fn clear[T:affine](v:rw<Vec[T]>) {
 
 // Append a view. Copying elements, so it instantiates only for copyable ones; an owner would
 // have to be moved out of the source view, which no borrow allows.
+// Cost: amortized one pass over `src`, one guard for the part it lands in.
 pub fn extend_from[T:copy](v:rw<Vec[T]>, n:usize, src:ro<T>[n]) {
-  reserve(v, v.len + n);
-  for i, s in src { v.data[v.len + i] = s; }
-  v.len += n;
+  let wanted = v.len + n;
+  reserve(v, wanted);
+  mem.copy(n, v.data[v.len..wanted], src);
+  v.len = wanted;
 }
 
 // Release the tail now instead of at the owner's scope exit; capacity is kept.

@@ -1,8 +1,9 @@
-"""The device timer and device calibration run only under the owner's make targets; here they are compiled, never run.
+"""The device timer and device calibration run only under the device make targets; here they are compiled, never run.
 
 Device runs have crashed the reference machine, so every test in this file checks what would run without running it:
-the gate that refuses outside `make tune-device` and `make calibrate-device`, the lock they share with `make gpu`,
-the budget and cooldown, and that the timed program and the calibration kernels compile for the device.
+the gate that refuses outside `make tune-device` and `make calibrate-device`, the GPU here that a timing's target must
+run on, the lock they share with `make gpu`, the budget and cooldown, and that the timed program and the calibration
+kernels compile for the device.
 """
 
 import os
@@ -13,10 +14,14 @@ from pathlib import Path
 
 import pytest
 
+from cairn.compiler.syntax.tree import Diagnostic
 from cairn.perf import on_device
+from cairn.perf.profile import card, card_target
+from cairn.perf.tuning.search import Budget
 from cairn.perf.tuning.tune import tune
-from cairn.projects.target import parse, toolkit
-from emitted import NVCC_HOST, emit
+from cairn.projects import target
+from cairn.projects.target import parse, resolve, toolkit
+from emitted import NVCC_HOST, code_of, emit
 from support import DEVICE_LOCK
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -40,10 +45,10 @@ def no_other_process(monkeypatch):
         monkeypatch.setattr(module, name, refuse)
 
 
-def test_nothing_runs_on_the_device_outside_the_owner_s_targets(monkeypatch):
+def test_nothing_runs_on_the_device_outside_the_device_targets(monkeypatch):
     monkeypatch.delenv("CAIRN_GPU_TESTS", raising=False)
     assert "make tune-device" in on_device.allowed()
-    with pytest.raises(ValueError, match="owner's make targets"):
+    with pytest.raises(ValueError, match="the device make targets"):
         on_device.time_device(SCALE, "scale", {"n": 1024})
     assert on_device.main(["--out", "/nonexistent/never-written.json"]) == 2
     assert on_device.DEVICE_LOCK == DEVICE_LOCK  # one lock for make gpu, tune-device and calibrate-device
@@ -63,6 +68,7 @@ def test_a_timed_run_builds_beside_the_runtime_headers_and_runs_under_the_lock(m
     monkeypatch.setenv("CAIRN_GPU_TESTS", "1")
     monkeypatch.setattr(on_device, "ran", 0)
     monkeypatch.setattr(on_device.clock, "sleep", lambda s: None)
+    monkeypatch.setattr(target, "detect", lambda: ("12.0", "NVIDIA GeForce RTX 5070 Ti"))  # where sm_120 runs
     started, held = [], []
     toolkit()  # asked of nvcc before every process below is replaced
 
@@ -93,7 +99,26 @@ def test_a_timed_run_builds_beside_the_runtime_headers_and_runs_under_the_lock(m
     assert timed[0].endswith("/timed") and locked_run and on_device.ran == 1
 
 
-def test_only_the_owner_s_make_targets_set_the_gate():
+def test_a_timing_whose_target_does_not_run_on_the_gpu_here_is_refused_before_anything_is_built(monkeypatch):
+    """A timing is about the GPU here. On a GH200, compute capability 9.0, code for the default card's sm_120a cannot
+    load, so the timing is refused before a compiler or the device is asked for anything. --card h100 gives sm_90a,
+    which runs there."""
+    toolkit()  # asked of nvcc before every process is replaced, as a target's record reads it
+    monkeypatch.setenv("CAIRN_GPU_TESTS", "1")
+    monkeypatch.setattr(on_device, "ran", 0)
+    monkeypatch.setattr(target, "detect", lambda: ("9.0", "NVIDIA GH200 480GB"))
+    no_other_process(monkeypatch)
+    timed = parse("sm_120a")
+    assert code_of(lambda: on_device.time_device(SCALE, "scale", {"n": 1024}, target=timed)) == "E-TARGET-MISMATCH"
+    with pytest.raises(Diagnostic) as refused:  # no --card: the default card's target, refused before the search
+        tune(SCALE, "scale", [{"n": 1e8}], measure=3, device=True, budget=Budget(compiles=0))
+    said = refused.value.data
+    assert said["code"] == "E-TARGET-MISMATCH" and said["target"] == "sm_120a" and said["recorded"] == "9.0"
+    assert "--card" in said["message"] and "--device-target" in said["message"] and on_device.ran == 0
+    resolve(card=card_target(card("h100"))).here("A device timing")  # sm_90a runs on the GPU here: no refusal
+
+
+def test_only_the_device_make_targets_set_the_gate():
     makefile = (ROOT / "Makefile").read_text()
     targets = {m.group(1) for m in re.finditer(r"^([\w-]+):\n(?:\t.*\n)*?\t[^\n]*CAIRN_GPU_TESTS=1", makefile, re.M)}
     assert targets == {"gpu", "tune-device", "calibrate-device", "device-limits"}

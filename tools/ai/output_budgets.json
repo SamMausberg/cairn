@@ -13,11 +13,13 @@
  "test, failing, at a terminal": 156,
  "new": 107,
  "rules E-EFFECT-ORDER": 937,
- "doc --std --module std.io": 6127,
+ "doc --std --module std.io": 6363,
  "explain": 70820,
  "explain --symbol count": 5183,
  "state": 2338,
  "inspect --symbol count": 11298,
+ "find, by words": 323,
+ "find, by types": 193,
  "check, the 69 programs of the 1.1 replay": 43839,
  "mcp tools/list check": 378,
  "mcp tools/list edit_open": 807,
@@ -27,6 +29,7 @@
  "mcp tools/list implementation_open": 892,
  "mcp tools/list implementation_submit": 320,
  "mcp tools/list state": 780,
+ "mcp tools/list find": 696,
  "mcp check, accepted": 118,
  "mcp check, three refusals": 1493,
  "mcp edit_open": 7922,
@@ -37,5 +40,6 @@
  "mcp implementation_open": 9614,
  "mcp implementation_submit": 1327,
  "mcp state": 1430,
- "mcp state, again": 214
+ "mcp state, again": 214,
+ "mcp find, by types": 169
 }

@@ -12,9 +12,9 @@ A guard is a check the compiled code makes before an operation, such as an index
 
 | Module | What it is for | Allocates |
 | --- | --- | --- |
-| `std.core` | `Option`, `Result`, and the traits `Ord`, `Eq` and `Hash` | no |
+| `std.core` | `Option`, `Result`, the traits `Ord`, `Eq` and `Hash`, and each integer type's limits | no |
 | `std.vec` | `Vec[T]`, a growable array that owns its elements | yes |
-| `std.text` | integers to and from bytes, comparison, search, hashing | only `push_u64`, `push_i64` |
+| `std.text` | integers to and from bytes, ASCII classes of a byte, comparison, search, hashing | only `push_u64`, `push_i64` |
 | `std.fmt` | integers, hex, padding and floats in exact fixed point, appended to a `Vec[u8]` | yes |
 | `std.io` | open files, standard streams, a monotonic clock | only `read_file`, `read_to_end` |
 | `std.fs` | files by path, with no NUL to write | only `read` |
@@ -78,6 +78,8 @@ fn main() -> i32 {
 
 `std.core` implements `Ord` and `Eq` for every integer type, `Eq` for `bool`, and `Hash` for the unsigned integers. For a type of your own, write an `impl` or generate one with [std.derived](#stdderived). Every trait member is `pure`, so an implementation of `less` that prints is refused with `E-EFFECT-CEILING`.
 
+`std.core` also names each integer type's least and greatest value, from `U8_MAX` to `USIZE_MAX` and from `I8_MIN` to `I64_MAX`, so `if total > U64_MAX - x { ... }` tests an add before it traps. Import them by name, as `import std.core (Option, U64_MAX);`, or import the module, `import std.core;`, and write `core.U64_MAX`.
+
 ## std.vec
 
 `Vec[T]` is a growable array that owns its elements. Its declaration is `struct Vec[T:affine] { data:Buf[T]; len:usize; lends data[0..len]; }`. Where a function expects a view, a `Vec` passes its first `len` elements, as [memory.md](memory.md#arrays-views-and-parts) explains, and a `for` loop walks them.
@@ -100,7 +102,7 @@ fn main() -> i32 {
 }
 ```
 
-When a `Vec` runs out of room, its capacity doubles and its elements move with `swap`, so an owner is never copied and `push` costs amortized O(1). `pop` and `remove` move an element out as an `Option[T]`. `get` takes only copyable elements, and `set` takes any. Both trap on an index at or past `len`.
+When a `Vec` runs out of room, its capacity doubles and its elements move with `swap`, so an owner is never copied and `push` costs amortized O(1). The move is one pass over two views of the same extent, so no index in it is guarded, and `extend_from` copies a view into one part. `pop` and `remove` move an element out as an `Option[T]`. `get` takes only copyable elements, and `set` takes any. Both trap on an index at or past `len`.
 
 ## std.text
 
@@ -141,7 +143,9 @@ fn main() -> i32 {
 }
 ```
 
-The `write_` functions write into storage you pass and return the number of bytes they used, or 0 when the value does not fit. The `push_` functions append to a `Vec[u8]`, so they allocate. A parser that fails reports the offset of the byte at fault. `hash_bytes` is FNV-1a.
+The `write_` functions write into storage you pass and return the number of bytes they used, or 0 when the value does not fit. The `push_` functions append to a `Vec[u8]`, so they allocate. A parser that fails reports the offset of the byte at fault, and `parse_u64` takes digits alone, with no sign and no spaces. `hash_bytes` is FNV-1a.
+
+`is_digit`, `is_alpha`, `is_alnum`, `is_upper`, `is_lower` and `is_space` class one byte as C's `<ctype.h>` does in the "C" locale, so a byte above 127 is in no class, and `to_lower` and `to_upper` change the case of a letter and leave every other byte alone.
 
 ## std.fmt
 
@@ -228,7 +232,7 @@ fn main() -> i32 {
 
 `close` returns nothing, because a function that consumes a linear value cannot return a status. If you need one, report it through a borrow.
 
-A path in `std.io` ends in a NUL byte, because C reads a pointer and no length; [std.fs](#stdfs) takes paths without one. `read` is one system call and returns 0 at the end of the file. `read_full` and `write` loop until the kernel has done all of it. Nothing here buffers. For output, the [print builtins](language.md#print-and-format) usually serve.
+A path in `std.io` ends in a NUL byte, because C reads a pointer and no length; [std.fs](#stdfs) takes paths without one. `read` is one system call and returns 0 at the end of the file. `read_full` and `write` loop until the kernel has done all of it. After its first read, `read_to_end` asks the file how much is left, so the rest of a regular file arrives in one allocation and a pipe's `Vec` doubles as it fills; a directory fails that read with EISDIR (21) before any size is asked. Nothing here buffers. For output, the [print builtins](language.md#print-and-format) usually serve.
 
 ## std.fs
 

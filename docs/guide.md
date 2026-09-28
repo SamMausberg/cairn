@@ -73,7 +73,7 @@ These are the refusals a first program meets most often, taken from the programs
 | `x as u64`, `i64::MIN`, `(a, b)` | `u64(x)`, `-9223372036854775808`, a `struct` | `E-PARSE` |
 | `add_wrap(x, y)` on `i64` | wrapping is unsigned only; test first, `y > 0 && x > MAX - y` | `E-WRAP-TYPE` |
 
-These are the library calls a program like this uses. `cairn doc --std --module std.text` prints the signatures of one module:
+These are the library calls a program like this uses. `cairn find parse integer` or `cairn find --takes 'ro<u8>[n]' --returns i64` names the call for a need the table leaves out, and `cairn doc --std --module std.text` prints the signatures of one module:
 
 | need | call |
 |---|---|
@@ -161,8 +161,7 @@ typed: 3 functions
 ```
 
 ```json
-{"status": "typed", "functions": 3, "library_functions": 0, "formal_status": "not-verified",
- "project": {"name": "demo", "manifest_sha256": "e029...", "sources": [...], ...}}
+{"status": "typed", "functions": 3, "library_functions": 0, "formal_status": "not-verified"}
 ```
 
 `typed` means the program passed every rule the compiler checks before it runs: syntax, types, ownership, leases, lanes, placement and effects. The three functions are the program's own, counting the test. When a program imports library modules, the library functions it reaches are checked with it and counted in `library_functions`. `formal_status` is always `not-verified`, because acceptance is not a proof.
@@ -181,7 +180,7 @@ Piped, the record carries what it printed:
 
 ```json
 {"status": "program-exited", "exit_code": 0, "stdout": "average(10, 20) = 15\n", "stderr": "",
- "build_directory": "/home/you/demo/build/demo-38_uge7b", "security_sandbox": false, "memory_limit_mib": 1024, "emulator": null}
+ "build_directory": "/home/you/demo/build/demo-38_uge7b", "security_sandbox": false, "memory_limit_mib": 1024}
 ```
 
 `security_sandbox` is `false` because the memory cap stops a runaway program and isolates nothing. `cairn run demo -- one two` passes `one` and `two` to the program, which reads them through `std.env`.

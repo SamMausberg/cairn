@@ -13,7 +13,7 @@ import pytest
 
 from cairn.cli import main
 from cairn.perf import report
-from cairn.perf.profile import DEFAULT_CARD, Device, card, cards, carrying, default
+from cairn.perf.profile import DEFAULT_CARD, Device, card, cards, carrying, default, packaged
 from cairn.perf.tuning import feedback
 from cairn.projects import target
 from cairn.projects.project import load_project
@@ -130,6 +130,34 @@ def test_a_card_gives_the_target_when_nothing_names_one(monkeypatch):
     assert resolve("sm_90", "sm_120", card=("9.0", "h100-sxm5")).name == "sm_90"  # the flag wins
     assert resolve(None, "sm_120", card=("9.0", "h100-sxm5")).name == "sm_120"  # then the manifest
     assert resolve().name == "sm_120"  # without a card, the GPU reported here
+
+
+def test_predict_and_tune_answer_alike_whatever_gpu_is_here(monkeypatch, tmp_path, capsys):
+    """Without --card or a named target, device work is priced on the default card for that card's own target, so
+    the answer is the same on a GH200, on an RTX 5070 Ti and with no GPU. Only a build takes the GPU here."""
+    path = tmp_path / "scale.cairn"
+    path.write_text(SCALE)
+    base, host = packaged(DEFAULT_CARD).source, packaged("zen4-7800x3d").source
+    measured = tmp_path / "measured.json"  # a card make calibrate-device measured for sm_120, beside a host
+    measured.write_text(json.dumps({**host, "origin": "measured", "device": {**base["device"], "target": "sm_120"}}))
+    answers = []
+    for gpu in (("9.0", "NVIDIA GH200 480GB"), ("12.0", "NVIDIA GeForce RTX 5070 Ti"), None):
+        monkeypatch.setattr(target, "detect", lambda gpu=gpu: gpu)
+        predicted = answer(capsys, "predict", str(path), "--at", "n=1e7")
+        tuned = answer(capsys, "tune", str(path), "--symbol", "scale", "--at", "n=1e7", "--budget-compiles", "0",
+                       "--no-history")  # fmt: skip
+        on_measured = answer(capsys, "predict", str(path), "--at", "n=1e7", "--profile", str(measured))
+        kept = ("device_target", "device_card", "candidates", "chosen")
+        answers.append((predicted, {k: tuned[k] for k in kept}, on_measured))
+    assert answers[0] == answers[1] == answers[2]
+    predicted, tuned, on_measured = answers[0]
+    for found in (predicted, tuned):
+        assert found["device_card"]["card"] == DEFAULT_CARD and found["device_target"]["name"] == "sm_120a"
+        assert found["device_target"]["origin"] == "card: rtx-5070-ti is compute capability 12.0"
+    assert on_measured["device_target"]["name"] == "sm_120"  # the target its figures were measured for
+    assert on_measured["device_target"]["origin"] == "card: RTX 5070 Ti was measured for sm_120"
+    monkeypatch.setattr(target, "detect", lambda: ("9.0", "NVIDIA GH200 480GB"))
+    assert resolve().name == "sm_90"  # a build still takes the GPU reported here
 
 
 def test_the_5070_ti_card_prices_as_the_default_did():

@@ -7,7 +7,7 @@ compiles device candidates for their registers and shared memory within the comp
 the best-ranked few and the plan the function has now, halving the field each round with more blocks for the
 survivors, within the run budget, and says how the measured order agreed with the predicted one. Host plans are
 timed on this host. Device plans are timed only with `--device`, which runs device code and so runs only where
-`make tune-device` allows it: the owner's target, holding the device lock.
+`make tune-device` allows it: a device make target, holding the device lock.
 
 With a history (`agent/history.py`), the search records what it tried, what the checker or a compiler refused, what
 each compile read and what each run measured, and it answers from the history what an earlier search already
@@ -30,7 +30,7 @@ from ...projects.emulation import EVIDENCE as EMULATED
 from ...projects.target import DeviceTarget, resolve
 from .. import model
 from ..counts import Cost
-from ..profile import Profile, default
+from ..profile import Profile, card_target, default, pricing
 from ..regions import applied, identified
 from ..work import count
 from .objective import Objective, fastest, where
@@ -256,7 +256,7 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
     kinds |= {placed(r) for g in alternatives for r in count(p, checker, {g})[g].regions} & {"host", "device"}
     goal = Objective.over(sizes, weights, objective)
     placement = Placement(source, name, (p, checker))
-    target = (device_target or resolve(required=False)) if "device" in kinds else None
+    target = (device_target or resolve(card=card_target(pricing(chosen)))) if "device" in kinds else None
     on = targeted({name: c}, chosen, target)  # the card that prices device plans runs the target's code
     current: Key = (written(receipts[name].get("plan", {})), receipts[name].get("runs"))
     stages = radii(p, name) if "device" in kinds else ()
@@ -265,6 +265,8 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
     order = Order(given, (None, *alternatives) if alternatives else (), current[0])
     compiling = "device" in kinds and target is not None and spent.budget.compiles > 0 and available()
     timing = bool(measure) and ("device" not in kinds or device)
+    if timing and target is not None:  # a device timing is about the GPU here, before anything is compiled
+        target.here("A device timing")
     candidates = searched(placement, name, order, spent, goal, chosen, arch, 0.5 if compiling or timing else 1.0,
                           target)  # fmt: skip
     recorder = None
@@ -344,7 +346,7 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
     predicted = result["chosen"]
     best = legal[rows.index(predicted)]
     if measure and "device" in kinds and not device:
-        result["measured"] = "Not measured: device plans are timed only by `make tune-device`, which the owner runs."
+        result["measured"] = "Not measured: device plans are timed only by `make tune-device`."
     elif measure:
         usable_keys = {x.key() for x, r in zip(legal, rows, strict=True) if not isinstance(r.get("validated"), str)}
         eligible = [x.key() for x in predicted_order if x.key() in usable_keys]
@@ -475,7 +477,7 @@ def timed(source: str, name: str, ranked: list[Any], current: Any, sizes: list[d
             break
         field = sorted(field, key=lambda plan: times[plan])[: max(2, len(field) // 2)]
         blocks *= 2
-    ran = "on the device, under the owner's make target" if device else "on this host"
+    ran = "on the device, under a device make target" if device else "on this host"
     note = (f"Timed {ran} by cairn.perf.measure, the median of each round's blocks; a busy machine adds noise, so "
             "a close measured order says little.")  # fmt: skip
     if not times:

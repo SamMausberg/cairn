@@ -1,6 +1,6 @@
-"""Time a CAIRN function on the device: only under the owner's make target, one run at a time, holding the lock.
+"""Time a CAIRN function on the device: only under a device make target, one run at a time, holding the lock.
 
-Device runs on the reference machine have reset its display driver and crashed the host, so nothing here runs device
+Device runs on a GPU that also drove the display have reset its driver and crashed the host, so nothing here runs device
 code unless `CAIRN_GPU_TESTS=1`, which only `make gpu`, `make tune-device`, `make calibrate-device` and `make
 device-limits` set, and every run holds the machine-wide device lock (`/tmp/cairn-gpu.lock`, the one `tools/support.py`
 holds). `program` writes the timed program without building or running it, which is what the suite compiles to check
@@ -35,9 +35,9 @@ ran = 0
 
 
 def allowed() -> str:
-    """Why device code may not run here, or "" when the owner's target has allowed it."""
+    """Why device code may not run here, or "" when a device make target has allowed it."""
     if os.environ.get("CAIRN_GPU_TESTS") != "1":
-        return "device code runs only under the owner's make targets (CAIRN_GPU_TESTS=1): make gpu, make tune-device"
+        return "device code runs only under the device make targets (CAIRN_GPU_TESTS=1): make gpu, make tune-device"
     return ""
 
 
@@ -74,6 +74,7 @@ def time_device(source: str, symbol: str, sizes: Mapping[str, float], *, fills: 
         raise ValueError(f"This process has made its {BUDGET} device runs; start another tuning round later.")
     text = program(source, symbol, sizes, fills, block_ns, blocks)
     chosen = target or resolve()
+    chosen.here("A device timing")  # a target from a card or a flag need not run on the GPU here
     with tempfile.TemporaryDirectory(prefix="cairn-device-time-") as scratch:
         directory = Path(scratch)
         timed, exe = write_program(directory, "timed.cu", text), str(directory / "timed")

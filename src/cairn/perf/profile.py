@@ -213,6 +213,24 @@ def card(name: str = DEFAULT_CARD) -> Profile:
     return known[found[0]]
 
 
+def pricing(profile: Profile | None = None, name: str | None = None) -> Profile:
+    """The one card that prices a prediction's or a tuning round's device work: the card `name` names (--card), else
+    `profile`'s own device, else DEFAULT_CARD. It is never the GPU on this machine, so an answer is the same on every
+    machine, and without a named target the device target is this card's (`card_target`)."""
+    if name:
+        return card(name)
+    return profile if profile is not None and profile.device is not None else card()
+
+
+def card_target(chosen: Profile) -> tuple[str, str, str]:
+    """What projects/target.py resolves a device target from when nothing names one: the compute capability of the
+    card `chosen`, its key (its device's name for a profile that is no packaged card), and the target its figures
+    were measured for, or "" for a specification."""
+    d = chosen.device
+    assert d is not None
+    return d.compute_capability, chosen.source.get("card") or d.name, d.target
+
+
 def carrying(profile: Profile, chosen: Profile) -> Profile:
     """`profile`'s host with the device of the card `chosen`: what prices a program's host work and, on that card,
     its device work. The host's origin stays the profile's; the card's is its own."""

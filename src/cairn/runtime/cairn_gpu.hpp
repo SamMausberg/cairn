@@ -39,6 +39,7 @@ inline cudaMemcpyKind kind(Dir d) noexcept {
     case Dir::h2h: return cudaMemcpyHostToHost;
   }
   trap();
+  return cudaMemcpyDefault;  // never reached; a device pass below sm_100 sees trap() return (cairn_runtime.hpp)
 }
 
 // CUDA as the machine an execution context and cairn_exec.hpp's operations run on. Each member is one CUDA call:

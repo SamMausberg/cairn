@@ -70,7 +70,7 @@ Checking is one pass per function over one typed tree, and each generic instance
 | Constant folding | `compiler/check/constants.py` | `constant`, `fold` |
 | I/O rings and their lowering | `compiler/primitives/rings.py` | `check_ring`, `method`, `waited`, `lower` |
 | Alternative implementations and their dispatch | `compiler/plans/implementations.py` | `declared`, `condition`, `select`, `joined`, `called`, `lower` |
-| Facts about `usize` values that let lowering drop a guard | `compiler/check/facts.py` | `binder`, `defined`, `assume`, `index`, `arithmetic`, `conversion` |
+| Facts about `usize` values that let lowering drop a guard | `compiler/check/facts.py` | `binder`, `defined`, `quotient`, `assume`, `index`, `arithmetic`, `product`, `conversion` |
 | The independent check of each guard lowering leaves out | `verify/elision.py` | `audit`, `decide`, `part` |
 | A plan's `fuse`: which regions join, and their scratch | `compiler/plans/fusion.py` | `chains`, `quiet`, `compatible`, `scratch` |
 | A plan's `vector` and its lowering | `compiler/plans/chunks.py` | `chunkable`, `vectored`, `lower` |
@@ -96,7 +96,7 @@ Checking is one pass per function over one typed tree, and each generic instance
 | The numerical policy: when a float result agrees with the reference's, for the host and for generated tests | `verify/validation/agreement.py` | `agrees`, `same`, `helper`, `stated` |
 | Z3's answer on an implementation, and its counterexample replayed through the finite path | `verify/validation/counterexamples.py` | `smt`, `outside`, `replayed` |
 | Native flags, the closed table of system libraries, the effects a freestanding image bans | `projects/toolchain.py` | `command`, `flags`, `LIBRARIES`, `audit_effects` |
-| The device target | `projects/target.py` | `resolve`, `parse`, `require`, `accept`, `fits` |
+| The device target | `projects/target.py` | `resolve`, `parse`, `require`, `accept`, `fits`, `here` |
 | A device program built for the host: what emulation refuses and what its records say | `projects/emulation.py` | `check`, `record`, `MODELED` |
 | Exports and the commands that take one | `projects/export.py` | `export`, `check`, `build`, `run`, `test`, `compare` |
 
@@ -110,7 +110,7 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::run`, i
 
 | Header in `runtime/` | Owns |
 |---|---|
-| `cairn_runtime.hpp` | the guards (checked arithmetic, bounds, entry checks) and the scoped scalar buffer; every guard can be called on the host and on the device |
+| `cairn_runtime.hpp` | the guards (checked arithmetic, bounds, entry checks) and the scoped scalar buffer; every guard can be called on the host and on the device, and below sm_100 the device compiler is not told that a failed guard's trap ends the thread, since NVVM 7.0.1 deleted loop exits around one it was told of |
 | `cairn_owners.hpp` | the movable zeroed `Buf`, `Defer`, borrowed callables, checked parts |
 | `cairn_parallel.hpp` | the host lane pool with its pooled reduction and its scan in two passes, `Mutex` and `Atomic` with explicit orders; it includes `cairn_tasks.hpp` |
 | `cairn_tasks.hpp` | the crew of reusable task threads, linear tasks, task groups with a bounded ring of completions |
@@ -155,7 +155,7 @@ Device work runs on the calling thread's execution context, `cr::gpu::here()`, w
 
 ### The rest of the package
 
-The ownership table of [AGENTS.md](../AGENTS.md) names the owner of every other module. In `perf/`, only `measure.py`, on the host, and `on_device.py`, under the owner's make targets, run a program. No agent, test generator or solver may rewrite the authority it is checked against, and native libraries never import the agent tooling or Z3.
+The ownership table of [AGENTS.md](../AGENTS.md) names the owner of every other module. In `perf/`, only `measure.py`, on the host, and `on_device.py`, under `make tune-device` and `make calibrate-device`, run a program. No agent, test generator or solver may rewrite the authority it is checked against, and native libraries never import the agent tooling or Z3.
 
 The wheel holds the compiler package, the runtime headers, the target support files, the `std` sources and the command line. Tests, benchmarks, proofs and evidence stay out of it.
 
@@ -183,9 +183,9 @@ make native        # both compilers with the sanitizers that bite, and the codeg
 make gpu embedded  # CUDA runtime and lanes, and the QEMU board, where the hardware is present
 ```
 
-`make gpu`, `make tune-device` and `make calibrate-device` are the only commands that run code on a CUDA device, and only the owner runs them. `make device-limits` launches nothing, but it starts a CUDA context to ask the device for the limits its card takes from NVIDIA's tables, so only the owner runs it too. Each sets `CAIRN_GPU_TESTS=1` and holds `/tmp/cairn-gpu.lock` around every device run (`tools/support.py`), and `tests/tooling/test_on_device.py` holds the Makefile to those four. `make tune-device` and `make calibrate-device` rest two seconds after each device run, and one process makes at most 64 of them. Everywhere else a device test compiles its code and skips the run. On the reference machine the GPU also drives the display, and repeated device test runs reset its driver and twice crashed the host.
+`make gpu`, `make tune-device` and `make calibrate-device` are the only commands that run code on a CUDA device. `make device-limits` launches nothing, but it starts a CUDA context to ask the device for the limits its card takes from NVIDIA's tables. Each of the four sets `CAIRN_GPU_TESTS=1` and holds `/tmp/cairn-gpu.lock` around every device run (`tools/support.py`), and `tests/tooling/test_on_device.py` holds the Makefile to those four. `make tune-device` and `make calibrate-device` rest two seconds after each device run, and one process makes at most 64 of them. Everywhere else a device test compiles its code and skips the run. The lock makes device runs from several agents or checkouts queue instead of overlapping. Who may start a device run depends on the GPU. On a headless Linux GPU, one that drives no display, an agent runs these targets when a change needs a device result. Where the GPU also drives the display, only the owner does: on the WSL2 machine where that held, repeated device test runs reset the driver and twice crashed the host.
 
-`make gpu` runs the modules the Makefile's `GPU_TESTS` names, one test at a time, and `tests/tooling/test_workflow.py` holds that list to every module that calls `on_device`, `device_reason` or `device_lock`. A test that traps on the device on purpose, such as a guard failing in a lane, runs only when the owner also sets `CAIRN_GPU_TRAPS=1` by hand (`CAIRN_GPU_TRAPS=1 make gpu`). Otherwise it skips with that reason.
+`make gpu` runs the modules the Makefile's `GPU_TESTS` names, one test at a time, and `tests/tooling/test_workflow.py` holds that list to every module that calls `on_device`, `device_reason` or `device_lock`. A test that traps on the device on purpose, such as a guard failing in a lane, runs only when `CAIRN_GPU_TRAPS=1` is also set (`CAIRN_GPU_TRAPS=1 make gpu`), which is done only on a GPU that drives no display. Otherwise it skips with that reason.
 
 `make proof` needs `lake`, on `PATH` or in `~/.elan/bin` where elan puts it. Its axiom audit allows `propext`, `Quot.sound` and, outside the ownership theorems, `Classical.choice`; the 1.1.0 record found only the first two ([verification.md](verification.md#pinned-versions-and-the-audit)).
 
@@ -236,7 +236,7 @@ These scripts write under `results/`, which is not tracked, one subdirectory per
 | `checks` | formatting, lint and types; a stale API reference; the examples, certificates and scalar equivalence | ubuntu-24.04 | 1 min |
 | `tests`, four parts | the whole suite under the runner's Clang 18, GCC 13 and Python 3.12 | ubuntu-24.04 | 4 to 6 min |
 | `proofs` | the Lean build, its axiom audit, and the differential runs against the checker | ubuntu-24.04 | 2 min |
-| `device`, four | device code nvcc refuses: under CUDA 12.9 and 13.2, each with g++ and with clang++ as nvcc's host compiler, every test that compiles device code, and every device example built for sm_80, sm_90a, sm_100a and sm_120 | ubuntu-24.04 | 12 to 15 min |
+| `device`, four | C++ nvcc refuses: under CUDA 12.9 and 13.2, each with g++ and with clang++ as nvcc's host compiler, every test that compiles device code, every example, documented program and std module compiled for sm_120 as a device program's host code would be (`tests/projects/test_nvcc_accepts.py`), and every device example built for sm_80, sm_90a, sm_100a and sm_120 | ubuntu-24.04 | 12 to 15 min |
 | `compilers`, two | runtime headers and emitted C++ another compiler refuses or builds differently: the runtime, soundness, project and language tests under GCC 11 and Clang 13, the oldest supported, and under GCC 15 and Clang 23 | ubuntu-22.04, ubuntu-26.04 | 9 to 11 min |
 | `python`, three | the compiler, the agent layer, the tools and the verifiers under Python 3.11, 3.13 and 3.14 | ubuntu-24.04 | 6 to 8 min |
 | `arm` | an AArch64 host: the runtime, soundness and project tests, and the freestanding image under `qemu-system-aarch64`, which must run rather than skip | ubuntu-24.04-arm | 6 min |

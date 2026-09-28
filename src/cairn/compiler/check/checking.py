@@ -66,6 +66,7 @@ class Checker:
     counts: dict[str, int]
     moved: set[str]
     deferred: set[str]
+    holds: dict[str, int]
     loop_depth: int
     unsafe_depth: int
     device_depth: int
@@ -629,6 +630,7 @@ class Checker:
 
     def block(self, ss: list[Stmt]) -> Any:
         saved, deferred, returned, known = dict(self.env), set(self.deferred), False, len(self.facts)
+        holds = dict(self.holds)  # A defer this block schedules has run once it ends, and holds nothing after.
         for s in ss:
             if returned:
                 fail("E-UNREACHABLE", "Statement after unconditional return.", s)
@@ -638,7 +640,7 @@ class Checker:
         self.released(set(self.env) - set(saved))
         self.moved |= (self.deferred - deferred) & set(saved)  # Its cleanup has now run: gone for good.
         self.leases = {t: held for t, held in self.leases.items() if t in saved}
-        self.env, self.deferred = saved, deferred
+        self.env, self.deferred, self.holds = saved, deferred, holds
         del self.facts[known:]  # What this block learned named what it bound or what it tested.
         return returned
 

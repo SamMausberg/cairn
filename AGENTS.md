@@ -83,6 +83,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `agent/skill.py` | the agent skill under `skills/cairn/`, written from the cards, the fixes and the command line |
 | `agent/projection.py` | the canonical projection: source printed back from the tree, which reparses to itself and compiles to the same C++ |
 | `agent/state.py`, `agent/explain.py`, `agent/shot.py` | `cairn state`, `cairn explain` and `cairn shot`: a program's state for an agent, where it pays at run time, what it drew |
+| `agent/find.py` | `cairn find`: the functions to call, by the types of the values an agent has, judged by probe calls the checker checks, or by words |
 | `agent/diagnostics.py`, `agent/sketches.py` | what a model reads back when a reply is refused, with the smallest fix; named expression sketches and their bounded search |
 | `editor/grammar.py` | the editor grammars, generated from the compiler's vocabulary |
 | `editor/terminal.py` | what a person at a terminal reads, beside the JSON record |
@@ -95,7 +96,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `perf/model.py`, `perf/profile.py` | a predicted time, and what one machine can do |
 | `perf/report.py` | what `cairn predict` answers: each function's work, its cost as a formula, a time at each size, and a change's difference |
 | `perf/calibrate.py`, `perf/native.py`, `perf/device.py` | a host measured into a profile; a loop's cycles from llvm-mca; a kernel's resources from ptxas and cuobjdump, nothing launched |
-| `perf/on_device.py` | the only device timing, under the owner's make targets |
+| `perf/on_device.py` | the only device timing, under `make tune-device` and `make calibrate-device` |
 | `perf/measure.py` | the only host timing: a function built with the build's flags beside a driver, its median block timed; never device code |
 | `perf/regions.py` | names for a function's parallel regions that survive edits which do not touch them |
 | `perf/tuning/search.py`, `perf/tuning/tune.py` | the bounded search over a function's plans: the space, what the checker accepts, the budgets, measurement |
@@ -139,7 +140,11 @@ Count whole compiler dependencies in density measurements, not a facade alone.
 
 ## Development
 
-Work on a branch, one focused change at a time. Run the fast suite before and after you touch code, and both native compilers with the relevant sanitizers when you touch the runtime or the lowering. Never run code on the GPU outside `make gpu`, never set `CAIRN_GPU_TESTS` yourself, and never start `make gpu` while another agent may: repeated device runs have crashed the host. Several agents on one machine share its cores, so give pytest at most four workers each: `make test JOBS=4`, or `-n 4` when you run pytest yourself.
+Work on a branch, one focused change at a time. Run the fast suite before and after you touch code, and both native compilers with the relevant sanitizers when you touch the runtime or the lowering. Several agents on one machine share its cores, so give pytest at most four workers each: `make test JOBS=4`, or `-n 4` when you run pytest yourself.
+
+Code runs on a GPU only through `make gpu`, `make tune-device` and `make calibrate-device`, or through a narrower run of the device tests a change touches (`CAIRN_GPU_TESTS=1 python -m pytest -p no:xdist --device-runs FILE`). Every device run holds the machine-wide lock `/tmp/cairn-gpu.lock`, so runs from several agents queue instead of overlapping. On a headless Linux GPU, one whose `nvidia-smi --query-gpu=display_active --format=csv` says `Disabled`, use the device whenever a claim needs it: a device feature that has not run on a GPU, a device result, a timing. Where the GPU also drives a display, as under WSL2 or on a desktop, only the owner runs device code, since there a morning of device runs that trapped on purpose crashed the host twice.
+
+A run that traps on the device on purpose also needs `CAIRN_GPU_TRAPS=1`, which you set only on a headless GPU. A timing wants the device to itself and the host quiet, so say what else was running. A device result is a claim only once it is recorded under `evidence/` with the GPU, the driver and the CUDA version.
 
 Source belongs in `src/cairn`, tests in the `tests` folder of their subject, real programs in `examples` (each listed in `examples/README.md`), measurements in `bench` (a README in each folder says what runs and what it needs), checks and generators in `tools`, records in `evidence`, and generated results under `results/`, which is not tracked. Do not reimplement a compiler rule in a script. `implementation_hash()` in `src/cairn/verify/scalar/semantics.py` pins a semantic receipt to every `*.py` under `compiler/` and the SMT path, so a new compiler module is covered without being listed. Prefer removing repeated boilerplate to adding opaque punctuation, and do not shrink a source-token measurement by excluding semantics the program imports.
 
