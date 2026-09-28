@@ -11,4 +11,4 @@ Each directory is one record of the work after `v1.1.0`, taken as it landed. Its
 | `loop/` | What an agent reads between an edit and a run, in bytes, before and after each change that acts on that loop; no model ran. |
 | `occupancy/` | The blocks an SM holds as every packaged card counts them, against CUDA's own occupancy calculator (`cuda_occupancy.h`) over a grid of block sizes, registers and shared bytes, and the predictions the resident block limit changes; nothing ran on a GPU. |
 | `std/` | Reading all of standard input into a `Vec[u8]` with `std` before and after each change to it: wall time and peak resident memory on the host, clang++ builds only; no device code ran. |
-| `terse/` | What each `cairn` command and MCP tool prints for an agent to read, in bytes and tokens, and the budgets that hold it; no model ran. |
+| `terse/` | What each `cairn` command and MCP tool prints for an agent to read, in bytes and tokens, before and after the cuts that took 63% of it, and the budgets that hold it; no model ran. |
