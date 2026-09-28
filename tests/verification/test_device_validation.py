@@ -151,6 +151,24 @@ def test_a_tool_that_ran_nothing_is_unknown_never_clean():
     assert unavailable["status"] == "unavailable" and "WDDM debugger interface" in unavailable["reason"]
 
 
+def test_a_test_without_a_cuda_call_counts_by_how_it_ends_without_the_tool():
+    before = (  # what each tool printed on the GH200 for a test whose views are empty, exiting 255
+        "========= COMPUTE-SANITIZER\n========= Error: Target application terminated before first instrumented API "
+        "call\n"
+    )
+
+    def alone(ended: int) -> dict:
+        return {"test": "t", "exit_code": 255, "report": before, "device_work": False, "program_exit_code": ended}
+
+    ran = {"test": "u", "exit_code": 0, "report": "========= ERROR SUMMARY: 0 errors\n"}
+    assert verdict([alone(0), ran])["status"] == "clean"
+    assert verdict([alone(2), ran])["status"] == "reported"
+    assert verdict([alone(0), {**ran, "exit_code": 97}])["status"] == "reported"
+    nothing = verdict([alone(0), alone(0)])
+    assert nothing["status"] == "unknown" and "no test made a CUDA call" in nothing["reason"]
+    assert verdict([alone(2)])["status"] == "reported"
+
+
 def test_outside_make_gpu_nothing_runs(monkeypatch):
     monkeypatch.delenv("CAIRN_GPU_TESTS", raising=False)
     result = sanitized(SOURCE, [])
