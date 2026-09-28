@@ -551,8 +551,8 @@ blur: (no plan for blur)  ->  plan blur { block 128; stage 1; }
   [compiler observation] cuobjdump: shared load instructions in the code: 0 -> 4
   [compiler observation] cuobjdump: shared store instructions in the code: 0 -> 1
   [hypothesis] derived from the SASS counts: b reads through shared memory (global load instructions in the code: 1 in b, 3 in a); b may move fewer bytes from device memory, unless the caches already served the neighbours' repeated reads
-  [suggested experiment] suggested, not run: time a and b at the same sizes, interleaved: make tune-device FILE=... SYMBOL=blur AT=...  (the owner's target; nothing here runs the device)
-  [suggested experiment] suggested, not run: profile a and b in an explicit profiling run (Nsight Compute's occupancy and memory sections), apart from timing, which only the owner runs
+  [suggested experiment] suggested, not run: time a and b at the same sizes, interleaved: make tune-device FILE=... SYMBOL=blur AT=...  (a device make target; nothing here runs the device)
+  [suggested experiment] suggested, not run: profile a and b in an explicit profiling run (Nsight Compute's occupancy and memory sections), apart from timing, which only make tune-device does
 ```
 
 A register, spill or instruction count (in the code, not executed) is never given as the reason one plan is slower. At most it leads to a hypothesis, beside the experiment that would test it, and both go into the history. When a and b compile to the same SASS, the report says so and attributes a measured difference only to the launch or to noise. A measurement or a profile comes only from the history, while it holds for this function, contract, compiler and target, with the procedure or profiling run behind it. Nothing here profiles, and profiling stays apart from timing because a profiler replays kernels. A measured order the model did not predict is reported as such. `--artifacts` adds the path of every file behind the lines: the emitted program, the cubin, ptxas's log, the SASS and the record ids.
