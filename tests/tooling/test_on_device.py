@@ -1,4 +1,4 @@
-"""The device timer and device calibration run only under the owner's make targets; here they are compiled, never run.
+"""The device timer and device calibration run only under the device make targets; here they are compiled, never run.
 
 Device runs have crashed the reference machine, so every test in this file checks what would run without running it:
 the gate that refuses outside `make tune-device` and `make calibrate-device`, the lock they share with `make gpu`,
@@ -40,10 +40,10 @@ def no_other_process(monkeypatch):
         monkeypatch.setattr(module, name, refuse)
 
 
-def test_nothing_runs_on_the_device_outside_the_owner_s_targets(monkeypatch):
+def test_nothing_runs_on_the_device_outside_the_device_targets(monkeypatch):
     monkeypatch.delenv("CAIRN_GPU_TESTS", raising=False)
     assert "make tune-device" in on_device.allowed()
-    with pytest.raises(ValueError, match="owner's make targets"):
+    with pytest.raises(ValueError, match="the device make targets"):
         on_device.time_device(SCALE, "scale", {"n": 1024})
     assert on_device.main(["--out", "/nonexistent/never-written.json"]) == 2
     assert on_device.DEVICE_LOCK == DEVICE_LOCK  # one lock for make gpu, tune-device and calibrate-device
@@ -93,7 +93,7 @@ def test_a_timed_run_builds_beside_the_runtime_headers_and_runs_under_the_lock(m
     assert timed[0].endswith("/timed") and locked_run and on_device.ran == 1
 
 
-def test_only_the_owner_s_make_targets_set_the_gate():
+def test_only_the_device_make_targets_set_the_gate():
     makefile = (ROOT / "Makefile").read_text()
     targets = {m.group(1) for m in re.finditer(r"^([\w-]+):\n(?:\t.*\n)*?\t[^\n]*CAIRN_GPU_TESTS=1", makefile, re.M)}
     assert targets == {"gpu", "tune-device", "calibrate-device"}
