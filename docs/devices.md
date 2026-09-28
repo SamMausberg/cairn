@@ -495,7 +495,7 @@ Queued work runs to completion at its `spawn`, in program order. That is one of 
 
 [`cairn validate --emulate`](tools.md#cairn-validate) tests a device implementation against its reference this way, and its evidence is `finite-tested-emulated`: finite testing of the host emulation, and never of the device. [`cairn tune`](tools.md#cairn-tune) chooses an implementation on that evidence only with `--accept-emulated`.
 
-Every record says the device work was emulated. The build receipt and the records of `cairn run`, `cairn test` and `cairn validate` carry `emulation`, with the target the program was judged against, and `cairn run` at a terminal prints the same note on standard error. An emulated result is evidence about the host, and never about a device. It does not time device code either: the lanes run on a few host threads, and each block's threads meet at operating system barriers, so a time the program prints measures those. [numerics.md](numerics.md#emulated-device-runs) says where an emulated result can differ from a device run.
+Every record says the device work was emulated. The build receipt and the records of `cairn run`, `cairn test` and `cairn validate` carry `emulation`, with the target the program was judged against, and `cairn run` prints the same note on standard error before the program starts. An emulated result is evidence about the host, and never about a device. It does not time device code either: the lanes run on a few host threads, and each block's threads meet at operating system barriers, so a time the program prints measures those. [numerics.md](numerics.md#emulated-device-runs) says where an emulated result can differ from a device run.
 
 ## What fast kernels use
 
