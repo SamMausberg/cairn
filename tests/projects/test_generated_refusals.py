@@ -1,20 +1,24 @@
 """A build whose compiler refuses the C++ CAIRN generated names the `.cairn` line that C++ was lowered from, and says
 the fault is the CAIRN compiler's, since a program that checks should always build. The line is read through the
-#line directives of the same program generated for a debugger. Each case here breaks the lowering of one statement on
-purpose, under clang++, g++ and nvcc, which only compiles; a refusal elsewhere, in a vendored source or at the link,
-claims no defect (tests/projects/test_foreign.py, tests/language/test_std_zlib.py).
+#line directives of the same program generated for a debugger, which for every example differs from the program built
+by those lines alone. Each case here breaks the lowering of one statement on purpose, under clang++, g++ and nvcc, which
+only compiles; a refusal elsewhere, in a vendored source or at the link, or a standard header the compiler's
+installation lacks, claims no defect (tests/projects/test_foreign.py, tests/language/test_std_zlib.py).
 """
 
 import shutil
+from pathlib import Path
 
 import pytest
 
 from cairn.cli import main
 from cairn.compiler.cairnc import compile_source
 from cairn.compiler.lower.codegen import Emitter
-from cairn.projects.build import build, refusal
+from cairn.projects.build import DIRECTIVE, build, emitted, refusal
 from cairn.projects.project import load_project
 from emitted import NVCC_HOST
+
+ROOT = Path(__file__).resolve().parents[2]
 
 HOST = """import std.core (Option);
 
@@ -118,6 +122,20 @@ def test_a_header_the_installation_lacks_claims_no_defect(tmp_path, compiler, sa
 
     assert refused("algorithm") == {}
     assert refused("cairn_coop.hpp")["compiler_defect"]
+
+
+@pytest.mark.parametrize(
+    "manifest",
+    sorted(p for p in (ROOT / "examples").rglob("*.toml") if "[project]" in p.read_text(encoding="utf-8")),
+    ids=lambda p: str(p.relative_to(ROOT / "examples")),
+)
+def test_a_debug_emission_differs_only_by_its_line_directives(manifest):
+    """What the line map rests on: a failed build's program.cpp is read line for line against the same program
+    generated with #line directives, so that program must be this one with those lines added and nothing else."""
+    project = load_project(manifest)
+    plain, debug = (emitted(project, kind=project.kind, debug=d).generated.splitlines() for d in (False, True))
+    assert any(DIRECTIVE.match(line) for line in debug)
+    assert [line for line in debug if not DIRECTIVE.match(line)] == plain
 
 
 def test_a_debug_build_names_the_line_of_each_match_arm():
