@@ -105,6 +105,7 @@ def test_a_manifest_names_the_library_its_own_externs_call(tmp_path):
 def test_without_the_row_the_link_fails_and_names_the_symbol(tmp_path):
     record = build(load_project(project(tmp_path, "")), cxx="clang++")
     assert record["status"] == "native-build-failed" and "crc32_z" in record["stderr"]
+    assert "compiler_defect" not in record  # the link is at fault, not the C++ CAIRN generated
 
 
 @pytest.mark.parametrize(

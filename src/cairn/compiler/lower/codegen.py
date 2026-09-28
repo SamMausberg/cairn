@@ -519,6 +519,12 @@ class Emitter:
             self.put(execution.HELD)
         self.block(f.body)
 
+    def directive(self, line: int):
+        """In a debug build, the `.cairn` line the C++ below was lowered from: a debugger steps by it, and a build its
+        compiler refuses names it (projects/build.py)."""
+        if self.origin and line:
+            self.put('#line {1} "{0}"'.format(*self.origin(line)))
+
     def block(self, ss: list[Stmt]):
         # Chains a plan asked to fuse, decided after the elision audit, so a body is quiet as it will be emitted. The
         # conservative emission, the reference a differential run compares with, writes every region apart.
@@ -529,8 +535,7 @@ class Emitter:
         for s in ss:
             if id(s) in inside:
                 continue
-            if self.origin and s.line:
-                self.put('#line {1} "{0}"'.format(*self.origin(s.line)))
+            self.directive(s.line)
             if s.tag in {"buffer", "stack"} and s.name in kept:  # Only the chain below touches it, one lane apiece.
                 self.put(f"// {s.name} lives in each lane of the fused regions below, never in memory")
                 continue
@@ -627,6 +632,7 @@ class Emitter:
         selector = f"static_cast<std::uint32_t>({temp})" if ty.name in self.p.enums else temp + ".tag"
 
         def arm(arm, variant: str):
+            self.directive(arm.line)
             # `_` names nothing, so nothing is declared: its payload stays in the temporary, which is released where
             # the switch ends, right after the arm.
             if arm.binder and arm.binder != "_":

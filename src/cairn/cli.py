@@ -98,16 +98,15 @@ def written(d: dict, own: str) -> str:
 
 
 def carded(supplied, name: str | None) -> tuple:
-    """`--card NAME`: the profile that prices host work on this machine and device work on that card, and the
-    card's compute capability and key, from which the device target is resolved when nothing names one."""
-    if not name:
-        return supplied, None
+    """The profile that prices host work on this machine and device work on one card (`--card NAME`, else the
+    profile's own device, else the default card), and that card as `resolve` takes it for the device target when
+    nothing names one, so the GPU on this machine never enters a prediction or a search."""
     if name == "all":
         raise ProjectError("--card all is for cairn predict; a search or a comparison prices one card.")
-    from .perf.profile import card, carrying, default
+    from .perf.profile import card_target, carrying, default, pricing
 
-    chosen = card(name)
-    return carrying(supplied or default(), chosen), (chosen.device.compute_capability, chosen.source["card"])
+    chosen = pricing(supplied or default(), name)  # the card the report prices on, CAIRN_PROFILE's included
+    return (carrying(supplied or default(), chosen) if name else supplied), card_target(chosen)
 
 
 def stamps(path: str) -> tuple:
@@ -467,7 +466,7 @@ def cairn_predict(a: Any, project: Project) -> int:
         show(answer, priced.lines_across)
         return 0
     supplied, card = carded(supplied, a.card)
-    device = resolve_device(a.device_target, project.device_target, required=a.inspect, card=card)
+    device = resolve_device(a.device_target, project.device_target, card=card)
     if a.against:
         before = load_project(a.against).source
         answer = priced.delta(before, project.source, sizes, chosen, supplied, arch, device, a.inspect)
@@ -489,7 +488,7 @@ def cairn_tune(a: Any, project: Project) -> int:
 
     supplied, card = carded(Profile.load(a.profile) if a.profile else None, a.card)
     arch = resolve_arch(a.arch or project.arch)
-    device = resolve_device(a.device_target, project.device_target, required=False, card=card)
+    device = resolve_device(a.device_target, project.device_target, card=card)
     budget = Budget(a.budget_compiles, a.budget_seconds, a.budget_runs)
     kept = None if a.no_history else a.history or beside(project.root)
     sizes = priced.parse_sizes(a.at)

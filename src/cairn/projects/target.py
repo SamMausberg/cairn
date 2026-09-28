@@ -6,11 +6,14 @@ portable target: its code runs on every device of that major version at that min
 family target: it adds the features a family shares, and runs on the family's devices at that minor version or
 later. `a` is the arch-specific target: it adds every feature of exactly one compute capability, and runs only there.
 
-A target is resolved once, from the command line's `--device-target`, else the manifest's `[build] device_target`,
-else the device card a prediction is priced on (`perf/profile.py`), else the one GPU `nvidia-smi` reports, which asks
-the driver's management library and launches nothing. The record says which. Everything downstream receives the same object: the native command, the device inspector, tuning,
-prediction's device profile, device timing and the build receipt. A result recorded for another target is refused
-(`E-TARGET-MISMATCH`), never approximated, and a feature the target lacks is refused (`E-TARGET-FEATURE`).
+A target is resolved once, from the command line's `--device-target`, else the manifest's `[build] device_target`.
+Else a prediction or a tuning round takes the target of the one device card that prices its device work
+(`perf/profile.py`, `pricing`), never the GPU on this machine, so it answers alike on every machine. Else a build, a
+run or a test takes the one GPU `nvidia-smi` reports, which asks the driver's management library and launches nothing.
+The record says which. Everything downstream receives the same object: the native command, the device inspector,
+tuning, prediction's device profile, device timing and the build receipt. A result recorded for another target is
+refused (`E-TARGET-MISMATCH`), never approximated, and so is a device timing whose target's code does not run on the
+GPU here. A feature the target lacks is refused (`E-TARGET-FEATURE`).
 """
 
 from __future__ import annotations
@@ -195,6 +198,18 @@ class DeviceTarget:
         if card.get("target"):
             self.accept(card["target"], what)
 
+    def here(self, what: str) -> None:
+        """Refuse `what`, a run on the GPU nvidia-smi reports here, when this target's code does not run on that GPU,
+        before anything is built. Without a GPU detected there is nothing to hold it to."""
+        found = detect()
+        if found and not self.runs_on(found[0]):
+            capability, name = found
+            raise refuse("E-TARGET-MISMATCH", f"{what} runs on the GPU here, {name} (compute capability {capability}), "
+                         f"where code for {self.name} ({self.origin}) does not run. Name a card of compute capability "
+                         f"{capability} with --card (cairn cards lists them; make tune-device takes CARD=), or a "
+                         f"target that runs here with --device-target, as sm_{capability.replace('.', '')}, beside a "
+                         "card it runs on.", target=self.name, recorded=capability)  # fmt: skip
+
     def record(self) -> dict[str, Any]:
         """What a receipt, an inspection, a timing or a candidate record says about the target it was made for."""
         limits = self.limits
@@ -295,19 +310,23 @@ def detect() -> tuple[str, str] | None:
     return rows[0]
 
 
-def carded(capability: str, card: str) -> DeviceTarget:
-    """The target of a device card's own compute capability (`card` names the card): arch-specific from sm_90 on,
-    since a card describes exactly one device and that target has every feature it has, and portable before."""
+def carded(capability: str, card: str, measured: str = "") -> DeviceTarget:
+    """The target of a device card (`card` names it): the one its figures were `measured` for, when they were, else
+    its own compute capability's, arch-specific from sm_90 on, since a card describes exactly one device and that
+    target has every feature it has, and portable before."""
+    if measured:
+        return parse(measured, f"card: {card} was measured for {measured}")
     major, _, minor = capability.partition(".")
     sm = int(major) * 10 + int(minor)
     return parse(f"sm_{sm}{'a' if sm >= FIRST['a'] else ''}", f"card: {card} is compute capability {capability}")
 
 
 def resolve(flag: str | None = None, manifest: str | None = None, required: bool = True,
-            card: tuple[str, str] | None = None) -> DeviceTarget | None:  # fmt: skip
+            card: tuple[str, ...] | None = None) -> DeviceTarget | None:  # fmt: skip
     """The device target of a run: `flag` (--device-target), else `manifest` ([build] device_target), else the
-    target of `card`, the compute capability and name of the card a prediction is priced on, else the GPU detected
-    here. With nothing to go on, E-TARGET when `required`, else None."""
+    target of `card`, the card a prediction or a tuning round is priced on as `carded` takes it (its compute
+    capability, its key and, for a measured card, the target it was measured for), else the GPU detected here. With
+    nothing to go on, E-TARGET when `required`, else None."""
     if flag:
         return parse(flag, "flag")
     if manifest:
