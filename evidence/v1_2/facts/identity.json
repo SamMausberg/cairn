@@ -1,0 +1,177 @@
+{
+ "command": "tools/checks/emission_identity.py snapshot/compare --normalize guards",
+ "before": "a39cd3d",
+ "after": "3fcf2c2",
+ "programs": 2194,
+ "changed": [],
+ "new": [],
+ "more_guards": [],
+ "guards_before": 13465,
+ "guards_after": 13191,
+ "fewer_guards": {
+  "doc:README.md:0": {
+   "before": 11,
+   "after": 8
+  },
+  "doc:docs/abstractions.md:0": {
+   "before": 7,
+   "after": 6
+  },
+  "doc:docs/abstractions.md:2": {
+   "before": 6,
+   "after": 5
+  },
+  "doc:docs/concurrency.md:4": {
+   "before": 11,
+   "after": 10
+  },
+  "doc:docs/devices.md:13": {
+   "before": 22,
+   "after": 14
+  },
+  "doc:docs/devices.md:15": {
+   "before": 19,
+   "after": 18
+  },
+  "doc:docs/library.md:14": {
+   "before": 15,
+   "after": 12
+  },
+  "doc:docs/library.md:21": {
+   "before": 278,
+   "after": 277
+  },
+  "doc:docs/library.md:22": {
+   "before": 458,
+   "after": 457
+  },
+  "doc:docs/numerics.md:6": {
+   "before": 9,
+   "after": 7
+  },
+  "file:examples/tensor/tile32.cairn": {
+   "before": 73,
+   "after": 40
+  },
+  "file:examples/tensor/tile64.cairn": {
+   "before": 114,
+   "after": 69
+  },
+  "file:examples/tensor/transpose.cairn": {
+   "before": 136,
+   "after": 67
+  },
+  "project:examples/apps/analytics/cairn.toml": {
+   "before": 467,
+   "after": 465
+  },
+  "project:examples/apps/analytics/gpu.toml": {
+   "before": 443,
+   "after": 441
+  },
+  "project:examples/apps/panel/cairn.toml": {
+   "before": 480,
+   "after": 478
+  },
+  "project:examples/cooperative/cairn.toml": {
+   "before": 93,
+   "after": 77
+  },
+  "project:examples/cooperative/gpu.toml": {
+   "before": 91,
+   "after": 77
+  },
+  "project:examples/cooperative/tuned.toml": {
+   "before": 82,
+   "after": 78
+  },
+  "project:examples/foreign/host/cairn.toml": {
+   "before": 8,
+   "after": 7
+  },
+  "project:examples/reduction/cairn.toml": {
+   "before": 45,
+   "after": 43
+  },
+  "project:examples/reduction/gpu.toml": {
+   "before": 45,
+   "after": 43
+  },
+  "std": {
+   "before": 479,
+   "after": 478
+  },
+  "test:tests/language/test_std_api.py:158": {
+   "before": 149,
+   "after": 146
+  },
+  "test:tests/language/test_std_image.py:299": {
+   "before": 274,
+   "after": 273
+  },
+  "test:tests/language/test_std_image.py:318": {
+   "before": 274,
+   "after": 273
+  },
+  "test:tests/soundness/test_blocks.py:83": {
+   "before": 27,
+   "after": 26
+  },
+  "test:tests/soundness/test_cooperative.py:35": {
+   "before": 22,
+   "after": 14
+  },
+  "test:tests/soundness/test_cooperative.py:500": {
+   "before": 17,
+   "after": 15
+  },
+  "test:tests/soundness/test_established.py:70": {
+   "before": 2,
+   "after": 1
+  },
+  "test:tests/soundness/test_expressiveness.py:69": {
+   "before": 8,
+   "after": 7
+  },
+  "test:tests/soundness/test_finish.py:18": {
+   "before": 34,
+   "after": 31
+  },
+  "test:tests/soundness/test_fragments.py:119": {
+   "before": 19,
+   "after": 10
+  },
+  "test:tests/soundness/test_fragments.py:198": {
+   "before": 7,
+   "after": 5
+  },
+  "test:tests/soundness/test_pipelines.py:15": {
+   "before": 40,
+   "after": 38
+  },
+  "test:tests/soundness/test_review_tools.py:137": {
+   "before": 9,
+   "after": 8
+  },
+  "test:tests/soundness/test_scan.py:316": {
+   "before": 18,
+   "after": 15
+  },
+  "test:tests/soundness/test_wide.py:20": {
+   "before": 16,
+   "after": 15
+  },
+  "test:tests/soundness/test_written.py:19": {
+   "before": 31,
+   "after": 23
+  },
+  "test:tests/tooling/test_predict_cooperative.py:35": {
+   "before": 44,
+   "after": 42
+  },
+  "test:tests/tooling/test_predict_cooperative.py:59": {
+   "before": 52,
+   "after": 42
+  }
+ }
+}

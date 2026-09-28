@@ -9,9 +9,10 @@ immutable usize name was bound to, and which origins are in force where. A loop,
 in its body, a `let` and a collector's result for the rest of their block, a condition in its arm, the left side of
 `&&` or `||` in the right side, a collector's predicate in its projection, and an `if` with exactly one arm that
 always leaves for the rest of the block. At each site it takes the cited facts and requires, of every one, that its
-origin is in force there, that it follows from that origin by the derivation written here, and that every value it
-names is still immutable there. It then decides the guard again from those facts alone. A span proof holds where
-the site sits inside an argument written `hi - lo` over the bounds of a part among the same call's arguments.
+origin is in force there, that it follows from that origin by the derivation written here (for `let q = a / C`, that
+q*C is at most a and so at most each bound of a), and that every value it names is still immutable there. It then
+decides the guard again from those facts alone. A span proof holds where the site sits inside an argument written
+`hi - lo` over the bounds of a part among the same call's arguments.
 
 A site whose proof fails keeps its guard: its flag is cleared before a line is emitted, and the receipt counts it
 under `refused_discharges`. `keep_all` clears every flag, which is how a conservative build keeps every guard.
@@ -176,6 +177,7 @@ class Walk:
                         if cap is not None:
                             high.add((base, add + cap))
                 low |= {(x, j + k) for x, j in la for y, k in lb if y == ZERO}
+                low |= {(y, j + k) for x, j in la for y, k in lb if x == ZERO}
             elif op == "-":
                 high |= {(x, j - k) for x, j in ha for y, k in lb if y == ZERO}
                 low |= {(x, j - k) for x, j in la for y, k in hb if y == ZERO}
@@ -311,7 +313,8 @@ class Walk:
                 for name, extent in zip((n.val for n in done.other_names), done.exprs, strict=True):
                     self.bind(name, True)
                     facts += self.bound(name, None, extent, True)
-                key = self.enter(("binder", id(done)), facts)
+                # The checker checks a finish as a region of one block (`done.ref`), and its facts name that region.
+                key = self.enter(("binder", id(done.ref if isinstance(done.ref, Stmt) else done)), facts)
                 self.block(done.body)
                 del self.active[key]
                 self.env = env
@@ -382,7 +385,18 @@ class Walk:
     def defined(self, name: str, value: Expr) -> list[Edge]:
         if value.tag == "call" and value.val == "Buf" and value.ty is not None and value.ty.name == "Buf":
             return self.bound(f"len({name})", value.args[0], value.args[0], False) if len(value.args) == 1 else []
-        return self.bound(name, value, value, False)
+        return self.quotient(name, value) + self.bound(name, value, value, False)
+
+    def quotient(self, name: str, value: Expr) -> list[Edge]:
+        """`let q = a / C` with C a positive constant: q*C is at most a, since the quotient rounds down, so it is at
+        most every bound of a and the largest usize."""
+        if value.ty != USIZE or value.tag != "binary" or value.val != "/":
+            return []
+        divisor = self.exact(value.args[1])
+        if divisor is None or divisor[0] != ZERO or divisor[1] <= 0:
+            return []
+        q = f"{name}*{divisor[1]}"
+        return [(q, ZERO, MAX), *((q, x, j) for x, j in self.terms(value.args[0], self.facts())[0])]
 
     def inside(self, s: Stmt, binder: str, facts: list[Edge], body):
         env = dict(self.env)
@@ -493,7 +507,7 @@ def site(e: Expr) -> str | None:
     """Which guard an established node would have had."""
     if e.tag in {"index", "slice"}:
         return e.tag
-    if e.tag == "binary" and e.val in {"+", "-"} and e.ty == USIZE:
+    if e.tag == "binary" and e.val in {"+", "-", "*"} and e.ty == USIZE:
         return "binary"
     if e.tag == "call" and e.val in {"shr", "shl_wrap"}:
         return "shift"
@@ -534,11 +548,14 @@ def decide(w: Walk, e: Expr, kind: str, facts: list[Edge]) -> bool:
     if kind == "index":
         n = w.extent(e.args[0])
         return n is not None and any(within(facts, h, n, -1) for h in w.terms(e.args[1], facts)[0])
+    if kind == "binary" and e.val == "*":  # an atom times a positive constant, as one product atom
+        product = w.exact(e)
+        return product is not None and "*" in product[0] and within(facts, product, (ZERO, MAX))
     if kind == "binary":
         (_, la), (hb, _) = (w.terms(a, facts) for a in e.args)
         if e.val == "+":
             return any(within(facts, h, (ZERO, MAX)) for h in w.terms(e, facts)[0])
-        return any(within(facts, y, x) for y in hb for x in la)
+        return e.val == "-" and any(within(facts, y, x) for y in hb for x in la)
     if kind == "shift":
         width = BITS[e.args[0].ty.name]
         return any(within(facts, h, (ZERO, width - 1)) for h in w.terms(e.args[1], facts)[0])
