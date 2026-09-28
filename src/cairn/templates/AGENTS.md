@@ -4,7 +4,7 @@ This is a CAIRN project. CAIRN is a checked systems language that compiles to C+
 
 ## The loop
 
-1. `cairn check . --format json` until it prints `"status": "typed"`. A refusal names one `code`, a file, a line and a column, the `card` that states its rule and, when the compiler can state one, a `repair_hint`.
+1. `cairn check . --format json` until its `status` is `typed`. A refusal names one `code`, a file, a line and a column, the `card` that states its rule and, when the compiler can state one, a `repair_hint`.
 2. `cairn test .` runs every `test` block in a process of its own.
 3. `cairn run .` builds and runs; the program's arguments go after `--`.
 

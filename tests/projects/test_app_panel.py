@@ -2,6 +2,7 @@
 from allocating, and the shot a person or an agent gets back. Every expectation about where the panels are comes
 from the key script, recomputed here, and the pixels are read back from the PNG files the program wrote."""
 
+import json
 import shutil
 from pathlib import Path
 
@@ -97,7 +98,7 @@ def test_the_cli_prints_the_record_and_a_program_without_captures_has_no_frames(
     one = tmp_path / "plain.cairn"
     one.write_text("fn main() -> i32 = 0;\n")
     assert main(["shot", str(one), "--format", "json"]) == 0
-    assert '"frames": []' in capsys.readouterr().out
+    assert json.loads(capsys.readouterr().out)["frames"] == []
 
 
 def test_the_edit_host_answers_a_shot_request(tmp_path):
