@@ -14,7 +14,7 @@ def pytest_addoption(parser):
 
 def pytest_collection_modifyitems(config, items):
     """Under --device-runs, which `make gpu` passes, keep a test only when its body or a fixture it takes reaches a
-    device run (emitted.DEVICE_RUNS): the owner's device session runs nothing the everyday suite already runs."""
+    device run (emitted.DEVICE_RUNS): the device session runs nothing the everyday suite already runs."""
     if not config.getoption("--device-runs"):
         return
     from emitted import DEVICE_RUNS

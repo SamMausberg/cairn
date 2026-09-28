@@ -34,7 +34,7 @@ FAST = parse_plan("grain 1; lanes 8")
 
 
 def kept(where, source, plan, kind, target, detail, name="spread"):
-    """A record as a search or the owner's make target would have kept it."""
+    """A record as a search or a device make target would have kept it."""
     variant = {"plan": dict(plan)}
     ident = identity(as_written(source, name), variant, contract(source, name), target)
     return record(where, kind, name, "c", ident, detail, variant)
