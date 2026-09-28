@@ -22,7 +22,7 @@ from ..diagnostics import explain, located
 from ..evidence import MAX_EXPAND, MAX_REPLACEMENT, TERMS, classes, establish
 from ..projection import declarations, derivation, function_source, local, related, signature, type_declarations
 from ..state import delta, entries, moved, own, state, written
-from ..teaching import select_cards
+from ..teaching import select_cards, unsent
 
 PROTOCOL = "cairn.edit/1"  # A request bound by the session digest.
 HANDLES = "cairn.edit/2"  # A request bound by a host handle; it may also ask to expand the context.
@@ -533,9 +533,7 @@ class EditHost:
             p["expand_protocol"] = {"protocol": HANDLES, "handle": handle, "kind": "expand", "symbols": ["name"]}
         p["explain_protocol"] = {"protocol": HANDLES, "handle": handle, "kind": "explain"}  # Costs, after an edit too.
         p["state_protocol"] = {"protocol": HANDLES, "handle": handle, "kind": "state"}  # The program as it now stands.
-        earlier = [n for n in p["rule_cards"] if n in self.sent]
-        self.sent |= set(p["rule_cards"])
-        p["rule_cards"] = {n: text for n, text in p["rule_cards"].items() if n not in earlier}
+        p["rule_cards"], earlier = unsent(p["rule_cards"], self.sent)
         fresh, repeated = self.unsent(p.pop("terms"))
         if fresh:
             p["terms"] = fresh
@@ -604,8 +602,7 @@ class EditHost:
             if s.scope != "focused":
                 fail("E-REQUEST", "A component packet already shows everything it may call.")
             grown = {k: v for k, v in s.expand(request["symbols"]).items() if k != "session"}
-            grown["rule_cards"] = {n: text for n, text in grown["rule_cards"].items() if n not in self.sent}
-            self.sent |= set(grown["rule_cards"])
+            grown["rule_cards"] = unsent(grown["rule_cards"], self.sent)[0]
             return grown
         site = s.site_names.get(request["site"]) if kind == "expr" and isinstance(request["site"], str) else None
         candidate, receipt = s.admit(kind, request["replacement"], site)

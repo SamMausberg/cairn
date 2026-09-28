@@ -16,7 +16,7 @@ from cairn.compiler.lower.codegen import mangle
 from cairn.projects.build import build
 from cairn.projects.foreign import inspect
 from cairn.projects.project import ProjectError, load_project
-from cairn.projects.target import parse
+from cairn.projects.target import parse, resolve
 from cairn.verify.foreign import passed, report
 from cairn.verify.runner import run_tests
 from cairn.verify.validation import boundaries
@@ -219,14 +219,15 @@ def test_an_unlinked_cuda_source_is_built_with_the_program_s_flags_and_inspected
 
 @needs_nvcc
 def test_the_device_implementation_runs_against_its_reference_on_the_gpu(tmp_path):
-    """Only `make gpu` runs this: validation's device tests transfer the inputs, launch the kernel and compare."""
+    """Only `make gpu` runs this: validation's device tests transfer the inputs, launch the kernel and compare. The
+    manifest names sm_120, whose code loads on no other GPU, so the build is for the GPU the test runs on."""
     with on_device():
         project = load_project(DEVICE)
         reference = next(f for f in compile_program(project.source)[0].functions if f.name == "stencil_1d")
         cases = boundaries.generate(reference, {}, {"largest_extent": 256}, budget=12, device=True)
         tests, names, _ = cases_as_tests(project.source, "stencil_1d", "stencil_tiled", cases)
         done = run_tests(replace(project, source=project.source + "\n" + tests), cxx=NVCC_HOST, chosen="device_",
-                         output=tmp_path)  # fmt: skip
+                         output=tmp_path, device_target=resolve().name)  # fmt: skip
         assert done["status"] == "passed-test-blocks" and done["passed"] == len(names), json.dumps(done)[-3000:]
 
 

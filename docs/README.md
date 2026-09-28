@@ -17,7 +17,7 @@ Each reference page gives every rule with a program the compiler accepts and one
 - [memory.md](memory.md): views and parts, owners and moves, linear values and `defer`, effect rows, operand order, `extern` and `unsafe`, record layout and the machine with typed assembly, layouts, and foreign implementations.
 - [abstractions.md](abstractions.md): generics, bounds and certified templates, traits, `dyn`, function values and closures, modules, projects, dependencies, recipes, and implementations with their natural parameters.
 - [concurrency.md](concurrency.md): tasks and leases, task groups, parallel regions, `reduce`, `compact` and `scan`, atomics and mutexes, plans and fusion, and I/O rings.
-- [devices.md](devices.md): placement and device memory, queued device work, the execution context device work runs on, cooperative regions with shared arrays, barriers and pipeline stages, wide loads and stores, emulation on the host, what fast kernels use, and a kernel packaged as a SOL-ExecBench, GPU MODE or KernelBench submission.
+- [devices.md](devices.md): placement and device memory, queued device work, the execution context device work runs on, cooperative regions with shared arrays, barriers and pipeline stages, wide loads and stores, the device target a program is built for, emulation on the host, what fast kernels use, and a kernel packaged as a SOL-ExecBench, GPU MODE or KernelBench submission.
 - [numerics.md](numerics.md): storage floats (`f16`, `bf16`, `f8e4m3`, `f8e5m2`) and their one rounding, `quantize`, the tensor-core multiply and its fragments, atomic float addition, `derive grad`, which writes a function's derivative in reverse mode as ordinary checked code, and what an emulated device run computes.
 
 ## The standard library
@@ -27,7 +27,7 @@ Each reference page gives every rule with a program the compiler accepts and one
 
 ## Tools
 
-- [tools.md](tools.md): find every command in one table, then read about each one beyond `check`, `build` and `run`: `fmt`, `test`, `validate`, `doc`, `expand`, `explain`, `predict`, `tune`, `diff`, `export`, `foreign`, incremental builds, the C header, `graph` and Bazel, the language server, `cairn mcp`, the editors, and the device and freestanding targets.
+- [tools.md](tools.md): find every command in one table, then read about each one beyond `check`, `build` and `run`: `fmt`, `test`, `validate`, `doc`, `expand`, `explain`, `predict`, `tune`, `diff`, `export`, `foreign`, incremental builds, the C header, `graph` and Bazel, the language server, `cairn mcp`, the editors, and the freestanding target.
 - [agents.md](agents.md): connect an AI agent to the compiler: packets and what they establish, rule cards, what a program drew, the program's state, interface migrations, plan edits, the candidate history, implementation sessions, resuming an investigation, named choices, and the skill, the Claude Code plugin and its MCP server.
 
 ## Trust and internals

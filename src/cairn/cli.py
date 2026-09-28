@@ -33,7 +33,7 @@ from .projects.toolchain import SANITIZER_ENVIRONMENT, emulator, host_family, re
 FORMAT: str | None = None  # --format as given; None lets the stream decide (see editor/terminal.py)
 LINES = False  # a watched check's records, one per line (JSON Lines), so a reader can take each as it comes
 # The commands that read no project: their function takes the arguments alone.
-ALONE = {"doctor", "cards", "certificates", "rules", "new", "fmt", "completions", "lsp", "mcp", "diff", "verify"}
+ALONE = set("doctor cards certificates rules find new fmt completions lsp mcp diff verify".split())
 REFUSED = {"counterexample", "rejected", "invalid-contract", "invalid-domain", "invalid-reference"}  # verify exits 1
 
 
@@ -55,11 +55,18 @@ def since(a: Any) -> Any:
     return json.loads(read_text(a.since, 16_000_000)) if a.since else None
 
 
+# What `receipt.json` in the build directory keeps and `cairn build` does not print: the checker's receipt of every
+# function, the project's hashes, the compiler's version, the hashes of the C++ and the artifact, and the time.
+RECEIPT_ONLY = {"frontend", "project", "generated_sha256", "compiler_version", "artifact_sha256", "elapsed_seconds"}
+
+
 def printed(built: dict) -> dict:
-    """What `cairn build` prints: its record without the checker's receipt of every function, which `receipt.json` in
-    the build directory keeps whole. That receipt was 54 KB for an 85-line program and buried the fields a caller
-    reads next, the status, the command and the artifact."""
-    kept = {k: v for k, v in built.items() if k != "frontend"}
+    """What `cairn build` prints: the status, the command, the artifact and the directory, and what went wrong when
+    something did; an empty stream and a zero exit status say nothing. `receipt.json` keeps the whole record, which
+    was 54 KB for an 85-line program and buried the fields a caller reads next."""
+    kept = {k: v for k, v in built.items() if k not in RECEIPT_ONLY and v not in ("", [], None)}
+    if kept.get("exit_code") == 0:
+        del kept["exit_code"]
     return {**kept, "receipt": str(Path(built["directory"]) / "receipt.json")} if "directory" in built else kept
 
 
@@ -181,6 +188,16 @@ def cairn_rules(a: Any) -> int:
         raise Diagnostic("E-RULE", f"{asked!r} is no diagnostic code, card or path; cairn rules --list names "
                          "every card.")  # fmt: skip
     terminal.rules(record) if terminal.human(FORMAT) else report(record)
+    return 0
+
+
+def cairn_find(a: Any) -> int:
+    """The program searched is the one --in names, else a project here; with neither, the library alone."""
+    from .agent.find import find, lines
+
+    within = a.within or ("." if Path("cairn.toml").is_file() else None)
+    source = load_project(within).source if within else None
+    show(find(source, " ".join(a.words), a.takes, a.returns, a.effects, a.limit), lines)
     return 0
 
 
@@ -324,8 +341,9 @@ def cairn_emit(a: Any, project: Project) -> int:
 def cairn_check(a: Any, project: Project) -> int:
     receipt = compile_source(project.source, sites=project.site, every=True)[1]
     library = sum(1 for name in receipt["functions"] if name.startswith("std."))  # what the imports bring in
+    # The project's hashes are a build's to keep (receipt.json); an agent that checks acts on the verdict alone.
     result = {"status": "typed", "functions": receipt["function_count"], "library_functions": library,
-              "formal_status": "not-verified", "project": project.receipt()}  # fmt: skip
+              "formal_status": "not-verified"}  # fmt: skip
     if a.generics:  # "ok": every instance within the bounds checks; else what the body needed beyond them.
         linked = tuple(module + "." for module in receipt["modules"] if module.startswith("std."))
         verdicts = certify_templates(project.source).items()
@@ -574,8 +592,9 @@ def cairn_build(a: Any, project: Project) -> int:
     cp = subprocess.run(started, capture_output=True, text=True, errors="backslashreplace", timeout=a.timeout, **run)
     report({"status": "program-exited", "exit_code": cp.returncode, "stdout": cp.stdout, "stderr": cp.stderr,
             "build_directory": result["directory"], "security_sandbox": False,
-            "memory_limit_mib": None if machine or not capped else a.memory_mib, "emulator": machine,
-            **({"sanitizer": a.sanitize} if a.sanitize else {}), **emulated})  # fmt: skip
+            "memory_limit_mib": None if machine or not capped else a.memory_mib,
+            **({"emulator": machine} if machine else {}), **({"sanitizer": a.sanitize} if a.sanitize else {}),
+            **emulated})  # fmt: skip
     return 0 if cp.returncode == 0 else 1
 
 

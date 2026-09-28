@@ -110,7 +110,7 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::run`, i
 
 | Header in `runtime/` | Owns |
 |---|---|
-| `cairn_runtime.hpp` | the guards (checked arithmetic, bounds, entry checks) and the scoped scalar buffer; every guard can be called on the host and on the device |
+| `cairn_runtime.hpp` | the guards (checked arithmetic, bounds, entry checks) and the scoped scalar buffer; every guard can be called on the host and on the device, and below sm_100 the device compiler is not told that a failed guard's trap ends the thread, since NVVM 7.0.1 deleted loop exits around one it was told of |
 | `cairn_owners.hpp` | the movable zeroed `Buf`, `Defer`, borrowed callables, checked parts |
 | `cairn_parallel.hpp` | the host lane pool with its pooled reduction and its scan in two passes, `Mutex` and `Atomic` with explicit orders; it includes `cairn_tasks.hpp` |
 | `cairn_tasks.hpp` | the crew of reusable task threads, linear tasks, task groups with a bounded ring of completions |
@@ -155,7 +155,7 @@ Device work runs on the calling thread's execution context, `cr::gpu::here()`, w
 
 ### The rest of the package
 
-The ownership table of [AGENTS.md](../AGENTS.md) names the owner of every other module. In `perf/`, only `measure.py`, on the host, and `on_device.py`, under the owner's make targets, run a program. No agent, test generator or solver may rewrite the authority it is checked against, and native libraries never import the agent tooling or Z3.
+The ownership table of [AGENTS.md](../AGENTS.md) names the owner of every other module. In `perf/`, only `measure.py`, on the host, and `on_device.py`, under `make tune-device` and `make calibrate-device`, run a program. No agent, test generator or solver may rewrite the authority it is checked against, and native libraries never import the agent tooling or Z3.
 
 The wheel holds the compiler package, the runtime headers, the target support files, the `std` sources and the command line. Tests, benchmarks, proofs and evidence stay out of it.
 
@@ -183,9 +183,9 @@ make native        # both compilers with the sanitizers that bite, and the codeg
 make gpu embedded  # CUDA runtime and lanes, and the QEMU board, where the hardware is present
 ```
 
-`make gpu`, `make tune-device` and `make calibrate-device` are the only commands that run code on a CUDA device, and only the owner runs them. Each sets `CAIRN_GPU_TESTS=1` and holds `/tmp/cairn-gpu.lock` around every device run (`tools/support.py`), and `tests/tooling/test_on_device.py` holds the Makefile to those three. `make tune-device` and `make calibrate-device` rest two seconds after each device run, and one process makes at most 64 of them. Everywhere else a device test compiles its code and skips the run. On the reference machine the GPU also drives the display, and repeated device test runs reset its driver and twice crashed the host.
+`make gpu`, `make tune-device` and `make calibrate-device` are the only commands that run code on a CUDA device. Each sets `CAIRN_GPU_TESTS=1` and holds `/tmp/cairn-gpu.lock` around every device run (`tools/support.py`), and `tests/tooling/test_on_device.py` holds the Makefile to those three. `make tune-device` and `make calibrate-device` rest two seconds after each device run, and one process makes at most 64 of them. Everywhere else a device test compiles its code and skips the run. The lock makes device runs from several agents or checkouts queue instead of overlapping. Who may start a device run depends on the GPU. On a headless Linux GPU, one that drives no display, an agent runs these targets when a change needs a device result. Where the GPU also drives the display, only the owner does: on the WSL2 machine where that held, repeated device test runs reset the driver and twice crashed the host.
 
-`make gpu` runs the modules the Makefile's `GPU_TESTS` names, one test at a time, and `tests/tooling/test_workflow.py` holds that list to every module that calls `on_device`, `device_reason` or `device_lock`. A test that traps on the device on purpose, such as a guard failing in a lane, runs only when the owner also sets `CAIRN_GPU_TRAPS=1` by hand (`CAIRN_GPU_TRAPS=1 make gpu`). Otherwise it skips with that reason.
+`make gpu` runs the modules the Makefile's `GPU_TESTS` names, one test at a time, and `tests/tooling/test_workflow.py` holds that list to every module that calls `on_device`, `device_reason` or `device_lock`. A test that traps on the device on purpose, such as a guard failing in a lane, runs only when `CAIRN_GPU_TRAPS=1` is also set (`CAIRN_GPU_TRAPS=1 make gpu`), which is done only on a GPU that drives no display. Otherwise it skips with that reason.
 
 `make proof` needs `lake`, on `PATH` or in `~/.elan/bin` where elan puts it. Its axiom audit allows `propext`, `Quot.sound` and, outside the ownership theorems, `Classical.choice`; the 1.1.0 record found only the first two ([verification.md](verification.md#pinned-versions-and-the-audit)).
 

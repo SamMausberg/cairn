@@ -647,9 +647,18 @@ class Emitter:
             self.nest(f"switch ({selector}) {{", arms)
 
         def arms():
-            for a, variant in zip(s.arms, s.ref, strict=True):
+            # The last arm is the default, entered by its own tag alone: a tag no variant has traps there. Every path
+            # through the switch is then an arm, so control never leaves it past an arm that returns, whether or not
+            # the compiler sees cr::trap() end the thread (it does not below sm_100: cairn_runtime.hpp).
+            *first, (last, last_variant) = zip(s.arms, s.ref, strict=True)
+            for a, variant in first:
                 self.nest(f"case {list(layout).index(variant)}: {{", lambda a=a, variant=variant: arm(a, variant))
-            self.put("default: cr::trap();")
+
+            def default():
+                self.put(f"if({selector} != {list(layout).index(last_variant)}) cr::trap();")
+                arm(last, last_variant)
+
+            self.nest("default: {", default)
 
         self.nest("{", whole)
 

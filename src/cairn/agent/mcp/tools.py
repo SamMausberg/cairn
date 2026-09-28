@@ -2,8 +2,9 @@
 
 `check` is `cairn check`. `edit_open` and `edit_request` drive the guarded edit host (`edits.EditHost`),
 `plan_open` and `plan_reply` the plan host (`plans.PlanHost`), `implementation_open` and `implementation_submit` the
-implementation host (`implementations.ImplementationHost`), and `state` is `cairn state`, with `symbol` one function's
-investigation from its candidate history. No rule is decided here: every refusal is the host's own diagnostic.
+implementation host (`implementations.ImplementationHost`), `state` is `cairn state`, with `symbol` one function's
+investigation from its candidate history, and `find` is `cairn find`. No rule is decided here: every refusal is the
+host's own diagnostic.
 
 A session opened on a path writes each change its host admits back to the files it came from (`write_back.py`),
 and only while they still hold what the host judged the change against; a session opened on source text writes
@@ -107,9 +108,23 @@ TOOLS: list[dict[str, Any]] = [
         }},
         "annotations": {"readOnlyHint": True},
     },
+    {
+        "name": "find",
+        "description": "Functions to call, best first, from the builtins, std and the program: those that take "
+        "values of the given types, or whose names and comments hold the words.",
+        "inputSchema": {"type": "object", "properties": {
+            **WHERE, "words": {"type": "string"},
+            "takes": {"type": "array", "items": {"type": "string"}, "description": "As ro<u8>[n], Vec[i64]."},
+            "returns": {"type": "string"},
+            "effects": {"type": "string", "description": "A ceiling, as pure."},
+            "limit": {"type": "integer"},
+        }},
+        "annotations": {"readOnlyHint": True},
+    },
 ]  # fmt: skip
 SCHEMAS = {t["name"]: t["inputSchema"] for t in TOOLS}
 ENVIRONMENT = (ProjectError, OSError, ValueError, RecursionError, subprocess.SubprocessError)
+SAID_ONCE = {"automatic_edit", "acceptance_boundary"}  # what `explain` says of every refusal of one check
 
 
 class Tools:
@@ -118,6 +133,7 @@ class Tools:
     def __init__(self, root: Path | None = None):
         self.root = root or Path.cwd()
         self.edits, self.plans, self.implementations = EditHost(), PlanHost(), ImplementationHost()
+        self.implementations.sent = self.edits.sent  # one reader: a card either host sent is not sent again
         self.files: dict[str, Files] = {}  # by edit handle, plan session digest and implementation handle
         self.states: dict[str, dict[str, Any]] = {}  # every state and investigation this server sent, by digest
         self.last: dict[tuple[str, ...], str] = {}  # the digest of the last one sent of each path, and symbol
@@ -303,6 +319,17 @@ class Tools:
         self.last |= {where: packet["digest"]} if where else {}
         return (investigation.delta(earlier, packet) if earlier else packet), False
 
+    def find(self, a: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+        from ..find import LIMIT, find
+
+        source = self.program(a)[0] if "path" in a or "source" in a else None
+        words, takes, limit = a.get("words", ""), a.get("takes", []), a.get("limit", LIMIT)
+        texts = [words, a.get("returns", ""), a.get("effects", ""), *(takes if isinstance(takes, list) else [0])]
+        if not all(isinstance(t, str) for t in texts) or type(limit) is not int:
+            fail("E-REQUEST", 'words, returns and effects are strings, takes a list of types such as ["ro<u8>[n]"], '
+                 "and limit an integer.")  # fmt: skip
+        return find(source, words, takes, a.get("returns"), a.get("effects"), limit), False
+
 
 def text(a: dict[str, Any], key: str) -> str:
     if not isinstance(a.get(key), str) or not a[key]:
@@ -321,12 +348,20 @@ def document(a: dict[str, Any], key: str) -> dict[str, Any]:
 
 def refusal(error: Diagnostic, source: str, files: Files | None, host: bool = True) -> dict[str, Any]:
     """A refused program as the command line reports it: the diagnostic with its card and fix, at its file and line, and
-    so each further refusal a check found; `host` false for `check`, where no host's contract applies."""
+    so each further refusal a check found, with its own line of source; `host` false for `check`, where no host's
+    contract applies. What `explain` says of every refusal, that nothing was applied and where acceptance stops, is
+    said once, by the first."""
     located = files.project.locate(error) if files else error.data
     further = error.data.get("further") or []
     known = declared(source) if not host and "E-CALLEE" in {d.get("code") for d in (error.data, *further)} else ()
-    record = {**explain(error, source, known, host), **located}
+    record = {**explain(error, source, known, host), **placed(located)}
     if further:
-        record["further"] = [{**explain(Diagnostic.of(d), source, known, host), **placed}
-                             for d, placed in zip(further, located["further"], strict=True)]  # fmt: skip
+        record["further"] = [{**{k: v for k, v in explain(Diagnostic.of(d), source, known, host).items()
+                                 if k not in SAID_ONCE}, **placed(at)}
+                             for d, at in zip(further, located["further"], strict=True)]  # fmt: skip
     return record
+
+
+def placed(located: dict[str, Any]) -> dict[str, Any]:
+    """Where a located refusal is: its file, and its line in that file."""
+    return {k: located[k] for k in ("file", "line") if k in located}

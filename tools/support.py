@@ -159,12 +159,12 @@ def device_reason(trap: bool = False) -> str:
     Device code runs only with CAIRN_GPU_TESTS=1, which `make gpu` sets. Under WSL2 and Windows the GPU also drives
     the display: a device run can make the driver reset its engine, and a morning of test runs that each did so ended
     in a host crash twice. So the everyday suite never touches the device, and `device_lock` serializes the rest. A
-    deliberate device trap, what those runs had in common, also needs CAIRN_GPU_TRAPS=1, which the owner sets by hand.
+    deliberate device trap, what those runs had in common, also needs CAIRN_GPU_TRAPS=1, which AGENTS.md allows only on a GPU that drives no display.
     """
     if os.environ.get("CAIRN_GPU_TESTS") != "1":
         return "device code runs only under `make gpu` (CAIRN_GPU_TESTS=1)"
     if trap and os.environ.get("CAIRN_GPU_TRAPS") != "1":
-        return "a run that traps on the device on purpose needs CAIRN_GPU_TRAPS=1 beside `make gpu`, set by hand"
+        return "a run that traps on the device on purpose needs CAIRN_GPU_TRAPS=1 beside `make gpu`, on a GPU that drives no display"
     if not shutil.which("nvcc"):
         return "nvcc is not installed"
     smi = shutil.which("nvidia-smi")

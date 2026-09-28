@@ -112,7 +112,7 @@ def build(source: str, cxx: str, arch: str | None, extra: tuple[str, ...], direc
     """The program's C++ and the runtime headers in `directory`, compiled to one object with the build's flags."""
     cpp, receipt = compile_source(source)
     if "cuda" in receipt["requires"]:
-        raise ValueError("A device program is never timed here: device runs belong to the owner's make target.")
+        raise ValueError("A device program is never timed here: device runs belong to the device make targets.")
     program, obj = write_program(directory, "program.cpp", cpp), directory / "program.o"
     bounded([find(cxx), *flags(arch, "exe"), *extra, "-c", str(program), "-o", str(obj)], until(deadline, 300), True)
     return obj
