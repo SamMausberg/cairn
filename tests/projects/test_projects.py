@@ -1,14 +1,18 @@
 import json
+import os
 import shutil
+import signal
 import subprocess
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from cairn.agent.hosts.edits import PROTOCOL, EditSession
 from cairn.agent.projection import canonical_source
 from cairn.agent.sketches import Sketch
-from cairn.cli import main
+from cairn.cli import limit, main
 from cairn.compiler.cairnc import Diagnostic, compile_source
 from cairn.editor.terminal import typed
 from cairn.projects.build import build
@@ -16,6 +20,8 @@ from cairn.projects.new import create_project
 from cairn.projects.project import ProjectError, load_project
 from cairn.verify.scalar.semantics import equivalent
 from emitted import refused
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.mark.parametrize(
@@ -540,6 +546,63 @@ def test_run_sanitize_builds_the_program_as_the_sanitizer_checks_it_and_runs_it(
     assert built["sanitizer"] == sanitizer and "-O1" in built["command"] and "-O3" not in built["command"]
     assert runtime in Path(built["artifact"]).read_bytes()
     assert main(["run", str(path), "--sanitize", sanitizer, "--incremental", "--format", "json"]) == 2
+
+
+STREAMS = """import std.core (Result);
+import std.io as io;
+
+fn main() -> i32 {
+  stack got:u8[1] = zeroed;
+  match io.read_stdin(1, got) {
+    Ok(n) => { if n == 0 { return 5; } }
+    Err(_) => return 5;
+  }
+  println("line one");
+  eprintln("said on stderr");
+  let b = Buf[u64](2);
+  let mut k:usize = 1;
+  if got[0] == 't' { k = 2; }
+  println("value ", b[k]);
+  return 3;
+}
+"""
+
+
+def test_a_piped_run_is_the_program_s_own_output_and_status_and_cairn_says_only_what_went_wrong(tmp_path):
+    """What an agent's shell gets: the program's streams to diff and its exit status, then one line of cairn's on
+    standard error. The record is there for whoever asks for it."""
+    path = tmp_path / "streams.cairn"
+    path.write_text(STREAMS)
+    env = {k: v for k, v in os.environ.items() if k != "CAIRN_FORMAT"}
+
+    def run(given: str, *flags: str) -> subprocess.CompletedProcess:
+        argv = [sys.executable, str(ROOT / "bin/cairn"), "run", str(path), "--out", str(tmp_path / "out"), *flags]
+        return subprocess.run(argv, input=given, capture_output=True, text=True, env=env, timeout=300)
+
+    done = run("a")
+    assert (done.returncode, done.stdout) == (3, "line one\nvalue 0\n")
+    assert done.stderr == "said on stderr\nerror: streams exited with status 3\n"
+    trapped = run("t")
+    assert (trapped.returncode, trapped.stdout) == (134, "line one\n")  # 128 plus SIGABRT, as a shell says it
+    assert trapped.stderr.endswith(
+        "error: streams was stopped by SIGABRT: a guard failed, or an allocation passed the 1024 MiB cap\n"
+    )
+    record = json.loads(run("a", "--format", "json").stdout)
+    assert (record["exit_code"], record["stdout"], record["stderr"]) == (3, "line one\nvalue 0\n", "said on stderr\n")
+    path.write_text(STREAMS.replace("let mut k:usize = 1;", "let mut k = 1;"))
+    rejected = run("a")
+    assert (rejected.returncode, rejected.stdout) == (1, "")  # standard output is the program's, which never ran
+    assert rejected.stderr.startswith("error[E-TYPE-MISMATCH]: Expected usize, got u64.\n")
+
+
+@pytest.mark.parametrize(
+    "code,capped,said",
+    [(-signal.SIGXCPU, True, ": its threads used the 60 s of CPU time --timeout allows"),
+     (-signal.SIGABRT, True, ", or an allocation passed the 1024 MiB cap"), (-signal.SIGABRT, False, ""),
+     (3, True, "")],
+)  # fmt: skip
+def test_a_run_that_ends_badly_names_the_limit_it_may_have_met(code, capped, said):
+    assert limit(code, SimpleNamespace(timeout=60, memory_mib=1024), capped) == said
 
 
 def test_build_prints_a_short_record_and_keeps_every_function_s_receipt_in_its_file(tmp_path, capsys):
