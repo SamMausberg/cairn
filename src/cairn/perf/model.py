@@ -170,14 +170,21 @@ def lanes(r: Region, card: Device | None, sizes: dict[str, float], missing: set[
     block, per_lane, _ = r.launch
     threads = min(n / (per_lane or 1), 65535 * (block or 256))  # the grid the runtime launches
     busy = min(1.0, threads / (card.sms * card.threads_per_sm * card.occupancy_to_saturate)) if n else 1.0
-    if r.registers:  # a kernel whose registers or shared memory keep few warps resident cannot keep memory busy
-        busy = min(busy, card.occupancy(r.registers, block or 256, r.shared) / card.occupancy_to_saturate)
+    held = card.held(r.registers, block or 256, r.shared) if r.registers else None
+    refused = ""  # the limits a block exceeds when it asks for more than a block may have: the kernel cannot launch
+    if held:  # a kernel whose registers or shared memory keep few warps resident cannot keep memory busy
+        busy = min(busy, card.occupancy(r.registers, block or 256, r.shared) / card.occupancy_to_saturate) or 1e-9
+        refused = "" if held["blocks_per_sm"] else " and ".join(held["limited_by"])
     memory, compute = moved / (card.dram_gbps * card.memory_efficiency * busy), issued / (card.flops["i32"] * busy)
     ns, bound = launched(card, memory, compute, "device compute")
     light = max(moved / card.dram_gbps, issued / card.flops["i32"])
     detail = {"count": r.count.render(), "device": card.name, "memory_ns": round(memory, 1), "compute_ns": round(compute, 1),
-              "launch_ns": card.launch_ns, "threads": int(threads), "busy": round(busy, 3)}  # fmt: skip
-    return Piece(f"device region at line {r.line}", ns * runs, bound, light * runs, detail)
+              "launch_ns": card.launch_ns, "threads": int(threads), "busy": round(busy, 3),
+              **({"resident": held} if held else {})}  # fmt: skip
+    guesses = [f"a block of {block or 256} threads asks for more {refused} than a block may have, so the kernel cannot "
+               "launch and its time is no prediction"] if refused else []  # fmt: skip
+    return Piece(f"device region at line {r.line}", ns * runs, f"cannot launch ({refused})" if refused else bound,
+                 light * runs, detail, guesses)  # fmt: skip
 
 
 def region(r: Region, host: Host, arch: str, sizes: dict[str, float], missing: set[str],
