@@ -52,6 +52,19 @@ python3 bin/cairn certificates
 python3 bin/cairn verify examples/proof_scope/reference.cairn examples/proof_scope/candidate.cairn --all
 ```
 
+## What you trust
+
+What CAIRN says about a program also depends on code that no proof covers. From parser to C++ emitter the compiler is about 15,400 lines of Python in `src/cairn/compiler`, and the runtime is about 4,400 lines of C++ headers in `src/cairn/runtime`. The table names each part you trust and what checks it.
+
+| You trust | For | Checked by |
+|---|---|---|
+| The Python parser, checker and emitter | every program | about 6,100 tests, rejection tables from nine adversarial reviews, differential runs against the Lean models |
+| The runtime headers | owners, threads, the lane pool, rings, device calls | native runs under Clang and GCC with the address, leak, undefined-behaviour and thread sanitizers |
+| Clang or GCC, and nvcc | native and device code | nothing in this repository |
+| `unsafe` blocks, `extern` declarations, typed `asm` and foreign implementations | the foreign boundary, MMIO, inline assembly, vendored C++ and CUDA | the effects and contracts they declare, taken as written; a foreign implementation is also tested against its reference |
+| Z3 and the SMT translator | `cairn verify` and `cairn diff` | tests of the translator; anything outside the modeled fragment is `unknown` |
+| The Lean kernel | the proofs in `proofs/` | an axiom audit, which in the 1.1.0 record found `propext` and `Quot.sound` and nothing else |
+
 ## Tests, native code and failures
 
 The test suite builds accepted programs with both native compilers, clang++ and g++, and runs them under AddressSanitizer, UndefinedBehaviorSanitizer, LeakSanitizer and ThreadSanitizer. Guards in device code have death tests, programs that must abort, and those run only under `make gpu`. A sanitizer-clean run shows that those faults did not happen on the inputs it ran. It says nothing about other inputs.
