@@ -11,7 +11,7 @@ The groups below are in reading order. A newcomer starts with the guide, then re
 
 ## The language
 
-Each reference page gives every rule with a program the compiler accepts and one it refuses, with the refusal's diagnostic code.
+Each reference page shows its rules with programs the compiler accepts and programs it refuses, each refusal with its diagnostic code.
 
 - [language.md](language.md): values, control flow, records, sums, `match` and `try`, constants, tests and printing.
 - [memory.md](memory.md): views and parts, owners and moves, linear values and `defer`, effect rows, operand order, `extern` and `unsafe`, record layout and the machine with typed assembly, layouts, and foreign implementations.
