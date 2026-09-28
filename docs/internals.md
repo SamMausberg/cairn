@@ -70,7 +70,7 @@ Checking is one pass per function over one typed tree, and each generic instance
 | Constant folding | `compiler/check/constants.py` | `constant`, `fold` |
 | I/O rings and their lowering | `compiler/primitives/rings.py` | `check_ring`, `method`, `waited`, `lower` |
 | Alternative implementations and their dispatch | `compiler/plans/implementations.py` | `declared`, `condition`, `select`, `joined`, `called`, `lower` |
-| Facts about `usize` values that let lowering drop a guard | `compiler/check/facts.py` | `binder`, `defined`, `assume`, `index`, `arithmetic`, `conversion` |
+| Facts about `usize` values that let lowering drop a guard | `compiler/check/facts.py` | `binder`, `defined`, `quotient`, `assume`, `index`, `arithmetic`, `product`, `conversion` |
 | The independent check of each guard lowering leaves out | `verify/elision.py` | `audit`, `decide`, `part` |
 | A plan's `fuse`: which regions join, and their scratch | `compiler/plans/fusion.py` | `chains`, `quiet`, `compatible`, `scratch` |
 | A plan's `vector` and its lowering | `compiler/plans/chunks.py` | `chunkable`, `vectored`, `lower` |
@@ -96,7 +96,7 @@ Checking is one pass per function over one typed tree, and each generic instance
 | The numerical policy: when a float result agrees with the reference's, for the host and for generated tests | `verify/validation/agreement.py` | `agrees`, `same`, `helper`, `stated` |
 | Z3's answer on an implementation, and its counterexample replayed through the finite path | `verify/validation/counterexamples.py` | `smt`, `outside`, `replayed` |
 | Native flags, the closed table of system libraries, the effects a freestanding image bans | `projects/toolchain.py` | `command`, `flags`, `LIBRARIES`, `audit_effects` |
-| The device target | `projects/target.py` | `resolve`, `parse`, `require`, `accept`, `fits` |
+| The device target | `projects/target.py` | `resolve`, `parse`, `require`, `accept`, `fits`, `here` |
 | A device program built for the host: what emulation refuses and what its records say | `projects/emulation.py` | `check`, `record`, `MODELED` |
 | Exports and the commands that take one | `projects/export.py` | `export`, `check`, `build`, `run`, `test`, `compare` |
 
@@ -110,7 +110,7 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::run`, i
 
 | Header in `runtime/` | Owns |
 |---|---|
-| `cairn_runtime.hpp` | the guards (checked arithmetic, bounds, entry checks) and the scoped scalar buffer; every guard can be called on the host and on the device |
+| `cairn_runtime.hpp` | the guards (checked arithmetic, bounds, entry checks) and the scoped scalar buffer; every guard can be called on the host and on the device, and below sm_100 the device compiler is not told that a failed guard's trap ends the thread, since NVVM 7.0.1 deleted loop exits around one it was told of |
 | `cairn_owners.hpp` | the movable zeroed `Buf`, `Defer`, borrowed callables, checked parts |
 | `cairn_parallel.hpp` | the host lane pool with its pooled reduction and its scan in two passes, `Mutex` and `Atomic` with explicit orders; it includes `cairn_tasks.hpp` |
 | `cairn_tasks.hpp` | the crew of reusable task threads, linear tasks, task groups with a bounded ring of completions |
@@ -152,6 +152,29 @@ What each operation takes when it runs, and gives back when it ends:
 | a `@device`, `@pinned` or `@unified` buffer | one CUDA allocation, zeroed on the context's stream, which is waited for | freed at scope exit |
 
 Device work runs on the calling thread's execution context, `cr::gpu::here()`, which `compiler/lower/execution.py` names at every call. Its bookkeeping is tested against a mock device (`tests/runtime/reuse_runtime.cpp`), and generated programs are tested against a host machine that counts every stream, allocation and wait (`tests/runtime/gpu_host.hpp`). [devices.md](devices.md#device-execution) says what that shows and what no device run has checked.
+
+### Undefined behaviour the lowering rules out
+
+C++ leaves many operations undefined, and an optimizer may assume they never happen: it can delete a check, a loop or a whole path that would reach one. Emitted code is therefore correct only while none of them happens. The table lists each kind the lowering relies on, what keeps an accepted program outside `unsafe` and `extern` from reaching it, and where that lives. Each rule is implemented and tested, and only the ones that name a Lean file have a proof, of a model.
+
+| Undefined behaviour | What rules it out | Where |
+|---|---|---|
+| Signed overflow | Every integer `+`, `-`, `*`, negation and `abs` is a runtime call that traps before a result wraps. `add_wrap`, `sub_wrap` and `mul_wrap` compute in `std::uint64_t` and convert back, which C++20 defines. The only source arithmetic on integers written as a bare operator is a `usize` `+` or `-` whose guard the elision audit let go, and `usize` is unsigned. | `runtime/cairn_runtime.hpp` (`cr::ovf`), `verify/elision.py` |
+| Division by zero, and the minimum divided by -1 | `cr::divide` and `cr::remainder` trap on both. | `runtime/cairn_runtime.hpp` |
+| A shift by the width or more | Shifts are `shl_wrap` and `shr` on unsigned values. Each traps on a count of at least the width and shifts in `std::uint64_t`, and its guard goes only where the checker showed the count is smaller. | `runtime/cairn_runtime.hpp`, `compiler/primitives/builtins.py` |
+| A float converted to an integer that cannot hold it | `cr::truncate` traps on NaN and on a value outside the target, and `cr::convert` traps on integer narrowing that `std::in_range` refuses. | `runtime/cairn_runtime.hpp` |
+| An index outside its array | `cr::at` and `cr::part` check every index and part. A check is left out only where `verify/elision.py` accepts the checker's facts, and `Facts.lean` proves such a guard cannot fail where those facts are true. | `compiler/check/facts.py`, `verify/elision.py`, `proofs/Cairn/Facts.lean` |
+| A null, misaligned or overlapping pointer from C | The exported `cf_` entry checks each view with `cr::view` and each mutable pair with `cr::disjoint`. A call from CAIRN goes to the `ci_` body with storage the caller holds. | `compiler/lower/codegen.py` (`entry`), `runtime/cairn_runtime.hpp` |
+| Use after move or free, double free, a dangling borrow | The ownership rules: an owner moves, a borrow never outlives its call, and a moved-from `Buf` is empty. The Lean ownership model proves this for a fragment of the language. | `compiler/check/places.py`, `runtime/cairn_owners.hpp`, `proofs/Cairn/Ownership/` |
+| A read of uninitialised memory | Every `let` has a value. `Buf`, host and device buffers and `stack` arrays start zeroed. A `shared` array is zeroed where its block starts unless the written rule shows that each element a thread reads was written first. A sum's payload is read only in the arm its tag selects, and a value parameter's tag is checked on entry. | `runtime/cairn_owners.hpp`, `compiler/cooperative/written.py`, `compiler/lower/codegen.py` |
+| A data race | A lane touches only element `[i]` of what any lane writes, a place lent to a live task is leased until its `wait`, the threads of a cooperative block keep the phase rule, and shared updates go through atomics and mutexes. The thread sanitizer watches the host lowering in the tests, and the Lean ownership model and `Cooperative.lean` prove race freedom of their models. | `compiler/check/concurrency.py`, `compiler/check/places.py`, `compiler/cooperative/phases.py` |
+| A loop that never ends and does nothing visible | The host compilers get `-fno-finite-loops`. nvcc has no such option for device code, so `CR_PROGRESS`, an empty volatile asm, opens each `while` body and each function that can call itself. `tests/soundness/test_endless.py` runs such loops under both compilers and reads the PTX nvcc writes for sm_90 and sm_120. | `projects/toolchain.py`, `runtime/cairn_runtime.hpp`, `compiler/lower/codegen.py` |
+| Operands whose side effects meet | C++ leaves the order of operands and of arguments open. The operand-order audit refuses an operand whose effect another operand could observe (`E-EFFECT-ORDER`). | `compiler/check/effects.py` (`audit`) |
+| Strict aliasing | Generated code reaches each array through its element type, and the host runtime reinterprets bits with `__builtin_bit_cast` or `memcpy`. The device paths of wide loads and atomics cast pointers, as CUDA's vector types and atomic functions need, and a vector chunk loads a struct that holds the element array through a cast pointer, on the host as well when device work is emulated. That last access relies on GCC's and Clang's alias analysis treating a struct as covering its members. No build turns strict aliasing off, and no test looks for a violation. | `runtime/cairn_access.hpp`, `runtime/cairn_exec.hpp` |
+
+Two gaps are open. The operand-order audit does not judge a call that moves an owner against a call among its arguments that reads it: `keep(total(c), c)` is accepted and lowers to `cf_keep(cf_total(v_c), std::move(v_c))`, and C++ may initialise `keep`'s parameter, emptying `c`, before `total` reads it. Neither compiler did so on AArch64, and a spawn's capture list has the same shape. The second is floating point: ISO C++ leaves a float divided by zero, and a `double` beyond the range of `float` converted to one, undefined. The lowering relies on the IEEE 754 results GCC, Clang and nvcc give, with `-ffp-contract=off` and `-fno-fast-math`, and nothing checks `std::numeric_limits<double>::is_iec559`.
+
+Outside the table the program is trusted: code inside `unsafe`, what an `extern` declares, and storage a foreign caller hands a `cf_` entry beyond what `cr::view` checks, such as a byte other than 0 or 1 where a `bool` belongs. Recursion has no depth limit, so a program that runs out of stack ends with a fault rather than a guard.
 
 ### The rest of the package
 
@@ -235,7 +258,7 @@ These scripts write under `results/`, which is not tracked, one subdirectory per
 | `checks` | formatting, lint and types; a stale API reference; the examples, certificates and scalar equivalence | ubuntu-24.04 | 1 min |
 | `tests`, four parts | the whole suite under the runner's Clang 18, GCC 13 and Python 3.12 | ubuntu-24.04 | 4 to 6 min |
 | `proofs` | the Lean build, its axiom audit, and the differential runs against the checker | ubuntu-24.04 | 2 min |
-| `device`, four | device code nvcc refuses: under CUDA 12.9 and 13.2, each with g++ and with clang++ as nvcc's host compiler, every test that compiles device code, and every device example built for sm_80, sm_90a, sm_100a and sm_120 | ubuntu-24.04 | 12 to 15 min |
+| `device`, four | C++ nvcc refuses: under CUDA 12.9 and 13.2, each with g++ and with clang++ as nvcc's host compiler, every test that compiles device code, every example, documented program and std module compiled for sm_120 as a device program's host code would be (`tests/projects/test_nvcc_accepts.py`), and every device example built for sm_80, sm_90a, sm_100a and sm_120 | ubuntu-24.04 | 12 to 15 min |
 | `compilers`, two | runtime headers and emitted C++ another compiler refuses or builds differently: the runtime, soundness, project and language tests under GCC 11 and Clang 13, the oldest supported, and under GCC 15 and Clang 23 | ubuntu-22.04, ubuntu-26.04 | 9 to 11 min |
 | `python`, three | the compiler, the agent layer, the tools and the verifiers under Python 3.11, 3.13 and 3.14 | ubuntu-24.04 | 6 to 8 min |
 | `arm` | an AArch64 host: the runtime, soundness and project tests, and the freestanding image under `qemu-system-aarch64`, which must run rather than skip | ubuntu-24.04-arm | 6 min |

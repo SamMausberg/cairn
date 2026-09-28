@@ -3,10 +3,12 @@
 Every accepted construct is executed natively under both compilers; every rule has a rejection.
 """
 
+import subprocess
+
 import pytest
 
 from cairn.compiler.cairnc import compile_source
-from emitted import SANITIZED, WARNINGS, refused, run, sanitized
+from emitted import SANITIZED, WARNINGS, artifact, refused, round_trips, run, sanitized
 
 PRELUDE = """
 const LIMIT:usize = 8;
@@ -140,6 +142,79 @@ def test_instances_are_monomorphic_and_named():
 def test_rejections(code, body):
     helper = "fn swap_parts(n:usize, a:rw<u64>[n], b:rw<u64>[n]) { swap(a[0], b[0]); }"
     refused(code, PRELUDE + helper + "fn main() -> i32 {" + body + "}")
+
+
+LEASES = """
+linear struct Lease { id:u64; }
+struct Holder { lease:Lease; uses:u64; }
+fn open(id:u64) -> Lease = Lease(id);
+fn renew(l:Lease) -> Lease { let Lease(id) = l; return Lease(id + 1); }
+fn close(l:Lease, closed:rw<u64>) { let Lease(id) = l; closed = closed * 100 + id; }
+"""
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "let mut l = open(1); l = open(2); close(l, c);",
+        "let mut h = Holder(open(1), 0); h.lease = open(2); let Holder(l, n) = h; close(l, c);",
+        "let mut h = Holder(open(1), 0); h = Holder(open(2), 0); let Holder(l, n) = h; close(l, c);",
+        "let mut l = open(1); defer close(l, c); l = open(2);",
+        "let mut l = open(1); l = renew(l);",
+        "let mut g = Group[u64](2); g = Group[u64](4); wait(g);",
+    ],
+)
+def test_assigning_over_a_linear_value_still_held_would_lose_it(body):
+    """Each place still holds its first value when the second lands: a local, a field, a record holding one, a local
+    whose consumer is deferred, and a group. `l = renew(l)` consumes the old value, and the new one is then dropped."""
+    said = refused("E-LINEAR-LEAK", LEASES + "fn main() -> i32 { let mut c:u64 = 0; " + body + " return 0; }")
+    assert said["message"].startswith("Assigning over") != body.endswith("l = renew(l);"), said["message"]
+
+
+def test_a_borrow_or_a_generic_instance_never_assigns_over_a_linear_value():
+    refused("E-LINEAR-LEAK", LEASES + "fn reset(l:rw<Lease>) { l = open(0); }")
+    put = "fn put[T](slot:rw<T>, v:T) { slot = v; }\n"
+    refused("E-LINEAR-LEAK", LEASES + put + "fn main() -> i32 { let mut c:u64 = 0; let mut l = open(1);"
+            " put(l, open(2)); close(l, c); return 0; }")  # fmt: skip
+    compile_source(put + "fn main() -> i32 { let mut x:u64 = 1; put(x, 2); return i32(x); }")
+
+
+RENEWED = """
+fn grow(b:Buf[u8]) -> Buf[u8] = b;
+fn main() -> i32 {
+  let mut c:u64 = 0;
+  let mut l = open(1);
+  l = renew(l);
+  if l.id == 2 { l = renew(l); }
+  let mut n:u64 = 0;
+  while n < 2 { l = renew(l); n += 1; }
+  let mut h = Holder(open(7), 0);
+  let mut spare = open(8);
+  swap(h.lease, spare);
+  h.uses = 1;
+  close(spare, c);
+  close(l, c);
+  let Holder(held, uses) = h;
+  close(held, c);
+  let mut b = Buf[u8](4);
+  b = grow(b);
+  b[3] = 9;
+  let kept = b;
+  if c != 70508 || kept[3] != 9 { return 1; }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_a_value_the_right_side_consumes_is_replaced_and_each_lease_closes_once(tmp_path, cxx):
+    """`l = renew(l)` in a line, a branch and a loop, a lease swapped out of a record's field and closed, and an owner
+    moved and assigned back by `b = grow(b)`, which was refused as moved before. `c` records every close in order:
+    7, then 5 (lease 1 renewed four times), then 8."""
+    round_trips(LEASES + RENEWED)
+    cpp = compile_source(LEASES + RENEWED)[0]
+    done = run(tmp_path, cpp, *SANITIZED, *WARNINGS, cxx=cxx, env={"ASAN_OPTIONS": "detect_leaks=1"})
+    assert done.returncode == 0, done.stderr[-3000:]
 
 
 ONE = """
@@ -329,6 +404,44 @@ def test_owned_dynamic_values_hold_heterogeneous_owners(tmp_path):
 )
 def test_owned_dynamic_rejections(code, tail):
     refused(code, DYNAMIC + tail)
+
+
+FRAME = """trait Frame { fn size(self:ro<Self>) -> u64; }
+struct Packet { payload:u32; }
+impl Frame for Packet { fn size(self:ro<Packet>) -> u64 = u64(self.payload) + 5; }
+struct Holder { d:Dyn[Frame]; }
+fn pass(d:Dyn[Frame]) -> Dyn[Frame] = d;
+fn loud(d:Dyn[Frame]) -> Dyn[Frame] { println("handed on"); return d; }
+"""
+# Each receiver is an expression that moves the value it calls through, so running it twice lends an empty Dyn.
+RECEIVERS = {
+    "call": "let q = Dyn[Frame](Packet(40));\n  let s = pass(q).size();",
+    "printing call": "let q = Dyn[Frame](Packet(40));\n  let s = loud(q).size();",
+    "take": "let mut h = Holder(Dyn[Frame](Packet(40)));\n  let s = take(h.d).size();",
+}
+
+
+@pytest.mark.parametrize("sanitizer", [None, "address"], ids=["plain", "address"])
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+@pytest.mark.parametrize("receiver", RECEIVERS.values(), ids=RECEIVERS.keys())
+def test_a_dynamic_call_runs_its_receiver_once(tmp_path, receiver, cxx, sanitizer):
+    """The receiver was written into both the table lookup and the object pointer, so it ran twice: `loud` printed
+    twice, and the second run found the value moved and trapped."""
+    source = FRAME + "fn main() -> i32 {\n  " + receiver + "\n  if s != 45 { return 1; }\n  return 0;\n}\n"
+    path = tmp_path / "receiver.cairn"
+    path.write_text(source)
+    done = subprocess.run([artifact(path, cxx, kind="exe", sanitizer=sanitizer)], capture_output=True, text=True,
+                          timeout=120)  # fmt: skip
+    assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
+    assert done.stdout == ("handed on\n" if "loud" in receiver else "")
+
+
+def test_a_dynamic_call_through_a_local_names_it_in_place():
+    """A local has no effect to repeat, so its call reads as before; anything else is bound once."""
+    local = FRAME + "fn main() -> i32 { let q = Dyn[Frame](Packet(40)); return i32(q.size()) - 45; }"
+    assert "v_q.view().vt->m0(v_q.view().self)" in compile_source(local)[0]
+    called = compile_source(FRAME + "fn main() -> i32 {\n  " + RECEIVERS["printing call"] + "\n  return 0;\n}")[0]
+    assert called.count("cf_loud(std::move(v_q))") == 1
 
 
 def test_an_empty_owned_dynamic_value_traps_when_lent(tmp_path):

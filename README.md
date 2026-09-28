@@ -1,6 +1,8 @@
 # CAIRN
 
-CAIRN is a systems language whose compiler refuses data races before a program runs, including races between the threads of a GPU kernel. It compiles to C++20 for the CPU and to CUDA for NVIDIA GPUs. It is designed to be written by AI agents.
+CAIRN is a systems language for the CPU and NVIDIA GPUs, designed to be written by AI agents. It compiles to C++20 and CUDA.
+
+Its compiler refuses data races before a program runs, including races between the threads of a GPU kernel. In C++ and CUDA a race is found at run time, if at all: by a sanitizer watching a run that reaches it, or as a wrong answer. In CAIRN the program does not compile, and the refusal says which threads conflict and where the fix goes, which an agent can act on without running anything.
 
 In the kernel below, each block of 256 threads reverses one tile of an array through shared memory, the fast memory that the threads of one block share:
 
@@ -29,11 +31,11 @@ error[E-COOP-UNORDERED]: thread t = 255 reads tile[0] at line 8, which thread t 
   = note: the cooperative card states this rule: cairn rules E-COOP-UNORDERED
 ```
 
-A region written `blocks ... threads ...` is a cooperative region: CAIRN's form of a CUDA kernel whose threads share memory and meet at barriers. The compiler checks every block of a launch as well. If every block writes `out[t]`, two blocks write the same element, and the kernel is refused with `E-COOP-GLOBAL`.
+A region written `blocks ... threads ...` is a cooperative region: CAIRN's form of a CUDA kernel whose threads share memory and meet at barriers. The compiler also checks the blocks of a launch against each other. If every block wrote `out[t]`, two blocks would write the same element, and the kernel would be refused with `E-COOP-GLOBAL`.
 
 ## What the compiler refuses
 
-The compiler refuses each of these before the program runs, and names each with a stable diagnostic code:
+Each of these is refused before the program runs, under a stable diagnostic code:
 
 - two threads of a block touching one shared element between barriers, where either of them writes (`E-COOP-CONFLICT`, `E-COOP-UNORDERED`, `E-COOP-REUSE`)
 - a barrier or warp operation that some thread of the block does not reach (`E-COOP-BARRIER`, `E-COOP-WARP`)
@@ -41,7 +43,9 @@ The compiler refuses each of these before the program runs, and names each with 
 - touching data a running task still holds (`E-LEASED`), using a value after it moved (`E-MOVED`), passing one array as two mutable borrows (`E-ALIAS`)
 - a function doing something its signature does not allow, such as allocating memory or spawning a task inside `pure` code (`E-EFFECT-CEILING`)
 
-Integer overflow, division by zero and indexing out of bounds are checked at run time instead, by guards the compiler writes into the program. A failed guard stops the program, on the CPU and inside a GPU kernel, before it can corrupt memory.
+Integer overflow, division by zero and out-of-bounds indexing are checked at run time instead, by guards the compiler writes into the program and leaves out only where it can show they cannot fail. A failed guard aborts the program before the operation it guards.
+
+Inside a GPU kernel a failed guard traps the kernel and poisons the device context, so nothing queued after it runs and no copy can read what the kernel wrote. A CAIRN program then aborts at its next wait ([devices.md](docs/devices.md#one-wait-or-none)). That device path is tested under `--emulate`, and a guard failing on a GPU has not been run since 0.8.3.
 
 ## The same rules on the CPU
 
@@ -79,9 +83,38 @@ fn saxpy(n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device, y:ro<f32>[n]@devic
 }
 ```
 
+## The rest of the language
+
+- Checked integer arithmetic, explicit conversions, and wrapping forms that say so by name.
+- Records, sums with exhaustive `match`, `try` for errors, generics with trait and kind bounds, closures that never escape, modules and projects with vendored dependencies.
+- Owners that move and are released at scope exit, `linear` values consumed exactly once, `take`, `swap` and `defer`.
+- Tasks with leases down to one field, task groups, I/O rings, atomics and mutexes.
+- `parallel`, `reduce`, `compact` and `scan` on host threads or CUDA lanes, plans that change how a region runs without changing its result, and placement in the type (`@host`, `@pinned`, `@unified`, `@device`).
+- Cooperative regions with shared memory, barriers, warp shuffles and pipeline stages, checked by the phase rule; layouts with checked coverage; fragments for the tensor cores.
+- Alternative implementations of a function, chosen by a plan, with the reference as the fallback.
+- Storage floats (`f16`, `bf16`, `f8e4m3`, `f8e5m2`) with one stated rounding, `quantize`, and `derive grad`, which writes a function's derivative in reverse mode as ordinary checked code.
+- Test blocks and `assert` in the language, and a standard library written in CAIRN: collections, text, formatting, files, sockets, `zlib`, images and 2D drawing.
+- `extern` with mandatory effects behind `unsafe`, typed inline assembly for x86-64, AArch64 and PTX, vendored C++ and CUDA as foreign implementations, a freestanding AArch64 target, and a generated C header for calling a CAIRN library from C or C++.
+
+The language is at 1.1.0, and a later major version may still change it.
+
+## Written for agents, and by them
+
+The compiler's answers are meant to be acted on without reading the manual. One `cairn check` reports every independent error, each with a stable code, a line and column, a message that says which rule was broken, and the rule card that states the rule, which `cairn rules CODE` prints. The first error is always the one a check that stops at the first error would give.
+
+Every function has an inferred effect row, the list of what it may do, such as `alloc`, `spawn`, `io`, `write:out` or `trap`. `cairn doc` prints it, and a signature can cap it, so an edit that adds an allocation where none was allowed is refused.
+
+Two commands answer what agents in the [1.1 evaluation](#agents) spent requests looking for. `cairn find` names the functions to call, given words or the types of the values in hand, and `cairn run --sanitize address` or `--sanitize thread` builds and runs a program under that sanitizer in one command.
+
+A slow function stays as the reference, and a faster version is written beside it as an implementation: `fn g(...) implements f when n % 4 == 0 { ... }`. `cairn validate` tests it against the reference on generated edge cases, and `cairn tune` chooses among validated implementations and plans, which change how a region runs without changing its result, within compile and run budgets. `cairn diff OLD NEW` gives each function of two versions a class: identical code; SMT-equivalent, where Z3 found no input that tells the two apart within the fragment it models; changed, with an input that shows the difference; or unknown, which is never counted as unchanged.
+
+The compiler's edit, plan and implementation sessions reach agents without a shell through `cairn mcp`, and the repository is a Claude Code plugin that adds the skill, the `cairn` command, the language server and those tools. After an edit of one function's body, the sessions and the language server check that body alone against the record the last check kept, then run the rules that span the whole program again, and a differential test requires the same answer as a whole check.
+
+The aim is that an agent reaches a correct program in fewer tokens than in C++ or Rust, and a fast one sooner, without the compiler giving up a check. That is not established, and so far CAIRN has cost agents more ([the evidence](#agents)). AI agents (Claude Code) also wrote most of CAIRN's compiler, runtime, tests and documentation, working to one maintainer's design, under the rules in [AGENTS.md](AGENTS.md).
+
 ## Install
 
-You need Linux on x86-64 or AArch64, Python 3.11 or later, and GCC 11 or later or Clang 13 or later. The compiler has no third-party Python dependency.
+You need Linux on x86-64 or AArch64, Python 3.11 or later, and GCC 11 or later or Clang 13 or later. The compiler has no third-party Python dependency. CAIRN is installed from a checkout: it is not on PyPI, and there is no package registry for its libraries.
 
 ```sh
 git clone https://github.com/SamMausberg/cairn && cd cairn
@@ -97,7 +130,7 @@ claude plugin marketplace add SamMausberg/cairn
 claude plugin install cairn@cairn
 ```
 
-Each optional tool turns on more checks, and CAIRN never downloads one: `nvcc` from CUDA 12.9 or later for device code, `libz3` for `verify` and `diff`, Lean 4 for `proofs/`, and `qemu-system-aarch64` for the freestanding AArch64 target, which runs with no operating system.
+Each optional tool turns on more checks, and CAIRN never downloads one: `nvcc` from CUDA 12.9 or later for device code, `libz3` for `verify` and `diff`, Lean 4 for `proofs/`, and `qemu-system-aarch64` for the freestanding AArch64 target, which needs no operating system and has so far run only under QEMU on an AArch64 host.
 
 ## Run
 
@@ -111,25 +144,6 @@ cairn run examples/apps/kvstore    # a storage engine that recovers from a torn 
 
 [docs/guide.md](docs/guide.md) goes from a fresh checkout to twelve complete programs, and [docs/tools.md](docs/tools.md) covers every command.
 
-## Built for agents, and with them
-
-An agent writing CAIRN gets feedback it can act on without reading the manual:
-
-- One `cairn check` reports every independent error. Each has a stable code, a line and column, a message that says which rule was broken, and the name of the rule card that states the rule, which `cairn rules CODE` prints. The first error is always the one a check that stops at the first error would give.
-- Every function has an inferred effect row: the list of what it may do, such as `alloc`, `spawn`, `io`, `write:out` or `trap`. `cairn doc` prints it, and a signature can cap it, so an edit that adds an allocation where none was allowed is refused.
-- A slow function stays as the reference, and a faster version is written beside it as an implementation: `fn g(...) implements f when n % 4 == 0 { ... }`. `cairn validate` tests it against the reference on generated edge cases. `cairn tune` chooses among validated implementations and plans, which change how a region runs without changing its result, within compile and run budgets.
-- `cairn diff OLD NEW` gives each function a class: identical code; SMT-equivalent, where Z3 found no input that tells the two apart within the fragment it models; changed, with an input that shows the difference; or unknown, which is never counted as unchanged.
-- The compiler's edit, plan and implementation sessions reach agents without a shell through `cairn mcp`, and the repository is a Claude Code plugin that adds the skill, the `cairn` command, the language server and those tools. After an edit of one function's body, the sessions and the language server check that body alone against the record the last check kept, then run the rules that span the whole program again. A differential test requires the same answer as a whole check.
-- `cairn run --sanitize address` or `--sanitize thread` builds the program under that sanitizer and runs it in one command.
-
-CAIRN is also built with agents. AI agents (Claude Code) wrote most of its compiler, runtime, tests and documentation, working to one maintainer's design. The repository's rules for agents are in [AGENTS.md](AGENTS.md).
-
-Whether CAIRN makes agents cheaper or more successful than C++ or Rust is not established, and on the evidence so far it costs them more. The preregistered v1.0 benchmark, run before the plugin existed, gave `claude-sonnet-5` ten small tasks in each language. Every subject solved its task, and CAIRN subjects used 11.6 times the tokens of C++ subjects, most of it reading documentation ([results](evidence/v1_0/ai_benchmark/RESULTS.md)).
-
-The 1.1 evaluation with the plugin stopped early, at 54 of its 156 subjects. Again every subject solved its task, and per solved task the plugin arm used 5.5 times C++'s tokens and the documentation arm 8.2 times ([partial results](evidence/v1_1/ai_eval/RESULTS.md)). The two runs differ in design, so the difference between them is not a measured improvement.
-
-[Where those tokens went](evidence/v1_1/friction/README.md): every CAIRN subject's first program that type-checked was correct. The cost was reading before writing, refusals, and finding the build with the sanitizers. Release 1.1.0 fixes the costliest of those causes, and no model has been run on it yet.
-
 ## GPU work without a GPU
 
 Most of the cycle of writing, testing and tuning a kernel runs on a machine with no GPU:
@@ -141,9 +155,9 @@ cairn predict examples/cooperative/gpu.toml --card all                     # a t
 cairn tune examples/cooperative/tuned.toml --symbol row_totals --card h100 --at rows=64,cols=1e5   # candidates compiled for sm_90a, priced on an H100
 ```
 
-`--emulate` judges the program against a real device target, such as `sm_120`, and runs all of its device work on host threads: regions, `reduce`, `compact` and `scan`, cooperative regions and transfers. `cairn test` and `cairn validate` then check a kernel's logic without a GPU, and the host build can run under the address and thread sanitizers. An emulated run checks correctness on host threads. It is not a run on the device, and it measures no time. What the host cannot run as the device would, such as a vendored CUDA kernel, is refused with `E-EMULATE`.
+`--emulate` judges the program against a real device target, such as `sm_120`, and runs all of its device work on host threads: regions, `reduce`, `compact` and `scan`, cooperative regions and transfers. `cairn test` and `cairn validate` then check a kernel's logic without a GPU, and the host build can run under the address and thread sanitizers. Every device example that `--emulate` accepts gives the same results under it as its host build or reference loop, under Clang and GCC ([evidence/v1_1/emulation](evidence/v1_1/emulation/README.md)). An emulated run is still a run on host threads: it is not a run on the device, and it measures no time. What the host cannot run as the device would, such as a vendored CUDA kernel, is refused with `E-EMULATE`.
 
-`cairn predict` prices device work from the published specifications of eight GPUs, from the A100 to the B200 and the RTX 5090. `cairn tune` compiles its candidates for that GPU's target and reads their registers and shared memory from ptxas, with nothing launched. These are predictions from datasheets and compiler reports. None of the eight cards has been checked against a measurement.
+`cairn predict` prices device work from the published specifications of eight GPUs, from the A100 to the B200 and the RTX 5090. `cairn tune` compiles its candidates for that GPU's target and reads their registers and shared memory from ptxas, with nothing launched. These are predictions from datasheets and compiler reports, and none of the eight cards has been checked against a measurement.
 
 A device library's C header gives each function whose effects the host cannot observe a `cq_NAME(stream, ...)` entry. The entry queues the function's work on the caller's CUDA stream and returns without waiting, so PyTorch or any CUDA program can call it or capture it in a CUDA graph. `cairn export --harness sol-execbench|gpumode|kernelbench` packages a function as a submission for that benchmark, bound to PyTorch's current stream. It writes the files and prints the command, and it never submits or runs anything.
 
@@ -162,63 +176,41 @@ Each demo is one command from a fresh checkout, and `tests/projects/test_demos.p
 
 The demo agents are scripted. What the host, the compiler, Z3 and the programs report is computed on each run.
 
-## Limitations and what you trust
+## The evidence so far
 
-CAIRN 1.1 was developed and measured on one machine, and a later major version may still change the language.
+CAIRN keeps eight kinds of claim apart: accepted, typed, native-built, finite-tested, sanitizer-clean, SMT-equivalent, Lean-checked and benchmarked. [verification.md](docs/verification.md#the-eight-claims) defines each, and a result supports only the claim it names. Most of 1.1.0's records were taken on one x86-64 machine under WSL2.
 
-The compiler is not proved correct. From parser to C++ emitter it is about 15,300 lines of Python (`src/cairn/compiler`), and the runtime is about 4,300 lines of C++ headers (`src/cairn/runtime`). The Lean proofs cover models written by hand beside that code. Differential tests compare those models with the checker on generated programs, which shows that they agree on samples and does not show that the Python implements the model.
+### Agents
 
-| You trust | For | Checked by |
-|---|---|---|
-| The Python parser, checker and emitter | every program | about 5,900 tests, rejection tables from nine adversarial reviews, differential runs against the Lean models |
-| The runtime headers | owners, threads, the lane pool, rings, device calls | native runs under Clang and GCC with the address, leak, undefined-behaviour and thread sanitizers |
-| Clang or GCC, and nvcc | native and device code | nothing in this repository |
-| `unsafe` blocks, `extern` declarations, typed `asm` and foreign implementations | the foreign boundary, MMIO, inline assembly, vendored C++ and CUDA | the effects and contracts they declare, taken as written; a foreign implementation is also tested against its reference |
-| Z3 and the SMT translator | `cairn verify` and `cairn diff` | tests of the translator; anything outside the modeled fragment is `unknown` |
-| The Lean kernel | the proofs in `proofs/` | an axiom audit, which in the 1.1.0 record found `propext` and `Quot.sound` and nothing else |
+Two evaluations have measured what CAIRN costs an agent, the second only in part, and in both it cost more than C++. The preregistered 1.0 benchmark, run before the plugin existed, gave `claude-sonnet-5` ten small systems tasks in each of CAIRN, C++ and Rust, twice over. Every subject solved its task, so the run cannot tell the languages apart by tasks solved. CAIRN subjects, who had never seen the language and read its documentation inside the budget, used 11.6 times the tokens of C++ subjects and 12.3 times those of Rust subjects ([results](evidence/v1_0/ai_benchmark/RESULTS.md)).
 
-Device code has run on two GPUs: a rented GH200 for the 0.8.0 to 0.8.2 records, and since 0.8.3 an RTX 5070 Ti under WSL2. In the session that released 1.1.0, 48 of the suite's 52 tests that run device code passed on the RTX 5070 Ti. Three trap on purpose and were left out, and one needs Compute Sanitizer, which cannot instrument that GPU under WSL2.
+The 1.1 evaluation added the plugin as an arm of its own and stopped early, at 54 of its 156 subjects. Again every subject solved its task, and per solved task the plugin arm used 5.5 times C++'s tokens and the documentation arm 8.2 times ([partial results](evidence/v1_1/ai_eval/RESULTS.md)). The two runs differ in design, so the difference between them is not a measured improvement.
 
-The tests that passed ran device plans, wide loads and stores, atomics, cooperative regions with their finish, votes and pipeline stages, multiplies on tensor cores that index their tiles through layouts in code, the device `scan` and `compact`, `cq_` entries in a CUDA graph and foreign CUDA kernels, each checked against the host or a reference ([evidence/v1_1/gpu](evidence/v1_1/gpu/README.md)). Storage floats, gradients and asserts in a lane, and a guard that fails on the device, have not run on a GPU.
+[The transcripts of that run](evidence/v1_1/friction/README.md) show where the tokens went. Every CAIRN subject's first program that type-checked was correct. Learning the language before writing took 80 percent of the documentation arm's tokens and 67 percent of the plugin arm's, against 17 percent in C++. The rest went to refusals, several of them of correct programs, and to testing, including finding the build with the sanitizers.
 
-What else has not been validated:
+Release 1.1.0 changed the causes that cost the most, and on the 69 programs those subjects checked it gives 16 refusals where the compiler before those changes gave 30. No model has been run on 1.1.0, so nothing shows that agents now spend less. All of this is one model family on small tasks, and that family also wrote much of the language and the tasks.
 
-- `cairn predict` prices the device side from published specifications. No device prediction has been checked against a measurement.
-- `cairn validate` is finite testing on generated inputs. The reference is an independent algorithm, but it goes through the same compiler.
-- Host performance was measured on one x86-64 machine with 16 threads against plain C++, OpenMP and oneTBB at equal guards. Device kernels were timed on the RTX 5070 Ti alone, against plain CUDA written by hand for the same computations ([evidence/v1_1/device_perf](evidence/v1_1/device_perf/README.md)). Nothing is claimed against tuned C++ or CUDA.
-- SMT equivalence covers a fragment. An owner inside a record or an array, concurrency, device memory, the foreign boundary, storage floats and loops it cannot bound are `unknown`, and `unknown` is never reported as success.
-- The AI evidence is one model family on small tasks, and that model also wrote much of the language and the tasks.
-- CAIRN runs on Linux only. There is no package registry, and the package is not on PyPI. The freestanding AArch64 target runs only under QEMU on an AArch64 host.
+### Correctness
 
-## What is established
+The compiler is not proved correct. The Lean proofs in `proofs/` cover models written by hand beside it: the ownership and lease calculus, the phase rule of cooperative regions, the host lane pool, the rule for leaving a guard out, layouts and the loop `compact` lowers to. Differential tests compare those models with the Python checker on generated programs, which shows that they agree on samples and not that the checker implements the model.
 
-| Claim | Kind | Where |
-|---|---|---|
-| An accepted program of the ownership and lease calculus has no use after move or free, double free, leaked task, aliased argument or data race, under any interleaving, and never gets stuck. | Lean-checked model | `proofs/Cairn/Ownership/` |
-| Two threads of an accepted cooperative region never make conflicting accesses between barriers, in any interleaving, and the result does not depend on thread order. | Lean-checked model, differential-tested | `proofs/Cairn/Cooperative.lean`, `evidence/v1_0/cooperative` |
-| The lane pool runs each index of a host region once and returns only when no worker is inside. | Lean-checked model | `proofs/Cairn/Region.lean` |
-| A guard the compiler leaves out cannot fail where the checker's facts hold. An independent audit decides again, from those facts alone, whether each guard may be left out. Builds that keep every guard and builds that leave guards out agreed on 174,816 cases per compiler. | Lean-checked rule, audited, finite-tested | `proofs/Cairn/Facts.lean`, `evidence/v1_0/guards` |
-| A declared layout covers its tile exactly once, so writes through it by distinct threads never collide. | Lean-checked model | `proofs/Cairn/Layout.lean` |
-| `compact` lowers to the collector loop, whose one store has no bounds check. The loop's seventeen arithmetic certificates hold, and a model of the loop stores only in bounds. | Lean-checked | `proofs/Cairn/Collector.lean` |
-| A host `parallel` region runs level with OpenMP and oneTBB at equal guards and worker counts. | Benchmarked, one machine | `evidence/v1_0/bench` |
-| `cairn predict` ranks host timings that its calibration never saw with a Kendall tau of 0.87 to 0.92, at a median error of 28 to 44 percent. | Benchmarked, one machine | `evidence/v1_0/perf_model` |
-| Every device example that `--emulate` accepts gives the same results under it as its host build or reference loop, under Clang and GCC. Emulated builds are clean under the address, undefined-behaviour and leak sanitizers, and emulated cooperative regions under the thread sanitizer. | Finite-tested on the host | `evidence/v1_1/emulation` |
-| After an edit of one function's body, a check from the record the last check kept gives exactly the answer of a whole check. The suite edits the first, middle and last body of every example, and `CAIRN_INCREMENTAL_EVERY=1` edits every body. | Finite-tested | `tests/verification/test_incremental.py` |
+The suite builds accepted programs under Clang and GCC and runs them under the address, leak, undefined-behaviour and thread sanitizers. Adversarial reviews have found accepted programs that should have been refused, and each one found is kept as a test in `tests/soundness/`. [verification.md](docs/verification.md#what-you-trust) says what you trust and what checks each part, and what each proof, model and test leaves out.
 
-[docs/verification.md](docs/verification.md) says what each proof, model and test covers and what it leaves out.
+SMT equivalence covers a fragment of the language that leaves out, among other things, concurrency, device memory, the foreign boundary and storage floats. What falls outside it is `unknown`, which is never reported as success. `cairn validate` is finite testing on generated inputs, against a reference compiled by the same compiler.
 
-## The language
+### Devices
 
-- Checked integer arithmetic, explicit conversions, and wrapping forms that say so by name.
-- Records, sums with exhaustive `match`, `try` for errors, generics with trait and kind bounds, closures that never escape, modules and projects with vendored dependencies.
-- Owners that move and are released at scope exit, `linear` values consumed exactly once, `take`, `swap` and `defer`.
-- Tasks with leases down to one field, task groups, I/O rings, atomics and mutexes.
-- `parallel`, `reduce`, `compact` and `scan` on host threads or CUDA lanes, plans that change how a region runs without changing its result, and placement in the type (`@host`, `@pinned`, `@unified`, `@device`).
-- Cooperative regions with shared memory, barriers, warp shuffles and pipeline stages, checked by the phase rule; layouts with checked coverage; fragments for the tensor cores.
-- Alternative implementations of a function, chosen by a plan, with the reference as the fallback.
-- Storage floats (`f16`, `bf16`, `f8e4m3`, `f8e5m2`) with one stated rounding, `quantize`, and `derive grad`, which writes a function's derivative in reverse mode as ordinary checked code.
-- Test blocks and `assert` in the language, and a standard library written in CAIRN: collections, text, formatting, files, sockets, `zlib`, images and 2D drawing.
-- `extern` with mandatory effects behind `unsafe`, typed inline assembly for x86-64, AArch64 and PTX, vendored C++ and CUDA as foreign implementations, a freestanding AArch64 target, and a generated C header for calling a CAIRN library from C or C++.
+Device code has run on two GPUs: a rented GH200 for the 0.8.0 to 0.8.2 records, and since 0.8.3 an RTX 5070 Ti under WSL2. In the session that released 1.1.0, 48 of the suite's 52 tests that run device code passed on the RTX 5070 Ti, each checking its results against the host or a reference. They ran device plans, wide loads and stores, atomics, cooperative regions with their finish, votes and pipeline stages, tensor-core multiplies that index their tiles through layouts in code, the device `scan` and `compact`, `cq_` entries in a CUDA graph and foreign CUDA kernels ([evidence/v1_1/gpu](evidence/v1_1/gpu/README.md)).
+
+The three tests that trap on purpose were left out. The fourth needs Compute Sanitizer, which cannot instrument that GPU under WSL2, so no Compute Sanitizer tool has checked device code. Storage floats, gradients and asserts in a lane have not run on a GPU.
+
+### Performance
+
+In the preregistered CPU suite, on one x86-64 machine with 16 threads, host `parallel` regions ran level with OpenMP and oneTBB at equal guards and worker counts. A float dot product, which CAIRN folds in the written order on one thread, ran at 0.4 to 0.5 times the speed of theirs ([evidence/v1_0/bench](evidence/v1_0/bench/README.md)).
+
+Device kernels were timed on the RTX 5070 Ti alone, against CUDA written by hand for the same computations. Through the `cq_` entry, saxpy ran level with the hand-written kernel, and a reduction with 16-byte loads and a transpose within 3 percent. A layer norm, a cooperative stencil and a reduction with scalar loads took 11 to 26 percent longer, for the checked index arithmetic in their loops ([evidence/v1_1/device_perf](evidence/v1_1/device_perf/README.md)). Nothing is claimed against tuned C++ or CUDA.
+
+On the same x86-64 machine, `cairn predict` ranked host timings its calibration never saw with a Kendall tau of 0.87 to 0.92, at a median error of 28 to 44 percent ([evidence/v1_0/perf_model](evidence/v1_0/perf_model/README.md)). No device prediction has been checked against a measurement.
 
 ## Documentation and repository
 

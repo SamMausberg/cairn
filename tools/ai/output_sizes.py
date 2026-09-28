@@ -88,6 +88,7 @@ COMMANDS = [
     ("check, three refusals, at a terminal", "check", "three", ["check", "."], ""),
     ("build", "build", "accepted", ["build", "."], ""),
     ("run", "build", "accepted", ["run", "."], EXAMPLE),
+    ("run, input ends early", "build", "accepted", ["run", "."], EXAMPLE[:5]),
     ("run --sanitize address", "build", "accepted", ["run", ".", "--sanitize", "address"], EXAMPLE),
     ("test, passing", "build", "accepted", ["test", "."], ""),
     ("test, failing", "build", "failing", ["test", "."], ""),
@@ -99,6 +100,8 @@ COMMANDS = [
     ("explain --symbol count", "other", "accepted", ["explain", ".", "--symbol", "count"], ""),
     ("state", "other", "accepted", ["state", "."], ""),
     ("inspect --symbol count", "other", "accepted", ["inspect", ".", "--symbol", "count"], ""),
+    ("find, by words", "other", "accepted", ["find", "parse", "integer"], ""),
+    ("find, by types", "other", "accepted", ["find", "--takes", "rw<Input>", "--returns", "u64"], ""),
 ]
 REPLAY = "check, the 69 programs of the 1.1 replay"
 
@@ -134,7 +137,18 @@ def verdicts(r: dict) -> str:
     return f"{len(r['records'])} checks, {sum(c['status'] in ('typed', 'rejected') for c in r['records'])} verdicts"
 
 
+def called(r: dict) -> list[str]:
+    """The functions a `find` answer names, each as its hit line begins."""
+    return [hit.split("(")[0].split("[")[0] for hit in r["hits"]]
+
+
 status, symbol = itemgetter("status"), itemgetter("symbol")
+text = itemgetter("text")
+# A run whose input ends after one value: the starter's assert, then how the program ended.
+EARLY = [
+    "assertion failed at src/main.cairn:47: input ended early",
+    "error: solution was stopped by SIGABRT: a guard failed, or an allocation passed the 1024 MiB cap",
+]
 THREE = "E-FIELD E-UNBOUND E-TYPE-MISMATCH"  # the three mistakes, in the order a check reports them
 OWN = ["count", "main", "next_token", "next_u64", "read_input"]  # the functions the reference declares
 # What each case says besides its size, and what it must say: a case that turned into a short error, a refusal of the
@@ -147,8 +161,9 @@ SAYS: dict[str, tuple[Callable[[dict], Any], Any]] = {
     "check, three refusals": (verdict, THREE),
     "check, three refusals, at a terminal": (verdict, THREE),
     "build": (status, "native-built"),
-    "run": (lambda r: (r["exit_code"], r["stdout"]), (0, ANSWER)),
-    "run --sanitize address": (lambda r: (r["exit_code"], r["stdout"], r["sanitizer"]), (0, ANSWER, "address")),
+    "run": (text, ANSWER),  # the program's own output, and nothing else when it exits 0
+    "run, input ends early": (lambda r: r["text"].splitlines(), EARLY),
+    "run --sanitize address": (text, ANSWER),
     "test, passing": (blocks, (1, 0)),
     "test, failing": (blocks, (1, 1)),
     "test, failing, at a terminal": (lambda r: r["text"].split("\n")[0], "tests-not-passed: 1 of 2 tests failed"),
@@ -159,6 +174,8 @@ SAYS: dict[str, tuple[Callable[[dict], Any], Any]] = {
     "explain --symbol count": (explained, ("observed", ["count"])),
     "state": (status, "typed"),
     "inspect --symbol count": (symbol, "count"),
+    "find, by words": (called, ["std.text.parse_i64", "std.text.parse_u64", "std.text.parse_fixed"]),
+    "find, by types": (called, ["next_u64"]),
     REPLAY: (verdicts, "69 checks, 69 verdicts"),
     "mcp check, accepted": (verdict, "typed"),
     "mcp check, three refusals": (verdict, THREE),
@@ -171,6 +188,7 @@ SAYS: dict[str, tuple[Callable[[dict], Any], Any]] = {
     "mcp implementation_submit": (status, "validated"),
     "mcp state": (status, "typed"),
     "mcp state, again": (lambda r: r["protocol"], "cairn.state-delta/1"),
+    "mcp find, by types": (called, ["std.text.parse_i64"]),
 }
 
 
@@ -253,8 +271,8 @@ class Client:
 
 def mcp(cairn: Path, sources: dict[str, str]) -> dict[str, str]:
     """Each tool's definition, and a typical result of each tool: a check accepted and refused, an edit session with a
-    refused and an admitted body, a plan session, an implementation session, and the state asked for twice. Each
-    request is the one its packet says to send."""
+    refused and an admitted body, a plan session, an implementation session, the state asked for twice, and a function
+    found by the types it takes. Each request is the one its packet says to send."""
     out: dict[str, str] = {}
     with tempfile.TemporaryDirectory(prefix="cairn-outputs-") as tmp:
         project(Path(tmp) / "histogram", sources["accepted"])
@@ -281,6 +299,7 @@ def mcp(cairn: Path, sources: dict[str, str]) -> dict[str, str]:
             out["mcp implementation_submit"], _ = client.tool("implementation_submit", request=submitted)
             out["mcp state"], _ = client.tool("state", path="histogram")
             out["mcp state, again"], _ = client.tool("state", path="histogram")
+            out["mcp find, by types"], _ = client.tool("find", path="histogram", takes=["ro<u8>[n]"], returns="i64")
         finally:
             client.close()
     return out

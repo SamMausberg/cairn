@@ -242,6 +242,18 @@ def test_friction_costs():
     assert conversion["refusals"] == 14 and conversion["tokens"] > 0
 
 
+def test_find_sizes(tmp_path):
+    """What the 1.1 subjects read to learn each library fact, beside what `cairn find` answers for it: every answer
+    smaller than the median subject's reading, as evidence/v1_2/discovery says; a size, not an outcome."""
+    printed = tool("tools/ai/find_sizes.py", "--output", tmp_path / "sizes.json", timeout=600)
+    record = json.loads((tmp_path / "sizes.json").read_text())
+    assert printed.startswith(f"tokens: {record['unit']}") and len(record["lookups"]) == 171
+    answers = [(q, a) for q in record["questions"] for a in q["answers"]]
+    assert len(answers) == 11 and all(a["hits"] and a["mcp_tokens"] < q["median_per_subject"] for q, a in answers)
+    first = {a["query"].get("words"): a["first"][0] for _, a in answers}
+    assert first["parse integer"].startswith("std.text.parse_i64(") and first["read stdin"].startswith("std.io.")
+
+
 @needs_clang
 def test_friction_replay_and_judge():
     """One subject's versions, checked by this checkout and judged by the evaluation's hidden check."""

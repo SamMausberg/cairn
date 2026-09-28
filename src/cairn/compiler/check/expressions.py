@@ -379,6 +379,8 @@ def e_binary(c: Checker, e: Expr, expected: Type | None) -> Type:
         c.guard("division" if op in {"/", "%"} else "overflow")
         if op in {"+", "-"} and left == USIZE and not facts.discharge(c, e, "overflow", facts.arithmetic(c, e)):
             facts.discharge(c, e, "overflow", e.span is not None, ("span", e.span))  # What a part's guard covers.
+        elif op == "*" and left == USIZE:
+            facts.discharge(c, e, "overflow", facts.product(c, e))
     elif left.name not in FLOAT or op == "%":
         fail("E-OPERATOR", f"{op} not defined on {left.name}.", e)
     return left

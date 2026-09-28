@@ -306,8 +306,11 @@ class Compilation:
             try:
                 receipts = incremental.recheck(checker, walk, edit, self.source, self.sites, self.every,
                                                lambda c, walk: walked(Walked.of(c, walk)))  # fmt: skip
-            except Diagnostic:
-                raise
+            except Diagnostic as error:
+                if error.abandoned is None:
+                    raise
+                self.edit = ""  # a fault the walk met (E-INTERNAL): the whole check says whether it is the walk's
+                return None
             except Exception:  # an edit the walk does not take (Fallback), or a fault of the walk's own: check whole
                 self.edit = ""
                 return None

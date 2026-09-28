@@ -36,20 +36,26 @@ def allowed(ceiling: tuple[str, ...]) -> set[str]:
     return set(ceiling) | (PURE if "pure" in ceiling else set())
 
 
+def cyclic(c: Checker, n: str) -> bool:
+    """Whether `n` can call itself, directly or through what it calls: a call that may never return (`diverge`)."""
+    todo, visited = list(c.calls[n]), set()
+    while todo:
+        q = todo.pop()
+        if q == n:
+            return True
+        if q not in visited:
+            visited.add(q)
+            todo.extend(c.calls[q])
+    return False
+
+
 def fixed_point(c: Checker, names: set[str] | None = None) -> dict[str, set[str]]:
     """Least fixed point of E_f = L_f + divergence + renamed callee footprints; of `names` alone when given, a set
     that holds everything its members call."""
     effects = {n: set(es) for n, es in c.local_effects.items() if names is None or n in names}
     for n in effects:
-        todo, visited = list(c.calls[n]), set()
-        while todo:
-            q = todo.pop()
-            if q == n:
-                effects[n].add("diverge")
-                break
-            if q not in visited:
-                visited.add(q)
-                todo.extend(c.calls[q])
+        if cyclic(c, n):
+            effects[n].add("diverge")
     universe = {x for es in effects.values() for x in es if not x.startswith(("read:", "write:"))}
     borrowed = {f.name: {n for n, t in f.params if t.mode != "value"} for f in c.p.functions}
     # A recursive argument permutation can need more sweeps than there are functions.
