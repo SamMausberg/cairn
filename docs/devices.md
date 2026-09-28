@@ -171,7 +171,7 @@ fn block_sums(n:usize, x:ro<u64>[n], g:usize, out:rw<u64>[g]) {
 
 ### Shape, barriers and warp operations
 
-Each side names up to three binders, fastest first. In `blocks bx, by in gx, gy threads tx, ty in 32, 8`, thread `(tx, ty)` is thread `tx + 32 * ty` of its block. The grid's extents are any `usize` values. The thread extents are literals or constants whose product is a whole number of warps, from 32 to 1024 threads (`E-COOP-SHAPE`).
+Each side names up to three binders, fastest first. In `blocks bx, by in gx, gy threads tx, ty in 32, 8`, thread `(tx, ty)` is thread `tx + 32 * ty` of its block. The grid's extents are any `usize` values, and block `(bx, by)` is block `bx + gx * by` of the launch: each block finds its names with a multiply-high and two shifts by a divider the launch makes once per extent, not with a 64-bit division. The thread extents are literals or constants whose product is a whole number of warps, from 32 to 1024 threads (`E-COOP-SHAPE`).
 
 A `shared` array is declared directly in the body, with a constant length. Each one starts on a 128-byte boundary, so a tensor core fragment may load from it ([numerics.md](numerics.md#tensor-core-fragments)). A block's shared arrays hold at most 48 KiB together (`E-COOP-SHARED`).
 
