@@ -2,11 +2,13 @@
 leak and undefined-behaviour sanitizers.
 
 Growth moves every element through two views of one extent, so owners are exchanged and never copied, and a
-copyable element costs one unguarded pass; `extend_from` copies into one part. `read_to_end` sizes a regular file
-first, fills the room its Vec has spare, and doubles a full one.
+copyable element costs one unguarded pass; `extend_from` copies into one part, which the emitted C++ shows.
+`read_to_end` fills the room its Vec has spare and doubles a full one, and after its first read sizes the rest of a
+file, so a directory is refused by that read before its size is asked.
 """
 
 import pytest
+from test_established import body
 
 from cairn.compiler.cairnc import compile_source
 from emitted import watched
@@ -59,29 +61,18 @@ fn main() -> i32 {
 
 READ_TO_END = """
 import std.core (Result);
+import std.env (Args);
+import std.fs;
 import std.io (IoError, File);
-import std.sys;
 import std.text;
 import std.vec (Vec);
 
-fn name() -> Vec[u8] {
-  let mut p = vec.new[u8]();
-  vec.extend_from(p, 22, "/tmp/cairn-read-to-end");
-  unsafe { text.push_u64(p, u64(sys.getpid())); }
-  vec.push(p, 0);
-  return p;
-}
-
 // A regular file read from an offset onto a Vec that already holds three bytes.
 fn from_a_file(n:usize, path:ro<u8>[n]) -> Result[usize, IoError] {
-  {
-    let f = try io.open(n, path, io.TRUNCATE);
-    defer io.close(f);
-    let mut body = Buf[u8](100000);
-    for i in 0..100000 { body[i] = u8(i % 251); }
-    try io.write(f, body);
-  }
-  let f = try io.open(n, path, io.READ);
+  let mut body = Buf[u8](100000);
+  for i in 0..100000 { body[i] = u8(i % 251); }
+  try fs.write(path, body);
+  let f = try fs.open(path, io.READ);
   defer io.close(f);
   stack head:u8[10] = zeroed;
   try io.read_full(f, head);
@@ -90,10 +81,9 @@ fn from_a_file(n:usize, path:ro<u8>[n]) -> Result[usize, IoError] {
   let got = try io.read_to_end(f, into);
   if got != 99990 || into.len != 99993 || into.data[2] != 'c' { return Ok(1); }
   for i in 0..99990 { if into.data[3 + i] != u8((i + 10) % 251) { return Ok(2); } }
-  if vec.capacity(into) != into.len + 4096 { return Ok(3); }            // sized first: one allocation
+  if vec.capacity(into) != into.len + 1 { return Ok(3); }               // sized after one read: one allocation
   let again = try io.read_to_end(f, into);                              // at the end already
   if again != 0 || into.len != 99993 { return Ok(4); }
-  try io.remove(n, path);
   return Ok(0);
 }
 
@@ -119,12 +109,39 @@ fn from_a_pipe() -> Result[usize, IoError] {
   return Ok(0);
 }
 
+// A directory is refused by its first read, EISDIR, before its size is asked: ext4 gives its end as 2^63 - 1.
+fn from_a_directory(n:usize, dir:ro<u8>[n]) -> Result[usize, IoError] {
+  let f = try fs.open(dir, io.READ);
+  defer io.close(f);
+  let mut into = vec.new[u8]();
+  match io.read_to_end(f, into) {
+    Ok(got) => { return Ok(8); }
+    Err(e) => { if e.code != 21 || into.len != 0 { return Ok(9); } }
+  }
+  match fs.read(dir) {
+    Ok(bytes) => { return Ok(10); }
+    Err(e) => { if e.code != 21 { return Ok(11); } }
+  }
+  return Ok(0);
+}
+
+// Argument 1 is a directory the test made; the file goes inside it.
+fn run() -> Result[usize, IoError] {
+  let a = try env.args();
+  let lo = a.begin(1);
+  let hi = a.end(1);
+  let mut path = vec.new[u8]();
+  vec.extend_from(path, a.text.data[lo..hi]);
+  vec.extend_from(path, 5, "/data");
+  let mut step = try from_a_directory(a.text.data[lo..hi]);
+  if step == 0 { step = try from_a_file(path); }
+  if step == 0 { step = try from_proc(); }
+  if step == 0 { step = try from_a_pipe(); }
+  return Ok(step);
+}
+
 fn main() -> i32 {
-  let path = name();
-  match from_a_file(path) { Ok(step) => { if step != 0 { return i32(step); } } Err(_) => return 10; }
-  match from_proc() { Ok(step) => { if step != 0 { return i32(step); } } Err(_) => return 11; }
-  match from_a_pipe() { Ok(step) => { if step != 0 { return i32(step); } } Err(_) => return 12; }
-  return 0;
+  match run() { Ok(step) => { return i32(step); } Err(e) => { return 100 + e.code; } }
 }
 """
 
@@ -136,7 +153,20 @@ def test_a_vec_grows_by_doubling_and_moves_its_owners(tmp_path, cxx):
 
 
 @pytest.mark.parametrize("cxx", BOTH)
-def test_read_to_end_sizes_a_file_and_reads_a_pipe_whole(tmp_path, cxx):
+def test_read_to_end_sizes_a_file_after_a_read_and_refuses_a_directory(tmp_path, cxx):
     stdin = "".join(chr(97 + i % 26) for i in range(300000))
-    done = watched(tmp_path, compile_source(READ_TO_END)[0], cxx, "address,undefined", input=stdin)
+    (tmp_path / "files").mkdir()
+    done = watched(tmp_path, compile_source(READ_TO_END)[0], cxx, "address,undefined", input=stdin,
+                   args=[str(tmp_path / "files")])  # fmt: skip
     assert done.returncode == 0 and "Sanitizer" not in done.stderr, (done.returncode, done.stderr[-3000:])
+
+
+def test_growth_and_extend_from_guard_no_element():
+    """What the timings in evidence/v1_2/std rest on: main's `reserve` guarded both indexes of every swap and
+    `extend_from` every store (`cr::at`); now each takes its views as parts, and the loops index them bare."""
+    cpp = compile_source(GROWTH)[0]
+    for name in ("std_vec_reserve_u8", "std_vec_exchange_u8", "std_vec_extend_from_u8", "std_mem_copy_u8"):
+        assert body(cpp, name) and "cr::at(" not in body(cpp, name), name
+    for element in ("u8", "u64", "std_vec_Vec_u8"):  # an owner is exchanged, never copied
+        assert "std::swap(v_a[v_i], v_b[v_i]);" in body(cpp, f"std_vec_exchange_{element}"), element
+    assert body(cpp, "std_vec_extend_from_u8").count("cr::part(") == 1

@@ -12,7 +12,7 @@ import pytest
 from test_std_api import examples
 
 from cairn.compiler.cairnc import compile_source
-from emitted import SANITIZED, build
+from emitted import SANITIZED, build, refused
 
 BOTH = ["clang++", "g++"]
 ASAN = {**os.environ, "ASAN_OPTIONS": "detect_leaks=1"}
@@ -105,3 +105,22 @@ def test_the_word_count_in_std_maps_comment_runs(tmp_path, cxx):
     assert done.returncode == 0, done.stderr[-2000:]
     counts = Counter(data.split())
     assert done.stdout.decode().splitlines() == [f"{w.decode()} {counts[w]}" for w in sorted(counts)]
+
+
+@pytest.mark.parametrize("trait, member", [
+    ("Eq", "fn same(a:ro<SELF>, b:ro<SELF>) -> bool = true;"),
+    ("Ord", "fn less(a:ro<SELF>, b:ro<SELF>) -> bool = false;"),
+    ("Hash", "fn hash(value:ro<SELF>) -> u64 = 0;"),
+])  # fmt: skip
+def test_a_programs_own_impl_for_a_vec_overlaps_std_vecs(trait, member):
+    """std.vec implements Eq, Ord and Hash for every Vec whose elements do, so a program's own impl for a Vec is a second
+    one; a record that wraps a Vec, as examples/apps/wordfreq's Word does, still takes its own."""
+
+    def program(self_type: str) -> str:
+        own = f"impl {trait} for {self_type} {{ {member.replace('SELF', self_type)} }}\n"
+        return f"import std.core ({trait});\nimport std.vec (Vec);\nstruct Word {{ bytes:Vec[u8]; }}\n{own}" + (
+            "fn main() -> i32 { return 0; }\n"
+        )
+
+    refused("E-TRAIT-OVERLAP", program("Vec[u8]"))
+    assert compile_source(program("Word"))[0]
