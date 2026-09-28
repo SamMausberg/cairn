@@ -30,7 +30,7 @@ from ...projects.emulation import EVIDENCE as EMULATED
 from ...projects.target import DeviceTarget, resolve
 from .. import model
 from ..counts import Cost
-from ..profile import Profile, default
+from ..profile import Profile, card_target, default, pricing
 from ..regions import applied, identified
 from ..work import count
 from .objective import Objective, fastest, where
@@ -256,7 +256,7 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
     kinds |= {placed(r) for g in alternatives for r in count(p, checker, {g})[g].regions} & {"host", "device"}
     goal = Objective.over(sizes, weights, objective)
     placement = Placement(source, name, (p, checker))
-    target = (device_target or resolve(required=False)) if "device" in kinds else None
+    target = (device_target or resolve(card=card_target(pricing(chosen)))) if "device" in kinds else None
     on = targeted({name: c}, chosen, target)  # the card that prices device plans runs the target's code
     current: Key = (written(receipts[name].get("plan", {})), receipts[name].get("runs"))
     stages = radii(p, name) if "device" in kinds else ()
@@ -265,6 +265,8 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
     order = Order(given, (None, *alternatives) if alternatives else (), current[0])
     compiling = "device" in kinds and target is not None and spent.budget.compiles > 0 and available()
     timing = bool(measure) and ("device" not in kinds or device)
+    if timing and target is not None:  # a device timing is about the GPU here, before anything is compiled
+        target.here("A device timing")
     candidates = searched(placement, name, order, spent, goal, chosen, arch, 0.5 if compiling or timing else 1.0,
                           target)  # fmt: skip
     recorder = None

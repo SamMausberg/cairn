@@ -89,8 +89,9 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"predict", "tune"}, "--profile", {"type": Path, "help": "A cairn.machine/1 profile; default: the packaged one."}),
     ({"predict", "tune"}, "--card", {"metavar": "CARD", "help": "Price device work on this packaged device card, "
                                      "published figures that no run here measured (cairn cards lists them; h100 "
-                                     "names h100-sxm5). Without --device-target or a manifest target, the target is "
-                                     "the card's own. predict also takes all: a row per card."}),
+                                     "names h100-sxm5); default: the profile's device, else rtx-5070-ti. Without "
+                                     "--device-target or a manifest target, the target is the card's own, never the "
+                                     "GPU here. predict also takes all: a row per card."}),
     ({"predict"}, "--inspect", {"action": "store_true", "help": "Compile the device code for the device target and "
                                 "read each cooperative region's registers from ptxas; nothing runs."}),
     ({"build", "run", "export"}, "--out", {"type": Path}),
@@ -100,8 +101,9 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
                                        "body calls what a [foreign] source of the manifest defines."}),
     ({"build", "run", "test", "validate", "predict", "tune", "state", "export", "foreign"}, "--device-target", {"metavar": "SM", "help": "The GPU's compilation "
                                                                "target, as sm_120, sm_120f or sm_120a; default: "
-                                                               "[build] device_target, else the GPU nvidia-smi "
-                                                               "reports."}),
+                                                               "[build] device_target, else for predict and tune "
+                                                               "the target of the card that prices them, and for "
+                                                               "the rest the GPU nvidia-smi reports."}),
     ({"build", "run", "test", "validate"}, "--emulate", {"action": "store_true", "help": "Run device work on host "
                                                         "threads, judged against the device target: a host run for "
                                                         "correctness, never a device run or a timing."}),

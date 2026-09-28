@@ -74,6 +74,7 @@ def time_device(source: str, symbol: str, sizes: Mapping[str, float], *, fills: 
         raise ValueError(f"This process has made its {BUDGET} device runs; start another tuning round later.")
     text = program(source, symbol, sizes, fills, block_ns, blocks)
     chosen = target or resolve()
+    chosen.here("A device timing")  # a target from a card or a flag need not run on the GPU here
     with tempfile.TemporaryDirectory(prefix="cairn-device-time-") as scratch:
         directory = Path(scratch)
         timed, exe = write_program(directory, "timed.cu", text), str(directory / "timed")
