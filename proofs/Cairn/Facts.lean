@@ -172,7 +172,9 @@ def eval (ρ σ : Nat → Nat) : E → Option Nat
     | some a, some b => some (Nat.min a b)
     | _, _ => none
 
-/-- The value as one atom plus a constant, when it is that: `facts.py:exact`. -/
+/-- The value as one atom plus a constant, when it is that: `facts.py:exact`.  Two constants multiply, a plain
+atom times a positive constant is a product atom, and a product atom times a constant is no term, as in
+`facts.py:times`. -/
 def exact : E → Option Term
   | .lit k => some (.zero, k)
   | .atom n => some (.plain n, 0)
@@ -184,6 +186,7 @@ def exact : E → Option Term
     | some (a, j), some (.zero, k) => some (a, j - k)
     | _, _ => none
   | .mul x y => match exact x, exact y with
+    | some (.zero, j), some (.zero, k) => some (.zero, j * k)
     | some (.plain n, 0), some (.zero, k) => if 0 < k then some (.prod n k.toNat, 0) else none
     | some (.zero, k), some (.plain n, 0) => if 0 < k then some (.prod n k.toNat, 0) else none
     | _, _ => none
@@ -463,6 +466,11 @@ theorem exact_sound : ∀ {e : E} {t : Term} {v : Nat}, exact e = some t → eva
       obtain ⟨_, rfl⟩ := some_of_ite hab
       simp only [exact] at h
       split at h <;> try contradiction
+      · next j k hx hy =>
+          rw [← Option.some.inj h]
+          have h1 := exact_sound hx ha; have h2 := exact_sound hy hb
+          simp only [Atom.val, Int.zero_add] at h1 h2 ⊢
+          rw [← h1, ← h2]; exact Int.natCast_mul a b
       · next n k hx hy =>
           obtain ⟨hk, rfl⟩ := some_of_ite (a := (Atom.prod n k.toNat, (0 : Int))) h
           have h1 := exact_sound hx ha; have h2 := exact_sound hy hb
@@ -484,6 +492,11 @@ theorem exact_mul {x y : E} {t : Term} {a b : Nat} (h : exact (.mul x y) = some 
     (ha : eval ρ σ x = some a) (hb : eval ρ σ y = some b) : ((a * b : Nat) : Int) = t.1.val ρ + t.2 := by
   simp only [exact] at h
   split at h <;> try contradiction
+  · next j k hx hy =>
+      rw [← Option.some.inj h]
+      have h1 := exact_sound hx ha; have h2 := exact_sound hy hb
+      simp only [Atom.val, Int.zero_add] at h1 h2 ⊢
+      rw [← h1, ← h2]; exact Int.natCast_mul a b
   · next n k hx hy =>
       obtain ⟨hk, rfl⟩ := some_of_ite (a := (Atom.prod n k.toNat, (0 : Int))) h
       have h1 := exact_sound hx ha; have h2 := exact_sound hy hb

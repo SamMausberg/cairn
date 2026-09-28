@@ -133,6 +133,11 @@ KEPT = {
         {"add": 1, "mul": 1},
     ),
     "unbounded_product": ("fn f(k:usize) -> usize { return k * 4; }", {"mul": 1}),
+    "two_constants": ("fn f(x:ro<u64>[8]) -> u64 { return x[2 * 3]; }", {"mul": 1}),  # 6 < 8 drops the index guard
+    "nested_product": (  # (k * 4) * 2 is no product atom, so its condition establishes nothing
+        "fn f(n:usize, x:ro<u64>[n], k:usize) -> u64 { if k * 4 * 2 < n { return x[k * 4 * 2]; } return 0; }",
+        {"at": 1, "mul": 4},
+    ),
     "scaled_row": (  # rows = k * 256 keeps its guard, and b < k makes b * 256 + v at most rows - 1
         "fn f(k:usize) -> u64 {\n  let rows = k * 256;\n  buffer p:u64[rows] = zeroed;\n"
         "  for b in 0..k { let row = b * 256; for v in 0..256 { p[row + v] = u64(v); } }\n  return u64(k);\n}",

@@ -205,6 +205,30 @@ def test_a_product_facts_py_never_discharged_is_refused_whatever_it_cites():
     assert "cr::mul<std::size_t>(v_k, static_cast<std::size_t>(4ULL))" in "\n".join(emitter.units()[1][1][1])
 
 
+PRODUCTS = {  # facts.py once folded two constants and named (k * 4) * 2 where the audit and Facts.lean did neither
+    "two_constants": ("fn f(x:ro<u64>[8]) -> u64 { return x[2 * 3]; }", {"bounds": 1}),
+    "a_folded_divisor": (
+        "fn f(n:usize, x:ro<u64>[n]) -> u64 { let q = n / (2 * 4); let mut t:u64 = 0; "
+        "for k in 0..q { t = add_wrap(t, x[k * 8]); } return t; }",
+        {"overflow": 1, "bounds": 1},
+    ),
+    "a_nested_product": (
+        "fn f(n:usize, x:ro<u64>[n], k:usize) -> u64 { if k * 4 * 2 < n { return x[k * 4 * 2]; } return 0; }",
+        {},
+    ),
+}
+
+
+@pytest.mark.parametrize("name", PRODUCTS)
+def test_facts_the_audit_and_lean_read_a_product_alike(name):
+    """Two constants multiply on all three sides, and a product atom times a constant names nothing on any, so every
+    discharge proposed here is accepted. Before they agreed, each of these programs had a proposal the audit refused
+    and a guard it kept."""
+    source, discharged = PRODUCTS[name]
+    rows = compile_source(source)[1]["functions"]["f"]
+    assert "refused_discharges" not in rows and rows["discharged_check_sites"] == discharged, rows
+
+
 PLANTED_RULES = {  # Each plants one slip in a new rule of facts.py; the audit, which derives its own, refuses it.
     "a_quotient_one_step_short": (
         "fn f(n:usize, x:ro<u64>[n]) -> u64 { let q = n / 4; let mut t:u64 = 0; "
@@ -222,6 +246,16 @@ PLANTED_RULES = {  # Each plants one slip in a new rule of facts.py; the audit, 
         "bounds",
         lambda real: lambda c, e: plus_one(real, c, e),
     ),
+    "two_constants_added": (
+        "fn f(x:ro<u64>[6]) -> u64 { return x[2 * 3]; }",
+        "times",
+        lambda real: lambda c, a, b: added(real, c, a, b),
+    ),
+    "a_nested_product_named": (
+        "fn f(n:usize, x:ro<u64>[n], k:usize) -> u64 { if k * 4 * 2 < n { return x[k * 4 * 2]; } return 0; }",
+        "times",
+        lambda real: lambda c, a, b: renamed(real, c, a, b),
+    ),
 }
 
 
@@ -229,6 +263,18 @@ def plus_one(real, c, e):
     """The bounds of `e`, with a sum's lower bounds each one higher than its sides give."""
     high, low = real(c, e)
     return high, [(x, k + 1) if e.tag == "binary" and e.val == "+" and x else (x, k) for x, k in low]
+
+
+def added(real, c, a, b):
+    """`a * b` as a term, with two constants added where they multiply."""
+    x, y = facts.exact(c, a), facts.exact(c, b)
+    return (facts.ZERO, x[1] + y[1]) if x and y and x[0] == y[0] == facts.ZERO else real(c, a, b)
+
+
+def renamed(real, c, a, b):
+    """`a * b` as a term, with a product atom times a constant named as an atom of its own (`k*4*2`)."""
+    (x, j), (y, k) = (facts.exact(c, e) or (None, 0) for e in (a, b))
+    return (f"{x}*{k}", 0) if x and "*" in x and y == facts.ZERO and not j and k > 0 else real(c, a, b)
 
 
 @pytest.mark.parametrize("name", PLANTED_RULES)

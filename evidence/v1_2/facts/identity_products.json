@@ -1,0 +1,29 @@
+{
+ "command": "tools/checks/emission_identity.py snapshot/compare --normalize guards",
+ "before": "fd64dd2",
+ "after": "c13/facts-lean-agreement",
+ "programs": 2289,
+ "changed": [],
+ "new": [],
+ "more_guards": {},
+ "guards_before": 16071,
+ "guards_after": 16066,
+ "fewer_guards": {
+  "test:tests/language/test_layouts.py:255": {
+   "before": 2,
+   "after": 1
+  },
+  "test:tests/soundness/test_elision.py:209": {
+   "before": 3,
+   "after": 2
+  },
+  "test:tests/soundness/test_elision.py:211": {
+   "before": 5,
+   "after": 3
+  },
+  "test:tests/soundness/test_established.py:136": {
+   "before": 3,
+   "after": 2
+  }
+ }
+}

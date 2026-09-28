@@ -105,12 +105,13 @@ def exact(c: Checker, e: Expr) -> Term | None:
 
 def times(c: Checker, a: Expr, b: Expr) -> Term | None:
     """`a * b` as one term: a name times a positive constant is an atom of its own (`b*256`), and two constants
-    multiply (`2 * BINS`)."""
+    multiply (`2 * BINS`). A product atom times a constant is no term, as `exact` in Facts.lean and the audit's give
+    none: `(b * 256) * 2` names nothing, where `b * 512` names `b*512`."""
     (x, j), (y, k) = (exact(c, arg) or (None, 0) for arg in (a, b))
     if x == ZERO and y == ZERO:
         return ZERO, j * k
     name, n = (x, k) if y == ZERO and x and not j else (y, j) if x == ZERO and y and not k else ("", 0)
-    return (f"{name}*{n}", 0) if name and n > 0 else None
+    return (f"{name}*{n}", 0) if name and "*" not in name and n > 0 else None
 
 
 def extent(c: Checker, e: Expr) -> Term | None:
