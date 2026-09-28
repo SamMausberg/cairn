@@ -5,4 +5,4 @@ Each directory is one record of the work after `v1.1.0`, taken as it landed. Its
 | Record | What it holds |
 |---|---|
 | `terse/` | What each `cairn` command and MCP tool prints for an agent to read, in bytes and tokens, and the budgets that hold it; no model ran. |
-| `std/` | Reading all of standard input into a `Vec[u8]` with `std` before and after each change to it: wall time and peak resident memory on the host, clang++ builds only; no device code ran. |
+| `std/` | Reading all of standard input into a `Vec[u8]` with `std` before and after each change to it, and a word count keyed by `Vec[u8]` against the one a probe wrote: wall time and peak resident memory on the host, clang++ builds only; no device code ran. |
