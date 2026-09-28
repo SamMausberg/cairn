@@ -61,7 +61,10 @@ def demangled(symbol: str, names: Collection[str]) -> str | None:
 
 
 def bare(condition: str) -> str:
-    """Drop one redundant outer pair of parentheses, only when the first really closes at the end."""
+    """Drop one redundant outer pair of parentheses, only when the first really closes at the end and does not open a
+    statement expression, `({ ... })`, which needs both."""
+    if condition.startswith("({"):
+        return condition
     depth = 0
     for i, c in enumerate(condition):
         depth += (c == "(") - (c == ")")
@@ -378,9 +381,15 @@ class Emitter:
             return self.invoke(e, e.ref)
         kind = e.ref[0]
         if kind == "dispatch":  # receiver.vt->member(receiver.self, the other arguments...)
-            receiver = self.expr(e.args[e.ref[3]]) + (".view()" if e.args[e.ref[3]].ty.name == "Dyn" else "")
-            rest = [self.expr(a) for i, a in enumerate(e.args) if i != e.ref[3]]
-            return f"{receiver}.vt->m{e.ref[2]}({', '.join([receiver + '.self', *rest])})"
+            at, bound = e.ref[3], ""
+            receiver = self.expr(e.args[at])
+            if e.args[at].tag != "name":  # Anything but a local runs once, and what it made lives until the call ends.
+                name = self.fresh("cr_self_")[0]
+                bound, receiver = f"auto&& {name} = {receiver}; ", name
+            receiver += ".view()" if e.args[at].ty.name == "Dyn" else ""
+            rest = [self.expr(a) for i, a in enumerate(e.args) if i != at]
+            call = f"{receiver}.vt->m{e.ref[2]}({', '.join([receiver + '.self', *rest])})"
+            return f"({{ {bound}{call}; }})" if bound else call
         if kind == "shared":  # receiver.op(values..., memory orders...)
             texts = [self.expr(a) for a in e.args]
             orders = {i for i, a in enumerate(e.args) if a.ty.name == "Order"}
