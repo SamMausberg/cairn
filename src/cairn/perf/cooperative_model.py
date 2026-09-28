@@ -168,6 +168,11 @@ def priced(r: Region, card: Device, sizes: dict[str, float], missing: set[str]) 
     if not r.registers:
         guesses.append("registers are not read until ptxas compiles the kernel (--inspect), so only its threads, its "
                        "shared memory and the resident block limit bound the blocks an SM holds")  # fmt: skip
+    if not per_sm:  # a block that asks for more than a block may have: no SM holds it, as in `model.lanes`
+        refused = " and ".join(held["limited_by"])
+        bound = f"cannot launch ({refused})"
+        guesses.append(f"a block of {threads} threads asks for more {refused} than a block may have, so the kernel "
+                       "cannot launch and its time is no prediction")  # fmt: skip
     if multiplied:
         detail["tensor_peak_ops_per_ns"] = peak
     return Piece(f"device cooperative region at line {r.line}", ns * runs, bound, light * runs, detail, guesses)

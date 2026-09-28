@@ -271,6 +271,21 @@ def test_a_pipeline_in_blocks_of_one_warp_keeps_copies_in_flight_in_the_blocks_a
     assert at["rtx-5070-ti", 16].ns > 1.7 * at["rtx-5070-ti", 32].ns  # half the bytes in flight
 
 
+def test_a_cooperative_block_that_asks_more_than_a_block_may_have_is_named_as_unable_to_launch():
+    """32 warps of 72 registers a thread are more than a block's 65536, so no SM holds the block: its bound says so,
+    as a lane kernel's does, and never names a rate its time was priced by."""
+    wide = "fn wide(g:usize, n:usize, out:rw<f32>[n]@device, x:ro<f32>[n]@device) {\n"
+    wide += "  blocks b in g threads t in 1024 { out[b * 1024 + t] = x[b * 1024 + t]; }\n}\n"
+    found = region(costs(wide, "wide")["wide"])
+    found.registers = 72
+    refused = priced(found, card("h100").device, {"g": 1e4, "n": 1.024e7}, set())
+    assert refused.detail["resident"]["blocks_per_sm"] == 0 and refused.bound == "cannot launch (registers)"
+    assert any("the kernel cannot launch" in why for why in refused.guesses)
+    found.registers = 32
+    launched = priced(found, card("h100").device, {"g": 1e4, "n": 1.024e7}, set())
+    assert launched.bound == "device memory" and launched.ns < refused.ns  # a search ranks it behind one that launches
+
+
 def test_predict_against_names_what_the_depth_changed(tmp_path, capsys):
     before, after = tmp_path / "two.cairn", tmp_path / "three.cairn"
     for path, depth in ((before, 2), (after, 3)):
