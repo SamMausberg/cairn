@@ -96,7 +96,7 @@ Checking is one pass per function over one typed tree, and each generic instance
 | The numerical policy: when a float result agrees with the reference's, for the host and for generated tests | `verify/validation/agreement.py` | `agrees`, `same`, `helper`, `stated` |
 | Z3's answer on an implementation, and its counterexample replayed through the finite path | `verify/validation/counterexamples.py` | `smt`, `outside`, `replayed` |
 | Native flags, the closed table of system libraries, the effects a freestanding image bans | `projects/toolchain.py` | `command`, `flags`, `LIBRARIES`, `audit_effects` |
-| The device target | `projects/target.py` | `resolve`, `parse`, `require`, `accept`, `fits` |
+| The device target | `projects/target.py` | `resolve`, `parse`, `require`, `accept`, `fits`, `here` |
 | A device program built for the host: what emulation refuses and what its records say | `projects/emulation.py` | `check`, `record`, `MODELED` |
 | Exports and the commands that take one | `projects/export.py` | `export`, `check`, `build`, `run`, `test`, `compare` |
 

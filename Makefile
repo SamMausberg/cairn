@@ -17,7 +17,7 @@ help:
 	@echo 'proof     certificates, the Lean build, the differential run, scalar module equivalence'
 	@echo 'lean      the Lean half of proof alone'
 	@echo 'gpu       runs device code: CUDA runtime, lanes, device plans, apps, the device benchmark'
-	@echo 'tune-device      times device plans: FILE=... SYMBOL=... AT=n=1e7 (runs device code)'
+	@echo 'tune-device      times device plans: FILE=... SYMBOL=... AT=n=1e7, CARD=h100 for this GPU (runs device code)'
 	@echo 'calibrate-device measures the device into results/perf_model/device.json (runs device code)'
 	@echo 'device-build  every test that compiles device code, where nvcc is installed; nothing runs on a device'
 	@echo 'embedded  the freestanding image under QEMU (needs an AArch64 host)'
@@ -105,8 +105,10 @@ gpu:
 
 # The two other targets that run device code. They time it, so nothing else should use the device meanwhile:
 # each device run holds /tmp/cairn-gpu.lock, rests two seconds after, and one process makes at most 64 of them.
+# CARD names the card that prices the plans and gives their target, which must run on the GPU here (E-TARGET-MISMATCH).
 tune-device:
-	CAIRN_GPU_TESTS=1 $(CAIRN) tune $(FILE) --symbol $(SYMBOL) --at $(AT) --measure 3 --device --format json
+	CAIRN_GPU_TESTS=1 $(CAIRN) tune $(FILE) --symbol $(SYMBOL) --at $(AT) --measure 3 --device --format json \
+	  $(if $(CARD),--card $(CARD))
 
 calibrate-device:
 	CAIRN_GPU_TESTS=1 PYTHONPATH=src $(PYTHON) -m cairn.perf.on_device --out results/perf_model/device.json

@@ -21,7 +21,7 @@ from typing import Any
 from ...compiler.cairnc import compile_program
 from ...projects.target import DeviceTarget, resolve
 from .. import cooperative_model, model
-from ..profile import Device, Profile, card, default
+from ..profile import Device, Profile, card, card_target, default, pricing
 from ..work import count
 from .plan_source import Placement, Plan, contract, written
 from .resources import Inspector, device_identity, host_target
@@ -90,7 +90,8 @@ def compare(source: str, name: str, a: Any, b: Any, sizes: list[dict[str, float]
     from ..report import targeted
     from .tune import keyed
 
-    chosen, target = profile or default(), target or resolve(required=False)
+    chosen = profile or default()
+    target = target or resolve(card=card_target(pricing(chosen)))
     placement = Placement(source, name)
     module = placement.f.module
     sides = {k: (plan, f"{module}.{use}" if use and module and "." not in use else use)
