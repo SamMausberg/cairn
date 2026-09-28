@@ -43,7 +43,7 @@ A fault of the compiler itself, met while it checks a statement, is refused as `
 
 ## Every refusal in one check
 
-`cairn check` reports every refusal it can judge on its own, so three mistakes in three functions cost one check. The record is the first refusal exactly as a check that stopped there would report it, with the others beside it:
+`cairn check` reports every refusal it can judge on its own, so three mistakes cost one check, whether they are in three functions or in one. The record is the first refusal exactly as a check that stopped there would report it, with the others beside it:
 
 ```json
 {"protocol": "cairn.diagnostic/2", "status": "rejected", "code": "E-TYPE-MISMATCH",
@@ -56,9 +56,11 @@ Each entry of `further` is a whole diagnostic at its own file, line and column, 
 
 The check never reports a refusal that may follow from another. Every function has an effect row, the list of what it may do that a caller can observe (`alloc`, `io`, `trap`, `write:out`, ...), and a signature may cap it with a ceiling. Once a function's body is refused, its row is unknown. A function that reaches it is then not held to its ceiling or to the rule on operand order (`E-EFFECT-ORDER`), and is counted in `not_judged`. So is a function that reaches a reference with [implementations](abstractions.md#implementations), because the reference's row joins theirs only after the rules about implementations run.
 
+Inside a function, a refused statement is taken back and the rest of its block is checked. What the refused statement may have changed is unknown after it: the locals it binds or assigns, and every owner, linear value, group or ticket it names. A later statement that names one of them is not judged, so after `let y:u32 = x;` is refused, `return y + 1;` says nothing. A mistake inside a lane, a cooperative region or a closure refuses the whole region or closure. One met where the body ends, such as a path without a `return` or a value never consumed, waits for the next check, and so does the operand order of a refused body.
+
 A refusal met again through a generic function or a type that two functions use is reported once. A refused type or signature ends the check once every type and signature is checked. A refused constant ends it at once, since whatever names the constant would be judged against half of it. A parse error is reported alone. The rules about [lanes](concurrency.md#parallel-regions), plans, implementations, fusion and layouts run only on a program nothing else refuses.
 
-A script that reads one diagnostic reads what it always read, and the exit status is 1 either way. At a terminal each refusal is shown beside its line, and a last line counts them. `cairn emit`, the language server and the MCP `check` tool report every refusal the same way. `cairn build`, `run` and `test`, and the edit, plan and implementation hosts, stop at the first. `tools/checks/refusal_differential.py` checks every refused program the repository holds both ways, and the first refusal must come out identical.
+A script that reads one diagnostic reads what it always read, and the exit status is 1 either way. At a terminal each refusal is shown beside its line, and a last line counts them. `cairn emit`, the language server and the MCP `check` tool report every refusal the same way. `cairn build`, `run` and `test` report them the same way, and the edit, plan and implementation hosts stop at the first. `tools/checks/refusal_differential.py` checks every refused program the repository holds both ways, and the first refusal must come out identical.
 
 ## cairn rules
 

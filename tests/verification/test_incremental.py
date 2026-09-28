@@ -4,8 +4,8 @@ object, the receipts with every effect row, and the emitted C++ and manifest.
 
 Every example is edited in the first, middle and last body the walk takes, and a program written for it is edited to
 add and remove calls, effects, a loop, a spawn, recursion, a device lane's reach and a call through a function value,
-and to refuse a correct program and correct a refused one. `CAIRN_INCREMENTAL_EVERY=1` edits every body of every
-example instead, which evidence/v1_1/workspace records.
+to refuse a correct program at one statement and at two of one body, and to correct a refused one.
+`CAIRN_INCREMENTAL_EVERY=1` edits every body of every example instead, which evidence/v1_1/workspace records.
 """
 
 import os
@@ -102,6 +102,7 @@ TARGETED = {
     "recursion": ("middle", "{\n  if x > 100 { return middle(x - 1); }\n  return leaf(x);\n}"),
     "call through a function value": ("middle", "{\n  return apply(twice, x);\n}"),
     "refuse a correct program": ("leaf", "{ return true; }"),
+    "refuse two statements of one body": ("middle", "{\n  let y:u32 = x;\n  let z:bool = x;\n  return leaf(y);\n}"),
     "use again an instance it made first": ("chooser", "{ return pick(x, 5, x > 6); }"),
     "no longer make an instance it made first": ("chooser", "{ return x; }"),
     "make first an instance a later body made": ("leaf", "{ return pick(x, 1, true) + 1; }"),
