@@ -1,6 +1,6 @@
 """A cooperative region's predicted time and the resources its blocks hold, priced from what `cooperative_work.py`
 counted and a device profile. The profile's figures are NVIDIA's published specification and a few assumptions it
-names; none is a measurement until the owner's `make calibrate-device` replaces them.
+names; none is a measurement until `make calibrate-device` replaces them.
 
 Resources. A block holds its threads, the shared memory the checker laid out (every array and stage from a 128-byte
 boundary: what ptxas reports as the kernel's static shared memory) and its registers, which only the compiler knows:

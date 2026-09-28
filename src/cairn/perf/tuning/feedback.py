@@ -218,7 +218,7 @@ def reasoning(lines: list[dict[str, Any]], read: dict[str, dict[str, Any]], devi
     `priced`, the packaged default without one. None is stated as a cause."""
 
     out: list[dict[str, Any]] = []
-    run = ("make tune-device FILE=... SYMBOL=" + name + " AT=...  (the owner's target; nothing here runs the device)"
+    run = ("make tune-device FILE=... SYMBOL=" + name + " AT=...  (a device make target; nothing here runs the device)"
            if device else f"cairn tune --symbol {name} --measure 2 --at ... with both plans on this host")  # fmt: skip
     got = {k: r for k, r in read.items() if r.get("status") == "read"}
     if any(x.get("same_code") for x in lines):
@@ -264,7 +264,7 @@ def reasoning(lines: list[dict[str, Any]], read: dict[str, dict[str, Any]], devi
         out.append(line(EXPERIMENT, "suggested, not run", f"time a and b at the same sizes, interleaved: {run}"))
     if device and any(x["kind"] == HYPOTHESIS for x in out):
         out.append(line(EXPERIMENT, "suggested, not run", "profile a and b in an explicit profiling run (Nsight "
-                        "Compute's occupancy and memory sections), apart from timing, which only the owner runs"))  # fmt: skip
+                        "Compute's occupancy and memory sections), apart from timing, which only make tune-device does"))  # fmt: skip
     return out
 
 
