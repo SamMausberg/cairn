@@ -112,6 +112,8 @@ namespace Cairn
 #print axioms Cairn.Facts.bounds_sound
 #print axioms Cairn.Facts.index_sound
 #print axioms Cairn.Facts.add_sound
+#print axioms Cairn.Facts.mul_sound
+#print axioms Cairn.Facts.divFacts_hold
 #print axioms Cairn.Facts.sub_sound
 #print axioms Cairn.Facts.atMostConst_sound
 #print axioms Cairn.Facts.part_sound

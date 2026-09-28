@@ -83,9 +83,12 @@ OWNERSHIP_THEOREMS = (
     "Cairn.Region.runs_once",
     "Cairn.Region.quiet_when_back",
     "Cairn.Region.finishes",
-    # The guard-elision rule: a discharged index or part is in bounds, a discharged + or - cannot trap.
+    # The guard-elision rule: a discharged index or part is in bounds, a discharged +, x * C or - cannot trap, and
+    # the facts `let q = a / C` adds are true.
     "Cairn.Facts.index_sound",
     "Cairn.Facts.add_sound",
+    "Cairn.Facts.mul_sound",
+    "Cairn.Facts.divFacts_hold",
     "Cairn.Facts.sub_sound",
     "Cairn.Facts.atMostConst_sound",
     "Cairn.Facts.part_sound",

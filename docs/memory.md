@@ -197,7 +197,7 @@ A `buffer` lives on the heap until its block ends, and its extent is the `n` it 
 
 ### Moves
 
-Owners are affine: each is used as a value at most once. Using one as a value (binding it, passing it by value, returning it, storing it in a field) moves it, and its name is dead afterwards (`E-MOVED`). An owner is released at scope exit, and `free` enters the effect row where that happens: at the end of the block that still holds it, at a `return`, or at a place a new value is assigned over. A function that hands an owner on carries neither `free` nor `alloc`.
+Owners are affine: each is used as a value at most once. Using one as a value (binding it, passing it by value, returning it, storing it in a field) moves it, and its name is dead afterwards (`E-MOVED`). An assignment whose right side moves the local it assigns, as `b = grow(b)` does, gives that local its new value, and it is live again. An owner is released at scope exit, and `free` enters the effect row where that happens: at the end of the block that still holds it, at a `return`, or at a place a new value is assigned over. A function that hands an owner on carries neither `free` nor `alloc`.
 
 An owner from outside a loop, a closure or a lane cannot be moved inside it (`E-MOVE-IN-LOOP`), because the body may run more than once.
 
@@ -279,6 +279,33 @@ fn main() -> i32 {
 ## Linear values and defer
 
 Some values stand for an obligation that must be met exactly once, such as giving back a resource that was acquired. A `linear struct` must be consumed exactly once on every path, where consuming it means moving it: passing it by value, returning it, storing it, or taking it apart with `let`. Leaving one unconsumed is `E-LINEAR-LEAK`, and consuming it on some paths only is `E-LINEAR-BRANCH`.
+
+Assigning over a place that still holds a linear value would lose that value, so it is `E-LINEAR-LEAK` too, whether the place is a local, a field, a record holding one or an `rw` borrow. Swap the new value in and consume what comes out. An assignment whose right side consumes the old value first, as `lease = renew(lease)` does, loses nothing.
+
+```cairn
+linear struct Lease { id:u64; }
+
+fn renew(l:Lease) -> Lease { let Lease(id) = l; return Lease(id + 1); }
+fn release(l:Lease, freed:rw<u64>) { let Lease(id) = l; freed += id; }
+
+fn main() -> i32 {
+  let mut freed:u64 = 0;
+  let mut lease = Lease(1);
+  lease = renew(lease);                             // lease 1 is consumed before lease 2 lands
+  let mut next = Lease(10);
+  swap(lease, next);                                // lease holds 10, next holds 2
+  release(next, freed);
+  release(lease, freed);
+  if freed != 12 { return 1; }
+  return 0;
+}
+```
+
+```cairn rejects E-LINEAR-LEAK
+linear struct Lease { id:u64; }
+fn release(l:Lease) { let Lease(id) = l; }
+fn main() -> i32 { let mut lease = Lease(1); lease = Lease(2); release(lease); return 0; }
+```
 
 `defer call(...);` runs one visible call at every normal exit of its block, and counts as the consumption. An abort runs no cleanup.
 
