@@ -4,11 +4,11 @@ The standard library is twenty modules, written in CAIRN and shipped inside the 
 
 ## Using a module
 
-`import std.map (Map);` brings in the module's functions under its short name, as `map.insert(...)`, and the bare name `Map`. `import std.sort as sort;` names the module without bringing in any type. A module you do not import is not in your program. Every module ships with the compiler, so nothing is fetched.
+`import std.map (Map);` brings in the module's functions under its short name, as `map.insert(...)`, and the bare name `Map`. `import std.sort as sort;` names the module without bringing in any type. A module that neither your program nor a module it imports names is not in your program, and `std.vec` brings `std.mem` and `std.core` with it. Every module ships with the compiler, so nothing is fetched.
 
 Three habits run through the whole API. A lookup returns an index, never a borrow: `map.find` returns `Option[usize]`, and you read `m.vals[slot]` yourself. A position you keep while the collection changes is a handle that is checked when you use it (`arena.Handle`, `map.Slot`). A function that allocates has `alloc` in its effect row, the list of what it may do that a caller can observe ([memory.md](memory.md#effects)), and so does every function that calls it.
 
-A guard is a check the compiled code makes before an operation, such as an index bound. When a guard fails, the program traps: it aborts at once, without running cleanup. Where this page says a call traps, or names a guard failure, the program ends this way.
+A guard is a check the compiler writes before an operation that could fail at run time, such as an index bound or an integer overflow. When a guard fails, the program traps: it aborts at once, without running cleanup. Where this page says a call traps, or names a guard failure, the program ends this way.
 
 | Module | What it is for | Allocates |
 | --- | --- | --- |
@@ -16,7 +16,7 @@ A guard is a check the compiled code makes before an operation, such as an index
 | `std.vec` | `Vec[T]`, a growable array that owns its elements | yes |
 | `std.text` | integers to and from bytes, ASCII classes of a byte, comparison, search, hashing | only `push_u64`, `push_i64` |
 | `std.fmt` | integers, hex, padding and floats in exact fixed point, appended to a `Vec[u8]` | yes |
-| `std.io` | open files, standard streams, a monotonic clock | only `read_file`, `read_to_end` |
+| `std.io` | open files, standard streams, a monotonic clock | only `read_file`, `read_to_end`, `read_stdin_to_end` |
 | `std.fs` | files by path, with no NUL to write | only `read` |
 | `std.env` | the program's arguments and environment | yes |
 | `std.time` | a monotonic clock, the date, sleeping | no |
@@ -35,7 +35,7 @@ A guard is a check the compiled code makes before an operation, such as an index
 
 ## std.core
 
-`std.core` holds the types and traits every other module shares. `Option[T]` is a value or nothing, and CAIRN has no null. `Result[T, E]` is a value or a failure, and it is the only way a function reports one. The three traits are `Ord`, whose `less` is a strict weak order, `Eq`, whose `same` is an equivalence, and `Hash`, whose `hash` returns a `u64`. The compiler does not check those laws; it checks that every implementation of a trait member is `pure`, a ceiling on its effect row that allows reads and traps but no allocation, no I/O and no write through a borrow.
+`std.core` holds the types and traits every other module shares. `Option[T]` is a value or nothing, and CAIRN has no null. `Result[T, E]` is a value or a failure, and it is how the library's functions report one; `try` takes any sum of two variants ([language.md](language.md#try)). The three traits are `Ord`, whose `less` is a strict weak order, `Eq`, whose `same` is an equivalence, and `Hash`, whose `hash` returns a `u64`. The compiler does not check those laws; it checks that every implementation of a trait member is `pure`, a ceiling on its effect row that allows reads and traps but no allocation, no I/O and no write through a borrow.
 
 ```cairn
 import std.core (Option, Result, Ord);
@@ -147,7 +147,7 @@ The `write_` functions write into storage you pass and return the number of byte
 
 ## std.fmt
 
-`std.fmt` builds text in a `Vec[u8]`. Every call appends, so a line is a run of calls followed by one write. `hex`, `padded`, `left` and `right` pad and align. `fixed(out, x, places)` writes a float with `places` digits after the point, rounded as printf's `%.*f` rounds, and the test suite checks every case against Python's formatting.
+`std.fmt` builds text in a `Vec[u8]`. Every call appends, so a line is a run of calls followed by one write. `hex`, `padded`, `left` and `right` pad and align. `fixed(out, x, places)` writes a float with `places` digits after the point, rounded as printf's `%.*f` rounds, and a test checks about a hundred cases against Python's formatting under clang++ and g++: ties, zeros, subnormals, the largest double, infinities, NaN, and random values at up to 40 places.
 
 ```cairn
 import std.fmt;
@@ -344,7 +344,7 @@ fn main() -> i32 {
 
 `insert` releases the old value when it replaces one, and `remove` moves the value out. `entry(m, key, value)` returns the slot of `key`'s entry, inserting `value` first when there is none, and `entry_view` and `find_view` look up a `Vec` key by a view of its elements, so the key is copied only when it is inserted. `sorted(m, out)` appends the live slots to `out` in the order of their keys.
 
-A slot index from `find` stays good only until the next `insert` or `remove`, because growth rehashes and a slot can be reused. For a position you keep longer, `slot(m, key)` returns a `Slot` stamped when its key was placed. `resolve(m, s)` returns `None` once that key is removed or the map has rehashed, and you then look the key up again. It never returns another entry's index. `update(m, key, f)` lends the value to a closure, and the closure may not reach the map (`E-ALIAS`).
+A slot index from `find` stays good only until the next `insert` or `remove`, because growth rehashes and a slot can be reused. For a position you keep longer, `slot(m, key)` returns a `Slot` stamped when its key was placed. `resolve(m, s)` returns `None` once that key is removed or the map has rehashed, and you then look the key up again. Against the map that gave it, it never returns another entry's index; against another map a `Slot` is only a number, since every map counts its stamps from zero. `update(m, key, f)` lends the value to a closure, and the closure may not reach the map (`E-ALIAS`).
 
 ```cairn
 import std.core (Option);
@@ -541,7 +541,7 @@ The encoding adds no framing, authentication or validation. A field of any other
 
 ## std.math
 
-`std.math` is the C math library on `f64`: `exp`, `log`, `log2`, `pow`, `sin`, `cos`, `tan` and `atan2`, with the constants `PI` and `E`. The last bit of a result depends on which libm the program links (glibc, musl and CUDA's differ), so a result can differ from one machine to another. The [builtins](language.md#values-and-arithmetic) `sqrt`, `floor`, `ceil`, `trunc` and `abs` give the same bits everywhere. The module is for host code only.
+`std.math` is the C math library on `f64`: `exp`, `log`, `log2`, `pow`, `sin`, `cos`, `tan` and `atan2`, with the constants `PI` and `E`. The last bit of a result depends on which libm the program links (glibc, musl and CUDA's differ), so a result can differ from one machine to another. The [builtins](language.md#values-and-arithmetic) `sqrt`, `floor`, `ceil`, `trunc` and `abs` compute what IEEE 754 defines exactly, and builds under clang++ and g++ are tested to give the same bits. The module is for host code only.
 
 ```cairn
 import std.math;
@@ -606,7 +606,7 @@ fn main() -> i32 {
 
 ## std.draw
 
-`std.draw` draws shapes and text into an `Image` on the CPU and blends colours, with a built-in 8 by 13 bitmap font. Every shape is clipped, so a shape partly outside the image draws the part inside, and no shape traps.
+`std.draw` draws shapes and text into an `Image` on the CPU and blends colours, with a built-in 8 by 13 bitmap font. Every shape is clipped, so a shape partly outside the image draws the part inside. Coordinates, sizes and radii are `i64` in checked arithmetic, so a shape whose corner plus its size, or whose radius squared, does not fit an `i64`, such as a circle of radius 2^32, traps.
 
 ```cairn
 import std.draw;
@@ -672,7 +672,7 @@ fn main() -> i32 {
 
 ## std.sys
 
-`std.sys` declares every C library function the rest of the library uses, once. An extern's C symbol is its CAIRN name, so two modules cannot both declare `close`. Prefer `std.io` and `std.net`, which wrap these calls.
+`std.sys` declares every function of the C library proper that the rest of the library uses, once; `std.math` binds the libm functions and `std.zlib` binds zlib. The other modules use these names instead of declaring the symbols again. Prefer `std.io` and `std.net`, which wrap these calls.
 
 ```cairn
 import std.sys as sys;

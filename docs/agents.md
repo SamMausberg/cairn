@@ -39,9 +39,9 @@ The plugin adds the skill, puts `bin/cairn` on the session's `PATH`, and runs `c
 
 The plugin also starts [`cairn mcp`](tools.md#cairn-mcp), a Model Context Protocol server, so an agent without a shell reaches the same hosts: `check`, `state`, `find`, and the edit, plan and implementation sessions of this page, as nine tools that write an accepted change back to its files. Other MCP clients start the same server as `bin/cairn mcp`.
 
-`claude plugin details` counts the skill's description, about 180 tokens, as the plugin's whole cost in every session, and does not count MCP tool schemas. The nine tools' list is 5,090 bytes of JSON, 700 of them `find`'s. The eight tools measured before `find` cost about a thousand tokens more for a client that loads tool schemas up front, and about 116 for Claude Code, which loads a schema only when a tool is searched for ([evidence/v1_0/skill](../evidence/v1_0/skill/README.md)).
+`claude plugin details` counts the skill's description, about 180 tokens, as the plugin's whole cost in every session, and does not count MCP tool schemas. The nine tools' list is 5,090 bytes of JSON, 700 of them `find`'s. No client that loads tool schemas up front has been measured. For Claude Code, which loads a schema only when a tool is searched for, the eight tools before `find` added about 116 tokens ([evidence/v1_0/skill](../evidence/v1_0/skill/README.md)).
 
-A smoke comparison of six runs gave three small tasks to one `claude-sonnet-5` session each, with and without the plugin, before the plugin had `cairn mcp`. Every session solved its task. The sessions with the plugin cost 0.51 times as much and took 40 turns instead of 70, because they read two cards instead of searching the checkout ([evidence/v1_0/skill](../evidence/v1_0/skill/README.md)). One run per cell is not a benchmark.
+A smoke comparison of six runs gave three small tasks to one `claude-sonnet-5` session each, with and without the plugin, before the plugin had `cairn mcp`. Every session solved its task. The sessions with the plugin cost 0.51 times as much and took 40 turns instead of 70. In one pair the session without the plugin spent 20 tool calls finding the checkout, the examples and the docs, where the session with it read two cards ([evidence/v1_0/skill](../evidence/v1_0/skill/README.md)). One run per cell is not a benchmark.
 
 `bench/skill/` is a `claude plugin eval` suite, which `plugin.json` names under `experimental.evals`. Its six cases need only the Read, Glob, Grep and Skill tools. Five are refused programs, each graded by a regular expression for its diagnostic code, a rubric for the fix, and whether the skill fired; one is a checksum to write. `tests/tooling/test_skill.py` holds each program to the code its case grades. The suite has not been run.
 
@@ -92,7 +92,7 @@ assert packet["dependencies"]["step"]["evidence"] == "smt-equivalent"
 {"protocol": "cairn.edit/2", "handle": "e1", "kind": "expand", "symbols": ["append", "Header"]}
 ```
 
-`explain` returns [`cairn explain`](tools.md#cairn-explain) for the functions the packet shows, on the last accepted candidate. The agent sees whether its edit left a guard in a loop or stopped it vectorizing, without running anything. A guard is a check, such as a bounds or an overflow check, that the compiler writes wherever it cannot prove an operation safe.
+`explain` returns [`cairn explain`](tools.md#cairn-explain) for the functions the packet shows, on the last accepted candidate. The agent sees whether its edit left a guard in a loop or stopped it vectorizing, without running anything. A guard is a check the compiler writes before an operation that could fail at run time, such as an index bound or an integer overflow, and leaves out only where the checker shows it cannot fail.
 
 `predict`, as in `{"protocol": "cairn.edit/2", "handle": "e1", "kind": "predict", "sizes": [{"n": 1e7}]}`, returns [`cairn predict`](tools.md#cairn-predict) for the functions the packet shows, and after an admission the predicted ratio against the original at each size. A prediction is not evidence of speed, and the host still decides what is measured.
 
@@ -111,7 +111,7 @@ The layout record is what the program says it drew where. A claim such as "the d
 
 ## What the host accepts
 
-The host splices a reply into the pinned original and checks the whole linked module again, whatever the packet showed. A reply that changes one body is checked against the record of the module's last full check: that one body is checked, and every rule after the bodies runs again, which gives exactly the answer checking every body again would give ([internals.md](internals.md#compiler-architecture)). Every token outside the range the reply may change must lex as it did, so a reply that ends in a comment that would hide the rest of the line is refused. The host refuses:
+The host splices a reply into the pinned original and checks the whole linked module again, whatever the packet showed. Where the conditions of `compiler/check/incremental.py` hold, a reply that changes one body is checked against the record of the module's last full check: that one body is checked, and every rule after the bodies runs again. `tests/verification/test_incremental.py` requires the same answer as a whole check on every example and on generated edits, and any other reply is checked whole ([internals.md](internals.md#checking-an-edit-from-the-last-check)). Every token outside the range the reply may change must lex as it did, so a reply that ends in a comment that would hide the rest of the line is refused. The host refuses:
 
 | Code | Why |
 |---|---|
@@ -189,7 +189,7 @@ The host names the function, its new signature, any other function whose signatu
 | `E-DECLARATION` | a declaration was added, removed or hidden behind a comment |
 | `E-CALLER-EFFECT` | a row gained an effect the host did not allow |
 
-The host checks the whole program again with every replacement in place. It then writes each file beside itself and renames it into place, putting every file back if one rename fails, so the project holds all the changes or none. Nothing is built or tested, and the result says so.
+The host checks the whole program again with every replacement in place. It then writes each file beside itself and renames it into place, putting every file back if one rename fails, so a failed rename leaves none of the changes. Nothing is built or tested, and the result says so.
 
 ## Plan edits
 
@@ -199,13 +199,13 @@ A plan edit (`cairn.plan/1`, `agent/hosts/plans.py`) lets the agent change only 
 {"protocol": "cairn.plan/1", "session": "<the packet's digest>", "items": {"grain": 1, "lanes": 8}}
 ```
 
-A reply names items and whole numbers, never source text. The host writes the plan, checks the program again, and requires the checker's record of every function to be unchanged apart from this function's plan, which must be the one the reply set. It refuses an item the regions do not take or a value out of range (`E-PLAN`); anything else in the reply, a plan sent to an edit host or a body sent to a plan host (`E-REQUEST`); and a session already spent or reopened (`E-SESSION`). A plan changes no result, so an accepted plan needs no test to be correct, only a measurement to be worth keeping.
+A reply names items and whole numbers, never source text. The host writes the plan, checks the program again, and requires the checker's record of every function to be unchanged apart from this function's plan, which must be the one the reply set. It refuses an item the regions do not take or a value out of range (`E-PLAN`); anything else in the reply, a plan sent to an edit host or a body sent to a plan host (`E-REQUEST`); and a session already spent or reopened (`E-SESSION`). The plan rules are made so that a plan changes no result, so the host asks of an accepted plan only a measurement to be worth keeping. Those rules are tested, planned regions against the regions as written, and not proved.
 
 A session opens on a function of any module, named with its module (`lib.spread`). A name that two modules declare is `E-SYMBOL`, with the qualified names. `PlanHost().open(load_project(path), "lib.spread")` says under `written_in` the module, file and line after which the plan is written, under the name its module gives the function. A plan that named the function from another module, such as `plan lib.spread { ... }` in the root, is removed so the plan is not written twice.
 
 ## Implementation sessions
 
-An implementation is an alternative version of a function, declared as `fn g(...) implements f when ...`, that a plan can select in place of `f`, its reference ([abstractions.md](abstractions.md#implementations)). An implementation session (`cairn.implementation/1`, `agent/hosts/implementations.py`) opens on one reference and accepts new implementations of it. Each is validated against the reference before the host keeps it, so a faster algorithm cannot change what the function means. [demos/implement](../demos/implement/README.md) runs one session end to end through `cairn mcp`.
+An implementation is an alternative version of a function, declared as `fn g(...) implements f when ...`, that a plan can select in place of `f`, its reference ([abstractions.md](abstractions.md#implementations)). An implementation session (`cairn.implementation/1`, `agent/hosts/implementations.py`) opens on one reference and accepts new implementations of it. Each is validated against the reference before the host keeps it: finite tests on the boundary inputs its contract gives, and Z3's counterexamples replayed natively where the code is in the modeled fragment. An implementation that passes agrees with the reference on the cases that ran, which is not every input. [demos/implement](../demos/implement/README.md) runs one session end to end through `cairn mcp`.
 
 ```python
 from pathlib import Path
@@ -310,7 +310,7 @@ cairn state app --symbol lib.spread --since before.json    # only what changed
 
 Beside the function's signature, row, plan, regions and current identity, the packet holds only the history that still holds. For each candidate that is what was measured and by which procedure, what a compile read, what failed and why, and what was validated or profiled. It adds the last searches and what they ranked best, and the hypotheses and suggested experiments; an experiment is `done` once the runs it asks for are kept. Records that no longer hold are counted under `stale` by the part that moved.
 
-A validation holds while the implementation, its reference and the compiler are as they were, under the tolerance and on the host it names. It holds only under this numerical policy and the native compiler that the packet's host builds with, as `cairn tune` cites it. The packet above was 2,959 bytes for a function with three measured candidates, and running the same `cairn tune --measure` again starts no run, since every measurement it needs is kept.
+A validation holds while the implementation, its reference and the compiler are as they were, under the tolerance and on the host it names. It holds only under this numerical policy and the native compiler that the packet's host builds with, as `cairn tune` cites it. Running the same `cairn tune --measure` again starts no run, since every measurement it needs is kept (`tests/agent/test_investigation.py`).
 
 ## Named choices
 
@@ -366,7 +366,7 @@ Typed means only that the static checks passed. The optional scalar checker comp
 
 These contracts are the packet an agent gets for editing the existing family and wire examples. They are neither the full language card nor a proof certificate. `compiler/derive/expansion.py` expands families and recipes, `std/wire.cairn` is the wire recipe, and `verify/linear_certificates.py` checks the collector; changing any of them needs a larger audit.
 
-family/1. A static function with one natural parameter K and `family prefix = base[a..b];` produces b - a independent monomorphic functions, `prefix_a` through `prefix_(b-1)`. Each uses its literal K. An expansion that is empty, negative, reversed, oversized, colliding or unbound is refused, and every emitted function is checked. There is no dynamic dispatch, allocation or evaluation of source strings. A larger range costs object size and compilation work. Expansion is capped at 1024 functions per family, 2048 in all, and 200000 expression visits while checking.
+family/1. A static function with one natural parameter K and `family prefix = base[a..b];` produces b - a independent monomorphic functions, `prefix_a` through `prefix_(b-1)`. Each uses its literal K. An expansion that is empty, negative, reversed, oversized, colliding or unbound is refused, and every emitted function is checked. There is no dynamic dispatch, allocation or evaluation of source strings. A larger range costs object size and compilation work. Expansion is capped at 1024 functions per family, 2048 in all, and 3,200,000 expression visits while checking (`E-AST-LIMIT`).
 
 wire/1. A record of fixed unsigned fields derives functions that encode it, decode it and give its length in bytes. Fields go in declaration order, each little endian, with no padding on the wire. The native layout of the record is not the wire layout. The encoded size is the sum of the field widths divided by eight, and every bit of every field is kept. The caller must supply a buffer of exactly the live extent, since guards cannot recover a forged pointer's provenance. No tags, checksums, value ranges, alignment padding, implicit versions or allocation are added.
 

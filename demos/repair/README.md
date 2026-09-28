@@ -22,7 +22,7 @@ The agent's first reply adds a debug print to `bucket`. The host refuses it, bec
 
 The second reply fixes the comparison. The host accepts it and runs the four public cases, then five hidden cases the agent never saw. All nine pass.
 
-The host then asks for a shorter `clamp` under the contract `preserve: equivalent`. The agent's first try, `min(max(x, lo), hi)`, reads well and is wrong whenever `hi < lo`. Z3 finds such an input, the host replays it on both versions, and the refusal names it:
+The host then asks for a shorter `clamp` under the contract `preserve: equivalent`. The agent's first try, `min(max(x, lo), hi)`, reads well and is wrong when `hi < lo` and `x < lo`, where `clamp` returns `lo`. Z3 finds such an input, the host replays it on both versions, and the refusal names it:
 
 ```text
 [clamp] host: refused E-PRESERVE: The host asks this edit to keep clamp equivalent; it is behavior-changed.
@@ -57,4 +57,4 @@ Its second reply was the body alone, reformatted, which the host accepted as `id
 
 ## What is verified and what is not
 
-Every refusal and acceptance, the finite tests, the Z3 queries, the native replays and the diff are computed on every run, and `tests/projects/test_demos.py` checks each outcome above. The default agent is `scripted.json`: replies written by hand to show one refusal of each kind, which no model wrote. `smt-equivalent` holds within the value model that [verification.md](../../docs/verification.md#value-level-source-equivalence) describes, and it trusts the translator and Z3. The predicted ratios come from `cairn predict`, and nothing was timed.
+Every refusal and acceptance, the finite tests, the Z3 queries, the native replays and the diff are computed on every run, and `tests/projects/test_demos.py` checks the refusal codes, the fix and its hidden cases, the witness, the diff's classes for `bucket`, `clamp`, `count_below` and `percentile`, and the major bump. It does not replay `live-sonnet-5.json`. The default agent is `scripted.json`: replies written by hand to show one refusal of each kind, which no model wrote. `smt-equivalent` holds within the value model that [verification.md](../../docs/verification.md#value-level-source-equivalence) describes, and it trusts the translator and Z3. The predicted ratios come from `cairn predict`, and nothing was timed.

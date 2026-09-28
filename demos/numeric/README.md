@@ -28,7 +28,7 @@ fn sweep(out:rw<f32>[CELLS], t:ro<f32>[CELLS]) {
 }
 ```
 
-A lane writes only `out[i]` and reads `t`, which no lane writes. The checker therefore accepts the region, and the result cannot depend on how many lanes run it. `src/device_main.cairn` has `sweep_device`, the same body with both views placed `@device`, and `tests/projects/test_demos.py` checks that every line of its body is a line of `plate.cairn`. The lowering fixes the order of the arithmetic on both sides (`-ffp-contract=off` on the host, `--fmad=false` on the device), so the device is meant to give the host's bits exactly.
+A lane writes only `out[i]` and reads `t`, which no lane writes. The checker therefore accepts the region, and the lane rule makes the result independent of how many lanes run it, which the test checks at one lane and at four. `src/device_main.cairn` has `sweep_device`, the same body with both views placed `@device`, and `tests/projects/test_demos.py` checks that every line of its body is a line of `plate.cairn`. The lowering fixes the order of the arithmetic on both sides (`-ffp-contract=off` on the host, `--fmad=false` on the device), so the device is meant to give the host's bits exactly.
 
 ## The numerical contract
 
@@ -45,16 +45,16 @@ plate: largest distance from the f64 reference 0.000014842041622387114, contract
 Every program printed the same fingerprint: yes.
 ```
 
-The largest error is 0.0000148, about 300 times inside the contract. `run.py` then builds `baseline/plate.cpp`, the same loop as a C++ programmer writes it, with the same compiler and the flags CAIRN builds with. With `-DGUARDS` it makes the same checks per cell that the CAIRN build keeps (`cairn explain demos/numeric --symbol sweep` lists them), and with `-fopenmp` it is an OpenMP parallel for over as many threads as the lane pool has. It runs every program in interleaved rounds and prints the median sweep time of each. Every C++ build prints the fingerprint above, so all of them computed the same bits.
+The largest error is 0.0000148, about 300 times inside the contract. `run.py` then builds `baseline/plate.cpp`, the same loop as a C++ programmer writes it, with the same compiler and the flags CAIRN builds with. With `-DGUARDS` it makes the same checks per cell that the CAIRN build keeps (`cairn explain demos/numeric --symbol sweep` lists them, and `--symbol edge` those of the edge test), and with `-fopenmp` it is an OpenMP parallel for over as many threads as the lane pool has. It runs every program in interleaved rounds and prints the median sweep time of each. Every C++ build prints the fingerprint above, so all of them computed the same bits.
 
 The timings in [evidence/v1_0/demos](../../evidence/v1_0/demos/README.md) come from one run while other agents worked on the machine, and they are not a performance comparison. Run `make demo-numeric` on a quiet machine before you quote a ratio.
 
 ## The device
 
-The device configuration compiles for sm_120 with `nvcc -Werror`, which `tests/projects/test_demos.py` checks. It runs only under `make gpu`, which the repository's owner runs. That run checks that the device plate has the host's fingerprint and keeps the contract, and writes its output and times to `results/demos/numeric/device.json`. It ran once, in the 1.1.0 release session on an RTX 5070 Ti. The device plate had the host's bits, and 200 sweeps took 7.2 ms on the device and 11.3 ms with both transfers, against 60.2 ms on host lanes: one run on one machine ([evidence/v1_1/gpu](../../evidence/v1_1/gpu/README.md)).
+The device configuration compiles for sm_120 with `nvcc -Werror`, which `tests/projects/test_demos.py` checks. It runs only under `make gpu`, where a GPU is present, under the device lock. That run checks that the device plate has the host's fingerprint and keeps the contract, and writes its output and times to `results/demos/numeric/device.json`. In the 1.1.0 release session on an RTX 5070 Ti the device plate had the host's bits, and 200 sweeps took 7.2 ms on the device and 11.3 ms with both transfers, against 60.2 ms on host lanes: one run on one machine ([evidence/v1_1/gpu](../../evidence/v1_1/gpu/README.md)). On a GH200 at `449189b` it had the host's bits again, and nothing was timed ([evidence/v1_2/gpu_gh200](../../evidence/v1_2/gpu_gh200/README.md)).
 
-Device speed was also measured for a different kernel, in `evidence/v0_8_3/gpu/benchmark.json` from one RTX 5070 Ti: an elementwise f32 `saxpy` whose host and device results agreed bit for bit. At 10^8 elements its kernel was 25 times as fast as the sequential host, and the whole run, transfers included, 0.47 times as fast.
+Device speed was also measured for a kernel written by hand against CAIRN's runtime (`bench/gpu/parallel_gpu.cu`), in `evidence/v0_8_3/gpu/benchmark.json` from one RTX 5070 Ti: an elementwise f32 `saxpy` whose host and device results agreed bit for bit. At 10^8 elements its kernel was 25 times as fast as the sequential host, and the whole run, transfers included, 0.47 times as fast.
 
 ## What is verified and what is not
 
-The host program is native-built and finite-tested at one size: the contract holds, and one lane and four lanes print the same fingerprint. The C++ loop computes the same bits. The device program is accepted and compiles for sm_120. It has run on a GPU once, in the 1.1.0 session above, where its bits matched the host's; no other run has measured its bits or its speed. The error bound is argued above, not proved.
+The host program is native-built and finite-tested at one size: the contract holds, and one lane and four lanes print the same fingerprint. The C++ loop computes the same bits. The device program is accepted and compiles for sm_120. It has run on two GPUs, and its bits matched the host's on both: in the 1.1.0 session above, which also timed it, and on a GH200, which did not. The error bound is argued above, not proved.

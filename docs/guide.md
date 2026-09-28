@@ -183,7 +183,7 @@ The build directory holds the generated `program.cpp`, the runtime headers, the 
             "implicit_synchronization": 0, "status": "prototype-checked-not-proved"}
 ```
 
-A guard is a check the program makes at run time. `syntactic_check_sites` counts the guards the source asks for, here the shift count and the checked `+`. `discharged_check_sites` counts those the checker proved cannot fail, which the C++ leaves out: the shift count is the literal 1, below the width. Nothing bounds `x` and `y`, so the guard of `+` stays, and `trap` in the row says the function has a guard that can abort.
+A guard is a check the compiler writes before an operation that could fail at run time, such as an index bound or an integer overflow. `syntactic_check_sites` counts the guards the source asks for, here the shift count and the checked `+`. `discharged_check_sites` counts those the checker showed cannot fail, which the C++ leaves out: the shift count is the literal 1, below the width. Nothing bounds `x` and `y`, so the guard of `+` stays, and `trap` in the row says the function has a guard that can abort.
 
 A function that allocates, writes through a borrow, starts a task or uses the device says so in the same list, and so does every function that calls it.
 
@@ -292,7 +292,7 @@ fn main() -> i32 {
 
 ### 3. Records, sums, `match` and `try`
 
-A `struct` is a record, and an `enum` is a sum whose variants each carry at most one payload. `match` must give every variant an arm, and it has no wildcard arm. `try` yields the success payload, or returns the failure from the enclosing function. It is the only way to pass an error up.
+A `struct` is a record, and an `enum` is a sum whose variants each carry at most one payload. `match` must give every variant an arm, and it has no wildcard arm. `try` yields the success payload, or returns the failure from the enclosing function, so an error passes up without a `match` written out for it.
 
 ```cairn
 struct Point { x:i64; y:i64; }
@@ -425,7 +425,7 @@ fn main() -> i32 {
 }
 ```
 
-### 9. Lanes are race free by construction
+### 9. Lanes cannot race
 
 A lane may touch what any lane writes only at its own index `[i]`, or inside its own block of a constant size ([concurrency.md](concurrency.md#parallel-regions)). Lanes combine their values through `reduce`, into one value, and `scan`, into every prefix. The checked `+` is allowed where no order of evaluation can change whether it traps. A lane may call a closure that writes nothing it captured.
 
@@ -549,4 +549,4 @@ Three example projects show the device half of the language. [examples/apps/gpu_
 
 ## Where to go next
 
-[language.md](language.md), [memory.md](memory.md), [abstractions.md](abstractions.md), [concurrency.md](concurrency.md), [devices.md](devices.md) and [numerics.md](numerics.md) are the reference: each rule with a program the compiler accepts and one it refuses. The [index](README.md) lists the rest in reading order.
+[language.md](language.md), [memory.md](memory.md), [abstractions.md](abstractions.md), [concurrency.md](concurrency.md), [devices.md](devices.md) and [numerics.md](numerics.md) are the reference, which shows its rules with programs the compiler accepts and programs it refuses. The [index](README.md) lists the rest in reading order.

@@ -7,14 +7,14 @@ This page is the first of the six pages of the language reference. It covers val
 Three rules explain most of the language.
 
 - Costs are visible: nothing allocates, synchronizes, copies an owner, runs in parallel or crosses a memory boundary unless the source says so.
-- Borrows are second class: a borrow, a reference to a value that someone else holds, exists only as a parameter or a call argument, so there are no lifetime annotations and no dangling references.
+- Borrows are second class: a borrow, a reference to a value that someone else holds, exists only as a parameter or a call argument, so there are no lifetime annotations, and outside `unsafe` a borrow cannot outlive the value it names. The Lean ownership model proves that for a fragment of the language ([verification.md](verification.md#ownership-and-leases-in-lean)).
 - Short forms are contracts: `compact`, `reduce`, `parallel`, `family`, `derive wire` and `try` expand to ordinary code, and every check and obligation of that code comes with them.
 
 Every function has an inferred effect row, which records the costs the first rule makes visible. The row is the list of what the function may do when it runs, such as `alloc` (take heap memory), `io` (input or output) or `trap` (abort on a failed check). [memory.md](memory.md#effects) lists every effect.
 
 An owner is a value that holds heap storage, such as a `Buf`, and releases it when it goes out of scope. Using an owner as a value moves it ([memory.md](memory.md#owners-and-moves)).
 
-A guard is a check the compiler writes into the program where an operation could go wrong at run time: an index past the end of an array, an integer overflow, a division by zero. A failed guard aborts the process at once. Nothing unwinds and nothing is rolled back.
+A guard is a check the compiler writes before an operation that could fail at run time: an index past the end of an array, an integer overflow, a division by zero. A failed guard traps: on the host it aborts the process at once, and in a device lane it ends the kernel, and the process aborts at its next wait on the device ([devices.md](devices.md#one-wait-or-none)). Nothing unwinds or is rolled back.
 
 ## Values and arithmetic
 
@@ -77,7 +77,7 @@ Expected u32, got u64.
 
 Floats compile with `-ffp-contract=off -fno-fast-math`, and device code with `--fmad=false` as well. The C++ compiler may neither fuse a multiply and an add into one operation nor reassociate float arithmetic.
 
-Six builtins cover what IEEE 754 defines exactly, so every compiler, the host and a device lane give the same bits. `sqrt` (correctly rounded), `floor`, `ceil` and `trunc` take an `f32` or an `f64`. `abs` takes a float or a signed integer, and traps on the signed minimum. `to_bits` gives a float's IEEE bit pattern. Any other argument is `E-MATH-TYPE`.
+Six builtins compute what IEEE 754 defines exactly, so a conforming compiler gives the same bits on the host and in a device lane. A test holds clang++ and g++ builds to Python's IEEE arithmetic, and no device run of them is recorded. `sqrt` (correctly rounded), `floor`, `ceil` and `trunc` take an `f32` or an `f64`. `abs` takes a float or a signed integer, and traps on the signed minimum. `to_bits` gives a float's IEEE bit pattern. Any other argument is `E-MATH-TYPE`.
 
 `exp`, `log`, `sin` and the rest depend on the last bit of the C math library, so they are not builtins. [std.math](library.md#stdmath) calls the C library for them, and its effect row says so. When a program declares its own function with one of these names, a call reaches the program's function.
 
@@ -108,7 +108,9 @@ The compiler leaves a guard out where the checker has shown that it cannot fail.
 
 The checker takes these facts from the index a loop binds, the index a lane binds (a lane runs one index of a `parallel` region, [concurrency.md](concurrency.md#parallel-regions)), immutable `let` bindings, conditions, early exits and the `where` test of a `compact` ([concurrency.md](concurrency.md#reduce-and-compact)). Each fact is about `usize` values that cannot change, and a `let mut` local never supplies one. A deferred call is checked where `defer` is written and runs when its block ends, and no local it names can move in between ([memory.md](memory.md#linear-values-and-defer)), so the facts it was checked under still hold when it runs. A part `x[lo..hi]` loses its guard once `lo <= hi <= len(x)` is established.
 
-Leaving a guard out never changes what a program does. The function's row still says `trap`, and the build receipt, the JSON record `cairn build` writes, counts the site under `discharged_check_sites`. Every guard left out carries the facts that justify it, and an independent audit checks each one before a line of C++ is emitted. `--keep-guards` on `emit`, `build` and `run` writes every guard. [verification.md](verification.md#the-guard-elision-rule) says what of this is proved.
+A guard is left out only where the checker's facts show that it cannot fail, and where those facts are true, leaving it out does not change what a program does. The function's row still says `trap`, and the build receipt, the JSON record `cairn build` writes, counts the site under `discharged_check_sites`. Every guard left out carries the facts that justify it, and an independent audit checks each one before a line of C++ is emitted. `--keep-guards` on `emit`, `build` and `run` writes every guard.
+
+Lean proves, for a model of the rule, that a guard cannot fail where the facts it cites are true, and a differential run compares that model with the checker on generated questions. That those facts are true where they are cited rests on the audit, which is written by hand and not proved, and on differential runs of generated programs built with and without every guard. [verification.md](verification.md#the-guard-elision-rule) says what each covers.
 
 ## Functions and control flow
 
@@ -187,7 +189,7 @@ This call returns std.core.Result[u64, u8], an outcome to handle: use try or mat
 
 ## Records and sums
 
-`struct` declares a record, like a C `struct`. `enum` declares a tagged sum, like a Rust `enum`, in which each variant carries zero or one payload. Fields and payloads may be any value type, owners included. A field or payload is never a borrow, `void`, or its own type by value (`E-RECORD-TYPE`); reach a value of the same type through a `Buf`. A record is copyable when all its fields are. An enum whose variants carry no payload may be compared with `==`, and comparing any other record or sum is `E-OPERATOR`.
+`struct` declares a record, like a C `struct`. `enum` declares a tagged sum, like a Rust `enum`, in which each variant carries zero or one payload. Fields and payloads may be any value type, owners included. A field or payload is never a borrow, `void`, or its own type by value (`E-RECORD-TYPE`); reach a value of the same type through a `Buf`. A record is copyable when all its fields are and it is not declared `linear` ([memory.md](memory.md#linear-values-and-defer)). An enum whose variants carry no payload may be compared with `==`, and comparing any other record or sum is `E-OPERATOR`.
 
 ```cairn
 struct Header { kind:u8; size:u32; }
@@ -412,7 +414,7 @@ Bind this try first: leaving from here would abandon an owner that another opera
 
 ## Constants
 
-The compiler folds a `const` before the program runs, exactly as the machine would compute it. It is made of literals, other constants in any order, arithmetic, comparisons and conversions, and anything else, such as a call, is `E-CONST`. An integer result must fit its type (`E-LITERAL-RANGE` for arithmetic, `E-CONST` for a conversion). A float result must be finite, and a division by zero or a constant defined through itself is `E-CONST`.
+The compiler folds a `const` before the program runs, in exact integer arithmetic with division toward zero as at run time, and with each `f32` operation rounded once as the machine rounds it. Only the result must fit, so `const X:u8 = 0 - 1 + 1;` is 0, where the same arithmetic at run time traps at `0 - 1`. It is made of literals, other constants in any order, arithmetic, comparisons and conversions, and anything else, such as a call, is `E-CONST`. An integer result must fit its type (`E-LITERAL-RANGE` for arithmetic, `E-CONST` for a conversion). A float result must be finite, and a division by zero or a constant defined through itself is `E-CONST`.
 
 A constant natural, a whole number known when the program compiles, may stand wherever a natural is written: an extent, `Array[u64, N]`, `scale[N](x)`.
 
@@ -445,7 +447,7 @@ HEAD is defined in terms of itself.
 
 ## Tests and assert
 
-`assert(cond)` traps when `cond` is false, and `assert(cond, "why")` also says why. The message is one string literal, and any other form is `E-ARITY`. A failed assert prints to standard error where it was written, as in `assertion failed at src/main.cairn:12: why`, and aborts as every failed guard does. `assert_eq(a, b)` also prints both values, as in `left 1, right 2`. It takes only integers, bools and floats (`E-ASSERT-EQ`), so for anything else write `assert(a == b)`.
+`assert(cond)` traps when `cond` is false, and `assert(cond, "why")` also says why. The message is one string literal, and any other form is `E-ARITY`. On the host a failed assert prints to standard error where it was written, as in `assertion failed at src/main.cairn:12: why`, and aborts as every failed guard does. In a device lane it prints through the device's `printf`, which has not run on a GPU, and a freestanding image prints nothing. `assert_eq(a, b)` also prints both values, as in `left 1, right 2`. It takes only integers, bools and floats (`E-ASSERT-EQ`), so for anything else write `assert(a == b)`.
 
 `test name { ... }` declares a test: a body with no parameters and no result that only [`cairn test`](tools.md#cairn-test) runs, each test in a process of its own. A module declares each test name once (`E-TEST`). Nothing can call a test, so it may share its name with the function it tests, and `test` is an ordinary name everywhere else.
 
@@ -516,4 +518,4 @@ print writes integers, bools, character literals, floats and bytes; format a Poi
 
 ## What the language does not have
 
-CAIRN has no inheritance, implicit boxing, lifetime annotations, implicit conversion, operator overloading or shadowing, and a block never returns its last expression. There is no wildcard arm, and no way to pass an error up but `try`. There are no exceptions, no unwinding and no rollback: a failed guard aborts. There is no orphan rule, because the compiler checks over the whole program that each type has one implementation of each trait ([abstractions.md](abstractions.md#traits)). Neither a task nor queued device work can be cancelled. No loop implies parallelism. Nothing is downloaded: dependencies are vendored sources.
+CAIRN has no inheritance, implicit boxing, lifetime annotations, implicit conversion, operator overloading or shadowing, and a block never returns its last expression. There is no wildcard arm, and no short form that passes an error up but `try`. There are no exceptions, no unwinding and no rollback: a failed guard aborts. There is no orphan rule, because the compiler checks over the whole program that each type has one implementation of each trait ([abstractions.md](abstractions.md#traits)). Neither a task nor queued device work can be cancelled. No loop implies parallelism. Nothing is downloaded: dependencies are vendored sources.

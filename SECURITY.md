@@ -14,7 +14,7 @@ A tool that writes outside the project or scratch directory it was given is a se
 
 ## How to report one
 
-Report it privately to the repository owner, through GitHub's private vulnerability reporting for this repository or by direct message, with the program that shows it. Do not open a public issue for it until a fix has landed. Reports get an acknowledgement within a week. A fix is released with a test that pins it: a rejection test naming the diagnostic code, or a behaviour test naming the exit status.
+Report it privately to the repository owner, @SamMausberg, with the program that shows it. GitHub's private vulnerability reporting is not turned on for this repository. Do not open a public issue for it until a fix has landed. Reports get an acknowledgement within a week. A fix is released with a test that pins it: a rejection test naming the diagnostic code, or a behaviour test naming the exit status.
 
 ## Supported versions
 

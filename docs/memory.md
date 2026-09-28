@@ -154,7 +154,7 @@ fn main() -> i32 { let mut frame = Buf[u8](8); swap_ends(4, frame[0..4], frame[2
 A mutable view cannot be passed to overlapping call arguments.
 ```
 
-The C++ the compiler writes holds two versions of a function that takes views. The checked entry `cf_f` checks null, alignment, length and overlap, and a foreign caller, a test driver and `cf_main` reach it. A call from CAIRN reaches the body `ci_f` directly, because every view such a call can pass was already checked, and `E-ALIAS` has shown that the mutable ones overlap nothing. `--keep-guards` sends every call through the entry.
+The C++ the compiler writes holds two versions of a function that takes views. The checked entry `cf_f` checks that each view's pointer is not null and is aligned, that its extent does not run past the end of the address space, and that no mutable view overlaps another view; that the storage holds that many live elements is trusted. A foreign caller, a test driver and `cf_main` reach it. A call from CAIRN reaches the body `ci_f` directly, because every view such a call can pass was already checked, and `E-ALIAS` has shown that the mutable ones overlap nothing. `--keep-guards` sends every call through the entry.
 
 ### Borrows stay in calls
 
@@ -170,7 +170,7 @@ A part xs[lo..hi] is a borrow: it exists only as a view argument of a call. Keep
 
 ## Owners and moves
 
-An owner is a value that holds heap storage and releases it when it goes out of scope, like a `Vec` in Rust or a `unique_ptr` in C++. `Buf[T]` is the basic owner, and a record with an owner field is an owner too. Four forms of storage hold elements, all filled with zeros, because every type has a value whose bytes are all zero.
+An owner is a value that holds heap storage and releases it when it goes out of scope, like a `Vec` in Rust or a `unique_ptr` in C++. `Buf[T]` is the basic owner, and a record with an owner field is an owner too. Four forms of storage hold elements, all filled with zeros, because every type they may hold has a value whose bytes are all zero. A linear value is refused there, since a zero one would be forged (`E-LINEAR-STORAGE`).
 
 ```cairn
 fn checksum(n:usize, bytes:ro<u8>[n]) -> u32 {
@@ -408,7 +408,7 @@ fill exceeds its declared effects.
 
 ## Operand order
 
-C++ leaves the order of an expression's operands open: in `f() + g()`, either call may run first. CAIRN lowers to C++, so the checker refuses an operand whose effect would make the result depend on that order.
+C++ leaves the order of an expression's operands open: in `f() + g()`, either call may run first. CAIRN lowers to C++, so the checker refuses an operand whose effect would make the result depend on that order. One case is still open: a call that moves an owner beside a call among its arguments that reads it, as in `keep(total(c), c)`, is accepted ([internals.md](internals.md#undefined-behaviour-the-lowering-rules-out)).
 
 A call that writes through a borrow or allocates cannot sit beside another operand (`E-EFFECT-ORDER`). Bind it to a name first, so its cost is a statement of its own. The refusal names the call and what it writes.
 
@@ -522,7 +522,7 @@ The target is `ptx`, `x86_64` or `aarch64`. PTX runs only in device code, a devi
 
 Operands are numbered as written, outputs first. The template names every one of them, `%0`, `%1`, with `%%` for a literal percent sign and, on a host, one modifier letter, as in `%k0` (`E-ASM-OPERANDS`). The type chooses the register class. On x86-64 and AArch64 an integer takes a general register and a float a vector register. In PTX, `u16` and `i16` take `h`, integers of 32 bits `r`, integers of 64 bits and `usize` `l`, `f32` `f` and `f64` `d`. A `bool`, a storage float, a record, or a `u8` in PTX has no class (`E-ASM-CONSTRAINT`). `out name:T` binds a fresh immutable local after the statement, and `out name:T = e` starts it at `e`. `clobbers(rax, rdx)` names the host registers the instructions write besides their outputs (`E-ASM-CLOBBER`).
 
-A view or local array given as an input passes its address. The statement then declares `read:x` or `write:x` for it (`E-ASM-EFFECT`), which lends it for the statement as a call would. So a task's lease refuses it (`E-LEASED`), and an `ro` view refuses `write:x` (`E-WRITE-LEASE`). `effects(...)` may also name `fence`, `barrier`, `atomic`, `io` and `mmio`. Any declared effect makes the lowering `volatile` with a `"memory"` clobber, and so does a statement with no outputs. `asm volatile` keeps a statement whose outputs depend on more than its inputs, such as a clock read, from being merged or moved.
+A view or local array given as an input passes its address. The statement then declares `read:x` or `write:x` for it (`E-ASM-EFFECT`), which lends it for the statement as a call would. So a task's lease refuses it (`E-LEASED`), and an `ro` view refuses `write:x` (`E-WRITE-LEASE`). `effects(...)` may also name `fence`, `barrier`, `atomic`, `io` and `mmio`. Any declared effect makes the lowering `volatile` with a `"memory"` clobber, and a statement with no outputs is `volatile` too. `asm volatile` keeps a statement whose outputs depend on more than its inputs, such as a clock read, from being merged or moved.
 
 The row gets `asm:TARGET` and the declared effects, and the build receipt lists each statement under `assembly` as `declared-not-checked`. In device code, typed PTX may declare reads, writes and `fence`, and nothing else (`E-ASM-LANE`). An address reaches the whole array, so the lane rule ([concurrency.md](concurrency.md#parallel-regions)) treats it as an access to the whole array: through one, a lane may read what no lane writes, and write nothing outside itself (`E-PARALLEL-RACE`).
 
@@ -566,7 +566,7 @@ The storage layouts are `rows(R, C)`, `cols(R, C)` and `strided(R, C, SR, SC)`. 
 
 In code, `L.at(r, c)` is an element's offset, `D.row(t, v)` and `D.col(t, v)` are the coordinates of participant `t`'s value `v`, and `D.at(t, v)` is that element's offset in `D`'s tile. Each argument is checked against its extent and traps outside it. `size()`, `cosize()`, `extent(k)`, `participants()` and `values()` are constants.
 
-Every declaration is held to two rules. A storage layout gives each element its own offset, and a spread gives each element of its tile exactly one holder, so writes through either never collide and never miss an element. A spread that leaves an element to nobody is `E-LAYOUT-GAP`. Two elements at one offset, or one element with two holders, is `E-LAYOUT-OVERLAP`.
+Every declaration is held to two rules. A storage layout gives each element its own offset, and a spread gives each element of its tile exactly one holder, so no two elements of a storage layout share an offset, and a phase in which every participant writes each of its values through a spread writes every element once. `Layout.lean` proves this of the rules, and the code that uses a layout is tested ([verification.md](verification.md#the-layout-rule)). A spread that leaves an element to nobody is `E-LAYOUT-GAP`. Two elements at one offset, or one element with two holders, is `E-LAYOUT-OVERLAP`.
 
 ```cairn rejects E-LAYOUT-GAP
 layout TILE = rows(32, 32);
@@ -603,7 +603,7 @@ LOAD spreads a 32 x 32 tile, and WIDE lays out 64 x 32: its coordinates name no 
 
 The build receipt lists each layout under `layouts`. For a spread over at most 4096 elements, `cairn explain` also names the participant that holds each element. For a spread, both say whether it covers its tile exactly once, and the widest run of adjacent values that every participant's values fall into (`runs`, by element size: what one access of at most 16 bytes moves). They also say how many ways a warp's accesses split over the 32 banks of shared memory (`bank_ways`). Reading the tile above a column at a time costs 32 ways when it is stored by rows, and 1 way when it is padded or swizzled. Between two spreads over one tile, or over a tile and its transpose, `cairn explain` says what moving values from one to the other needs (`conversions`): `none`, `registers`, a `shuffle` within each warp, or `shared`, which is a store, a barrier and a load.
 
-Every answer comes from enumerating the layout, so one layout holds at most 262,144 elements, or pairs of participant and value, and the SMT model answers `unknown` for a function that uses one. Every offset a storage layout places is below 2^63 - 1, the most elements an array holds, and a swizzle reads and flips bits 0 to 62 (`B + M + S` at most 63). The lowered arithmetic on 64 bits therefore never wraps, and gives what the enumeration gives (`E-LAYOUT`).
+Every answer comes from enumerating the layout, so one layout holds at most 262,144 elements, or pairs of participant and value, and the SMT model answers `unknown` for a function that uses one. Every offset a storage layout places is below 2^63 - 1, the most elements an array holds, and a swizzle reads and flips bits 0 to 62 (`B + M + S` at most 63). The lowered arithmetic on 64 bits therefore never wraps (`E-LAYOUT`). Its offsets matched the enumeration on 120 random accepted layouts under both compilers in one review ([evidence](../evidence/v1_0/review_implementation_layer/README.md)), and the suite checks a transpose through three tiles against the plain one.
 
 A [plan](concurrency.md#plans)'s `vector` and `stage` ask the same questions of a device region's lanes: how many adjacent elements one access moves, and whether a block's tile holds every element its lanes read. In a [cooperative region](devices.md#cooperative-regions) the phase rule, which keeps two threads of a block from touching one shared element between two barriers where either writes, runs each thread's `L.at(...)` with its own numbers, so a tile written through one layout and read through its transpose is checked element by element. `examples/tensor/transpose.cairn` does that through a tile stored by rows, a padded tile and a swizzled tile.
 
@@ -641,4 +641,4 @@ plan stencil_1d use stencil_tiled;
 
 An implementation stays inside its reference's ceiling, so the reference names the foreign symbol its implementations may reach (`E-IMPL-EFFECT` otherwise). The build compiles each vendored source as it is, with the program's own flags and device target and the runtime headers on the include path. It asserts that each symbol has the C++ types its extern passes, so a definition of other types does not build. A C++ symbol has C linkage, and a kernel keeps its C++ name. A source that defines nothing the program declares, such as a copy of `bench/gpu/parallel_gpu.cu`, is compiled and inspected and never linked. The build receipt pins every source by its sha256.
 
-`cairn foreign` says what one foreign implementation has, each claim apart: its declared contract, which is trusted and never checked; whether it is native-built; what ptxas reports of a CUDA source's kernels; and validation against its reference with the vendored objects linked, under clang++ and g++. An implementation that runs device code has its device tests built and never run, since device code runs only under `make gpu`. [tools.md](tools.md#cairn-foreign) shows the record.
+`cairn foreign` says what one foreign implementation has, each claim apart: its declared contract, which is trusted and never checked; whether it is native-built; what ptxas reports of a CUDA source's kernels; and validation against its reference with the vendored objects linked, under clang++ and g++. An implementation that runs device code has its device tests built and never run, since `cairn foreign` runs no device code; `make gpu` runs them. [tools.md](tools.md#cairn-foreign) shows the record.

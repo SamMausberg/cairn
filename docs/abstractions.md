@@ -86,7 +86,7 @@ Buf[u8] is affine, not copy; widest needs [T:copy].
 
 ## Certifying a template
 
-`cairn check --generics` checks each template once, at placeholder types that offer only what its bounds promise. `ok` means every instance whose arguments satisfy the bounds will check. Any other verdict names the first thing the body needed beyond its bounds, such as an operator on a bare `T`, or dropping one.
+`cairn check --generics` checks each template once, at placeholder types that offer only what its bounds promise. `ok` means the body needed nothing beyond its bounds at those placeholder types, so an instance whose arguments satisfy the bounds passes every rule the verdict covers. Any other verdict names the first thing the body needed beyond its bounds, such as an operator on a bare `T`, or dropping one.
 
 ```cairn
 fn smaller[T:numeric](a:T, b:T) -> T { if a < b { return a; } return b; }
@@ -109,7 +109,7 @@ cairn check --generics frame.cairn
 }
 ```
 
-The verdict covers ceilings, operand order and what a lane may reach too. A trait member without a ceiling may do anything, which shows as `bound:Trait.member` in the row. The command reports the program's own templates and exits 1 unless every one certifies, and every template of `std` certifies. Without the flag, the checker accepts templates instance by instance, and the build receipt lists a template nobody instantiates under `uninstantiated_templates`.
+The verdict covers ceilings and what a lane may reach too, and operand order except around a call of a trait member without a ceiling: `bandwidth` above certifies `ok`, and an instance whose `size` prints is refused with `E-EFFECT-ORDER`. A trait member without a ceiling may do anything, which shows as `bound:Trait.member` in the row. The command reports the program's own templates and exits 1 unless every one certifies, and every template of `std` certifies. Without the flag, the checker accepts templates instance by instance, and the build receipt lists a template nobody instantiates under `uninstantiated_templates`.
 
 ## Traits
 
@@ -488,7 +488,7 @@ fn main() -> i32 {
 
 ### When an implementation runs
 
-The selected implementation runs where its condition holds and the reference everywhere else, so every input the reference admits is still admitted. Without a plan the reference runs. A call whose literal or constant arguments make the condition true, such as `total(12, xs)` above, calls the implementation directly. Without `when`, an implementation applies to every input, and the dispatch tests nothing.
+The selected implementation runs where its condition holds and the reference everywhere else, so every input the reference admits is still admitted. Without a plan the reference runs. A call whose literal or constant arguments make the condition true, such as `total(12, xs)` for a `stack xs:u64[12]`, calls the implementation directly. Without `when`, an implementation applies to every input, and the dispatch tests nothing.
 
 `when` is a condition over the value parameters that cannot trap. It may use comparisons, `&& || !`, `& | ^ ~`, `min`, `max`, the wrapping forms, `/` or `%` by a nonzero literal or natural parameter, `shr` or `shl_wrap` by a count below the width, `len` of a view parameter, literals, constants and natural parameters (`E-IMPL-WHEN`). A condition that computes with a float is always tested on entry, in the machine's own arithmetic.
 

@@ -31,7 +31,7 @@ Start with `hello`, the smallest complete project, and `apps/kvstore`, the shape
 | [harness](#examplesharness) | two benchmark problems as CAIRN kernels, with the mappings that package them as submissions |
 | [bazel](#examplesbazel) | a Bazel workspace that builds, runs and tests CAIRN code with nothing fetched |
 
-`apps/simulator`, `apps/gpu_pipeline`, the `gpu.toml` configurations and `foreign/device` need nvcc and a CUDA device, and the suite runs their device code only under `make gpu`. That target ran each of them once, in the 1.1.0 session on an RTX 5070 Ti ([evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)). `harness` needs nvcc to compile its kernels. `bazel` needs Bazel. `embedded` needs `qemu-system-aarch64` on an AArch64 host. Everything else needs only a C++20 compiler.
+`apps/simulator`, `apps/gpu_pipeline`, the `gpu.toml` configurations and `foreign/device` need nvcc and a CUDA device, and the suite runs their device code only under `make gpu`. That target ran each of them in the 1.1.0 session on an RTX 5070 Ti ([evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)) and again on a GH200 at `449189b` ([evidence/v1_2/gpu_gh200](../evidence/v1_2/gpu_gh200/README.md)). `harness`, `cooperative/tuned.toml` and the two fragment multiplies of `tensor` need nvcc to compile. `sketch` and `proof_scope` need `libz3`. `bazel` needs Bazel. `embedded` needs `qemu-system-aarch64` on an AArch64 host. Everything else needs only a C++20 compiler.
 
 ## examples/hello
 
@@ -115,7 +115,7 @@ printf 'put a hello\nget a\ndel a\nget a\nquit\n' | nc 127.0.0.1 39800
 +bye
 ```
 
-One I/O ring holds the accept and every client's receive in flight, and `q.next(tag, result)` answers whichever finished first. A receive's buffer comes back with its result and goes into the next receive. The test holds three clients at once and checks that the process never has a second thread. On `quit`, `run` cancels the accept and every idle receive, and `defer wait(q)` collects them before the listener closes.
+One I/O ring holds the accept and every client's receive in flight, and `q.next(tag, result)` answers whichever finished first. A receive's buffer comes back with its result and goes into the next receive. The test holds three clients at once and checks that the process has one thread while all three are connected. On `quit`, `run` cancels the accept and every idle receive, and `defer wait(q)` collects them before the listener closes.
 
 A function cannot return a borrow, so `word_end` returns an index and the caller takes the part, `find(t, k, line[key_lo..key_hi])`. Shifting a client's pending line down is an ordinary loop, because `mem.copy` would be refused there with `E-ALIAS`. The rows leave out the same effects as above:
 
@@ -129,7 +129,7 @@ run      + ffi:socket, ffi:bind, ffi:listen, ffi:setsockopt, ffi:close, ffi:writ
 
 The only allocation per request is the answer to `get`, which `respond` builds in a `Vec`. A reply is a blocking send, so a client that stops reading its replies can still stall the service.
 
-Overload gets an answer and never a trap. A 33rd client hears `-busy` and is closed. A failed accept, as when descriptors run out, is retried after a `q.timeout` of ten milliseconds, so the loop does not spin. Without io_uring, `q.status()` is negative, and the service prints `service: no io_uring here, errno 24` and exits 2. `tests/projects/test_apps.py` provokes all three.
+Overload gets an answer and never a trap. A 33rd client hears `-busy` and is closed. A failed accept, as when descriptors run out, is retried after a `q.timeout` of ten milliseconds, so the loop does not spin. Without io_uring, `q.status()` is negative, and the service prints `service: no io_uring here, errno N` with the setup call's error (24, too many open files, in the test that provokes it) and exits 2. `tests/projects/test_apps.py` provokes all three.
 
 ## examples/apps/wordfreq
 
@@ -218,7 +218,7 @@ analytics: group by venue    2513 us
 analytics: every cross-check passed on the host
 ```
 
-The device configuration is a second manifest, `gpu.toml`, because one `@device` view sends the whole program through nvcc. A machine without CUDA must still build the host engine, which takes 1.2 s.
+The device configuration is a second manifest, `gpu.toml`, because one `@device` view sends the whole program through nvcc. A machine without CUDA must still build the host engine.
 
 ```sh
 cairn run examples/apps/analytics/gpu.toml --timeout 300
@@ -260,7 +260,7 @@ agg.run_dyn                             ... dispatch
 device.queued_notional                  ... spawn, join, par:device, transfer:h2d, transfer:d2h
 ```
 
-In the runs above, measured on 2026-09-19 on a GH200 with CUDA 12.8 and clang 15.0.7, ingest dominates, host lanes do not pay off over 10^6 cheap elements, and the download costs nearly twice what the device queries do. The device configuration also agreed with the host on the RTX 5070 Ti in the 1.1.0 session ([evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)).
+The times above are one run's, on a GH200 on 2026-09-19 with CUDA 12.8 and clang 15.0.7. No record under `evidence/` keeps them, so they show what the program prints and nothing about its speed. The device configuration agreed with the host bit for bit in that run ([evidence/v0_8_2/RUN_NOTES.md](../evidence/v0_8_2/RUN_NOTES.md)), on the RTX 5070 Ti in the 1.1.0 session ([evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)) and on a GH200 at `449189b` ([evidence/v1_2/gpu_gh200](../evidence/v1_2/gpu_gh200/README.md)).
 
 Three things are still awkward. The `fold` a recipe runs takes only an operator or a bare function name. A view's extent cannot be inferred from a literal. A recipe cannot express arithmetic between two named fields, so `notional_of` is written by hand.
 
@@ -292,7 +292,7 @@ step_device   ffi_precondition, par:device, read:src, trap, write:out
 main          ... gpu_alloc, gpu_free, transfer:h2d, transfer:d2h, par:host, par:device
 ```
 
-Measured on 2026-09-19 on a GH200 with 64 cores, CUDA 12.8 and clang 15.0.7, host threads beat the loop by about 10x and the device by about 85x, after 283 ms to create the CUDA context on the first device allocation.
+The times above are one run's, on a GH200 on 2026-09-19 with CUDA 12.8 and clang 15.0.7, where making the CUDA context on the first device allocation took 283 ms. No record under `evidence/` keeps that run, so they show what the program prints and are not a measured speedup. That the three back ends agree bit for bit is what `make gpu` checks, and it held on an RTX 5070 Ti in the 1.1.0 session and on a GH200 at `449189b` ([evidence/v1_2/gpu_gh200](../evidence/v1_2/gpu_gh200/README.md)).
 
 ## examples/apps/gpu_pipeline
 
@@ -322,7 +322,7 @@ sum_device   ffi_precondition, gpu_alloc, gpu_free, par:device, read:src, trap
 main         ... alloc, free, gpu_alloc, gpu_free, io, par:device, transfer:h2d, transfer:d2h
 ```
 
-`gpu_alloc` in `keep_device` and `sum_device` is the execution context's arena growing for CUB's temporary storage. The run above was measured on 2026-09-19 on a GH200 with CUDA 12.8.
+`gpu_alloc` in `keep_device` and `sum_device` is the execution context's arena growing for CUB's temporary storage. The times above are one run's, on a GH200 on 2026-09-19 with CUDA 12.8, which no record under `evidence/` keeps, so they say nothing about speed.
 
 ## examples/apps/matmul
 
@@ -336,7 +336,7 @@ cairn run examples/apps/matmul
 host layer: 200 x 136 x 72, 0 outputs outside the contract
 ```
 
-`gpu.toml` replaces the entry with `src/device_main.cairn`, which moves the matrices to the device, multiplies a 256 x 512 x 1024 layer on the tensor cores and holds it to the same bound. That shape is whole 64 x 64 tiles with `k` and `n` multiples of 8, so both stages in shared memory load through asynchronous copies of 16 bytes. It kept the bound on the RTX 5070 Ti in the 1.1.0 session ([evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)), and nothing has timed it. `cairn predict` prices it from the published tensor peak, as a roofline, at low confidence:
+`gpu.toml` replaces the entry with `src/device_main.cairn`, which moves the matrices to the device, multiplies a 256 x 512 x 1024 layer on the tensor cores and holds it to the same bound. That shape is whole 64 x 64 tiles with `k` and `n` multiples of 8, so both stages in shared memory load through asynchronous copies of 16 bytes. It kept the bound on the RTX 5070 Ti in the 1.1.0 session ([evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)) and on a GH200 at `449189b` ([evidence/v1_2/gpu_gh200](../evidence/v1_2/gpu_gh200/README.md)), and nothing has timed it. `cairn predict` prices it from the published tensor peak, as a roofline, at low confidence:
 
 ```sh
 cairn predict examples/apps/matmul/gpu.toml --symbol device_layer --at rows=256,cols=512,inner=1024,on=131072,xn=262144,wn=524288
@@ -387,7 +387,7 @@ sorted 7 19 19 23 31 42
 ok
 ```
 
-The image exits with `fn main()`'s return value, 0 here, and `size` reports 5411 bytes of text, with no data and no bss.
+The image exits with `fn main()`'s return value, 0 here, and `size` reported 5411 bytes of text in the v0.8.0 record, with no data and no bss.
 
 The UART driver is `mmio_read[u32]` and `mmio_write[u32]` inside `unsafe { }`. Each field goes to the parser as `text[start..i]`, a part of the one borrowed view, with no copy and one guard, and the histogram is a `stack` array. There is no `Buf`, `parallel` or `extern` anywhere, and the freestanding target refuses all three ([the freestanding target](tools.md#the-freestanding-target)).
 
@@ -480,7 +480,7 @@ cairn run examples/cooperative
 transpose 96 x 64, 5 block sums and 3 row sums agree with plain loops
 ```
 
-`gpu.toml` is the same kernels over `@device` views, with a driver that moves the data across. The suite compiles it for sm_120 and runs it only under `make gpu`, which ran it once, in the 1.1.0 session ([evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)). `tuned.toml` holds `row_totals` and an implementation, `row_totals_tiled[T, D]`, whose block shape and pipeline depth `cairn tune` searches ([tools.md](tools.md#cairn-tune)). None of its instances is chosen until a validation on the device holds.
+`gpu.toml` is the same kernels over `@device` views, with a driver that moves the data across. The suite compiles it for sm_120 and runs it only under `make gpu`, which ran it in the 1.1.0 session ([evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)) and on a GH200 at `449189b` ([evidence/v1_2/gpu_gh200](../evidence/v1_2/gpu_gh200/README.md)). `tuned.toml` holds `row_totals` and an implementation, `row_totals_tiled[T, D]`, whose block shape and pipeline depth `cairn tune` searches ([tools.md](tools.md#cairn-tune)). None of its instances is chosen until a validation on the device holds.
 
 ```sh
 cairn tune examples/cooperative/tuned.toml --symbol row_totals --at rows=64,cols=1e5 --device-target sm_120
@@ -502,7 +502,7 @@ cairn run examples/reduction
 the one-pass and the atomic sums agree with a plain loop on host threads
 ```
 
-`gpu.toml` is the same kernels over `@device` views, with a driver that moves the data across. The suite runs it emulated on host threads and compiles it for sm_120, where the sum's loop is one `LDG.E.EF.128` a step with nothing in local memory ([evidence/v1_1/kernels](../evidence/v1_1/kernels/README.md)). The suite runs it on a GPU only under `make gpu`, which ran it once, in the 1.1.0 session on an RTX 5070 Ti. In the same session `bench/device` timed `sum` through its `cq_sum` entry at 330.7 us, against 329.1 us for a CUDA kernel written by hand that makes one pass, the medians of 60 calls at 2^26 f32 ([evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)).
+`gpu.toml` is the same kernels over `@device` views, with a driver that moves the data across. The suite runs it emulated on host threads and compiles it for sm_120, where the sum's loop is one `LDG.E.EF.128` a step with nothing in local memory ([evidence/v1_1/kernels](../evidence/v1_1/kernels/README.md)). The suite runs it on a GPU only under `make gpu`, which ran it in the 1.1.0 session on an RTX 5070 Ti and on a GH200 at `449189b`. In the same session `bench/device` timed `sum` through its `cq_sum` entry at 330.7 us, against 329.1 us for a CUDA kernel written by hand that makes one pass, the medians of 60 calls at 2^26 f32 ([evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)).
 
 ## examples/tensor
 
@@ -513,7 +513,7 @@ cairn run examples/tensor/transpose.cairn       # exits 0 when all three transpo
 cairn explain examples/tensor/transpose.cairn   # bank_ways and conversions for each spread
 ```
 
-`tile64.cairn` and `tile32.cairn` add `a * b` into `c` with tensor-core fragments, under the signature and contract of `mma_unordered`. [numerics.md](numerics.md#tensor-core-fragments) gives their two tilings and what their runs on the host showed. Both compile for sm_120, and on an RTX 5070 Ti each kept the contract on the suite's shapes ([evidence/v1_0/tensor](../evidence/v1_0/tensor/README.md), [evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)).
+`tile64.cairn` and `tile32.cairn` add `a * b` into `c` with tensor-core fragments, under the signature and contract of `mma_unordered`. [numerics.md](numerics.md#tensor-core-fragments) gives their two tilings and what their runs on the host showed. Both compile for sm_120. On the suite's shapes each output lay within twice the contract's bound of the reference loop on an RTX 5070 Ti, and on a GH200 after #164, since NVVM 7.0.1 had first miscompiled `tile64` there ([evidence/v1_0/tensor](../evidence/v1_0/tensor/README.md), [evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md), [evidence/v1_2/gpu_gh200](../evidence/v1_2/gpu_gh200/README.md)).
 
 ## examples/foreign
 
@@ -525,7 +525,7 @@ cairn foreign examples/foreign/host --implementation histogram_interleaved
 cairn foreign examples/foreign/device --implementation stencil_tiled --device-target sm_120
 ```
 
-[tools.md](tools.md#cairn-foreign) shows what `cairn foreign` reports for each. The device kernel is compiled for sm_120 and inspected. Its validation against the reference runs only under `make gpu`, which ran it once, in the 1.1.0 session on an RTX 5070 Ti ([evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)).
+[tools.md](tools.md#cairn-foreign) shows what `cairn foreign` reports for each. The device kernel is compiled for sm_120 and inspected. Its validation against the reference runs only under `make gpu`, which ran it in the 1.1.0 session on an RTX 5070 Ti ([evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)) and on a GH200 at `449189b`, once #166 built it for the GPU it runs on ([evidence/v1_2/gpu_gh200](../evidence/v1_2/gpu_gh200/README.md)).
 
 ## examples/harness
 

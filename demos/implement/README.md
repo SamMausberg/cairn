@@ -31,7 +31,7 @@ The loop covers the first four elements and never reads `xs[4]`. The corrected s
 
 The last submission is `sumsq_blocks[K]`: blocks of `K` terms, each summed from zero and added to the total, with `tune K in [4, 8, 16, 32]`. The host validates each of the four instances on its own and writes the implementation with its helper.
 
-Given no history, `cairn tune` has no validation to cite, so it marks every implementation `not validated`, times only the reference and keeps it. With the history the session wrote, every row says `finite-tested`, and the search times all six on this host within its budgets and writes the fastest:
+Given no history, `cairn tune` has no validation to cite, so it marks every implementation `not validated`, times only the reference and keeps it. With the history the session wrote, every row says `finite-tested`, and the search times all six on this host within its budgets and writes the fastest. The output below is the run in `evidence/v1_0/demos/implement.json`; the later run of [evidence/v1_1/validation](../../evidence/v1_1/validation/README.md) chose `sumsq_blocks[8]`, since which instance wins depends on the machine and its load:
 
 ```text
 $ cairn tune results/demos/implement/sumsq --symbol sumsq --at n=65536 --measure 6 --budget-seconds 120 --budget-runs 16 --write
@@ -72,12 +72,12 @@ The measurements come from the history the search wrote, so the report starts no
 
 Every implementation computes the same products `xs[i] * xs[i]` and adds them in another order. Added in any order, m nonnegative terms come within gamma(m - 1) = (m - 1)u / (1 - (m - 1)u) of their exact sum, relative, where u = 2^-53. Two orders are then within 2 gamma(m - 1) / (1 - gamma(m - 1)) of each other, relative to either result, which for m up to 4096 is below 8192u = 2^-40. The host pins that bound: a correct reordering validates under it, and no submission can widen it. The bound holds while no partial sum overflows; a term that overflows is infinite in every order.
 
-A zero tolerance refuses the correct `sumsq_by4`. `cairn validate` with an exact policy finds that at n = 4096, with random elements, its result and the reference's differ by 3 units in the last place.
+A zero tolerance refuses the correct `sumsq_by4`. `cairn validate` with an exact policy finds a failing case at n = 4096 with random elements and shrinks it to n = 2048, where the two results differ by 3 units in the last place.
 
 ## What is verified and what is not
 
-The agent is scripted: its four submissions are the files in `candidates/` and the tolerance in `run.py`, written by hand to show one refusal of each kind, and no model wrote them. Every refusal, validation, timing and search is computed on every run. `tests/projects/test_demos.py` checks each outcome above except the times and which instance the search chooses, which depend on the machine.
+The agent is scripted: its four submissions are the files in `candidates/` and the tolerance in `run.py`, written by hand to show one refusal of each kind, and no model wrote them. Every refusal, validation, timing and search is computed on every run. `tests/projects/test_demos.py` checks the refusals, the validations and the search's answer, but not the times or which instance the search chooses, which depend on the machine, nor the packet's size and the counts of cases and runs quoted above.
 
-A validation is finite testing on the cases that ran, never proof. The reference and each implementation are compiled by the same compiler, so a fault they share would agree with itself. Z3 is asked apart from the tests, and its query covers only n <= 16, its unrolling bound. A counterexample it gave would be replayed natively under the pinned tolerance, and would refuse the implementation if it broke that tolerance. In the recorded run it answered `unknown` for all five, within its time limit; an earlier run answered `smt-equivalent` for `sumsq_blocks[32]`, where that bound leaves only n = 0.
+A validation is finite testing on the cases that ran, never proof. The reference and each implementation are compiled by the same compiler, so a fault they share would agree with itself. Z3 is asked apart from the tests, and its query covers only n <= 16, its unrolling bound. A counterexample it gave would be replayed natively under the pinned tolerance, and would refuse the implementation if it broke that tolerance. In the recorded run it answered `unknown` for all five, within its time limit.
 
 The times are host timing only, from one run on a shared machine; [evidence/v1_0/demos](../../evidence/v1_0/demos/README.md) records the machine, its load and the run. They show every implementation faster than the reference at n = 65536 on that host. Which `K` wins is within the noise, and a run on a quiet machine may choose another. Nothing ran on a GPU.

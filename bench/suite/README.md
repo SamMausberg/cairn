@@ -4,9 +4,9 @@ This suite times eight kernels on the host, each written in CAIRN and as plain, 
 
 | File | What it does |
 |---|---|
-| `harness.py` | emits each kernel, probes whether OpenMP and oneTBB run in parallel here, builds every arm, counts each arm's safety boundaries against the CAIRN build receipt, runs what built, and writes `results/bench_suite/`; it writes nothing when a case disagrees with its sequential result |
+| `harness.py` | emits each kernel, probes whether OpenMP and oneTBB run in parallel here, builds every arm, counts each arm's safety boundaries against the CAIRN build receipt, runs what built, and writes `results/bench_suite/`; it writes no `suite.json` when a case disagrees with its sequential result or its oracle |
 | `report.py` | reads `results/bench_suite/suite.json` and prints the tables, losses beside wins; it measures nothing |
-| `kernels/<name>/` | each kernel's CAIRN source (`kernel.cairn`), its arms (`cairn.cpp`, `plain.cpp`, `omp.cpp`, `tbb.cpp`), the `case.hpp` they share, and a Python `oracle.py`; the result an arm dumps must equal the oracle's `expected(n)` exactly, unless the oracle states its own `agrees(n, result)` |
+| `kernels/<name>/` | each kernel's CAIRN source (`kernel.cairn`), its arms (`cairn.cpp`, `plain.cpp`, `omp.cpp`, `tbb.cpp`, and for some kernels `cairn_atomic.cpp`, `cairn_pool.cpp`, `cairn_blocks.cpp`, `cairn_wrap.cpp` or `threads.cpp`), `stencil_1d`'s refused `in_place_rejected.cairn`, the `case.hpp` they share, and a Python `oracle.py`; the result an arm dumps must equal the oracle's `expected(n)` exactly, unless the oracle states its own `agrees(n, result)` |
 | `bench.hpp`, `guards.hpp`, `omp_arm.hpp`, `tbb_arm.hpp` | the timing loop, the guards a guarded baseline arm pays, and the two library arms |
 
 It needs `g++` and `clang++`, and an arm whose library (OpenMP, oneTBB) is missing is reported as unavailable. The harness never writes under `evidence/`; `evidence/v1_0/bench/` holds a release's copy.
