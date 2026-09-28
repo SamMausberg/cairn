@@ -23,10 +23,26 @@ error: solution was stopped by SIGABRT: a guard failed, or an allocation passed 
 
 The column for main is its own `output_sizes.py` for the first two cases, and the same command through its compiler for the third, which main's corpus does not have.
 
+## One check reports the independent refusals of one body
+
+A refusal used to end the check of its function, so independent mistakes in one `main` came back one check at a time. A refused statement is now taken back and the rest of its block is checked, and a later refusal that may only follow from a refused statement is not reported. The first refusal is what a check that stops gives, in every program below.
+
+| measure | main at 16e49c3 | after |
+|---|---|---|
+| the 69 programs the 1.1 subjects checked: refused | 16 | 16 |
+| the same: refusals reported | 16 | 32 |
+| the same: bytes of all 69 records | 10,742 | 18,307 |
+| every refused program the repository holds, 1,241: further refusals | 16, in 15 programs | 104, in 54 programs |
+| the four-mistake `main` of `tests/language/test_refusals.py`: checks until `typed`, fixing what each reports | 5 | 2 |
+
+Five of the 69 checks gain further refusals: `block_scan`'s three other `transfer` calls that pass a `Buf` where `[n]` is expected, in three checks of two subjects, and `sieve`'s three other calls of the `println` an import put in place of the builtin, in two checks. Every further refusal the repository's programs gained was read, and each is a mistake of its own: a helper the program never declares, called again on another line, or a template's placeholder. A record is about 470 bytes a refusal larger, and a check the agent no longer runs is a whole request.
+
 ## Commands
 
 ```sh
 python3 tools/ai/output_sizes.py --check      # every case within its budget
+python3 tools/ai/friction.py replay --compiler .   # each check's first refusal, and the code and line of each further one
+python3 tools/checks/refusal_differential.py       # every refused program both ways
 git archive d004653 | tar -x -C DIR           # main, outside the temporary directory
 python3 DIR/tools/ai/output_sizes.py          # main's corpus, by main's own tool
 ```

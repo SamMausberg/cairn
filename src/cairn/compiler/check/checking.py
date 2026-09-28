@@ -67,6 +67,7 @@ class Checker:
     moved: set[str]
     deferred: set[str]
     holds: dict[str, int]
+    unsure: set[str]
     loop_depth: int
     unsafe_depth: int
     device_depth: int
@@ -121,12 +122,13 @@ class Checker:
     e_call, invoke, indirect, repeatable = calls.e_call, calls.invoke, calls.indirect, calls.repeatable
     view_argument, construct, establish = calls.view_argument, calls.construct, calls.establish
 
-    refusing, rest, verdict = refusals.refusing, refusals.rest, refusals.verdict
+    refusing, rest, verdict, statement = refusals.refusing, refusals.rest, refusals.verdict, refusals.statement
 
     def __init__(self, program: Program, capture_sites: bool = False, every: bool = False):
         self.p = program
         # With `every`, a refusal is kept and the check goes on: (about, whether it read callees' rows, it, its key).
         self.refusals: list[tuple[str, bool, Diagnostic, tuple]] | None = [] if every else None
+        self.walked: refusals.Walked | None = None  # the body the walk is checking, when every refusal is reported
         self.unjudged: set[str] = set()  # functions a refusal left without a verdict
         self.abandoned: BaseException | None = None  # what ended such a check early, when it was not a refusal
         self.stopped: str | None = None  # the code of the limit, or the class of the fault, that ended it early
@@ -438,15 +440,20 @@ class Checker:
 
     def body(self, f: Function):
         """One concrete function's body, as the walk over every body checks it."""
-        with self.refusing(f.name):
+        with self.refusing(f.name), refusals.walking(self, f):
             try:
                 self.function(f)
-            except Diagnostic as error:  # The position is the recipe's: say which derivation this copy came from.
-                error.data.update({"derived": f.source_name} if f.source_name.startswith("derive ") else {})
-                inner = self.s.f.module  # the innermost body checked, as an instance is checked inside its caller
-                if inner in self.p.sources and "module" not in error.data:
-                    error.data["module"] = inner  # its line counts in that library module's own file
+            except Diagnostic as error:
+                self.placed(f, error)
                 raise
+
+    def placed(self, f: Function, error: Diagnostic):
+        """Where a refusal met in the body of `f` is. The position of a derived copy is the recipe's: say which
+        derivation it came from. A library body checked inside `f` counts its line in its own module's file."""
+        error.data.update({"derived": f.source_name} if f.source_name.startswith("derive ") else {})
+        inner = self.s.f.module  # the innermost body checked, as an instance is checked inside its caller
+        if inner in self.p.sources and "module" not in error.data:
+            error.data["module"] = inner
 
     def judge(self) -> dict[str, set[str]]:
         """The rules that need every row: ceilings, operand order, and what a lane may reach."""
@@ -620,7 +627,7 @@ class Checker:
 
     def leaks(self, names, node: Any):
         for n in names:
-            if self.kind(self.env[n].ty) == "linear" and n not in self.moved | self.deferred:
+            if self.kind(self.env[n].ty) == "linear" and n not in self.moved | self.deferred | self.unsure:
                 fail("E-LINEAR-LEAK", f"{n} is linear: consume it, or defer its consumer, on every path.", node)
 
     def released(self, names):
@@ -634,7 +641,7 @@ class Checker:
         for s in ss:
             if returned:
                 fail("E-UNREACHABLE", "Statement after unconditional return.", s)
-            returned = self.stmt(s)
+            returned = self.statement(s)
         if not returned:
             self.leaks(set(self.env) - set(saved), ss[-1] if ss else self.f)
         self.released(set(self.env) - set(saved))

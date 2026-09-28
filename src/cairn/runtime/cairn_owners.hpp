@@ -7,18 +7,35 @@ namespace cr {
 template<class T> class Buf final {
   T* p_ = nullptr;
   std::size_t n_ = 0;
+  // A type whose zero is all bytes 0 and that needs no destructor comes from calloc in a hosted program, which takes
+  // a large block from pages the kernel already zeroed: nothing writes them, and none is resident until the program
+  // writes it. A freestanding image has no C library, and nothing in it allocates.
+  static constexpr bool plain = std::is_trivially_default_constructible_v<T> && std::is_trivially_destructible_v<T>
+                                && alignof(T) <= alignof(std::max_align_t);
+  static T* zeroed(std::size_t n) noexcept {
+#if !defined(CAIRN_FREESTANDING)
+    if constexpr(plain) return static_cast<T*>(std::calloc(n, sizeof(T)));
+#endif
+    return new(std::nothrow) T[n]();
+  }
+  static void release(T* p) noexcept {
+#if !defined(CAIRN_FREESTANDING)
+    if constexpr(plain) return std::free(p);
+#endif
+    delete[] p;
+  }
 public:
   Buf() noexcept = default;
   explicit Buf(std::size_t n) noexcept : n_(n) {
     if(n > static_cast<std::size_t>(std::numeric_limits<std::ptrdiff_t>::max()) / sizeof(T)) trap();
-    if(n) { p_ = new(std::nothrow) T[n](); if(!p_) trap(); }
+    if(n) { p_ = zeroed(n); if(!p_) trap(); }
   }
-  ~Buf() noexcept { delete[] p_; }
+  ~Buf() noexcept { release(p_); }
   Buf(const Buf&) = delete;
   Buf& operator=(const Buf&) = delete;
   Buf(Buf&& o) noexcept : p_(std::exchange(o.p_, nullptr)), n_(std::exchange(o.n_, 0)) {}
   Buf& operator=(Buf&& o) noexcept {
-    if(this != &o) { delete[] p_; p_ = std::exchange(o.p_, nullptr); n_ = std::exchange(o.n_, 0); }
+    if(this != &o) { release(p_); p_ = std::exchange(o.p_, nullptr); n_ = std::exchange(o.n_, 0); }
     return *this;
   }
   T* data() const noexcept { return p_; }

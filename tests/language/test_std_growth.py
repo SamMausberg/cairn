@@ -4,14 +4,16 @@ leak and undefined-behaviour sanitizers.
 Growth moves every element through two views of one extent, so owners are exchanged and never copied, and a
 copyable element costs one unguarded pass; `extend_from` copies into one part, which the emitted C++ shows.
 `read_to_end` fills the room its Vec has spare and doubles a full one, and after its first read sizes the rest of a
-file, so a directory is refused by that read before its size is asked.
+file, so a directory is refused by that read before its size is asked. A `Buf` of plain values takes its zeros from
+`calloc` and goes back with `free`, every other `Buf` from `new T[n]()`, and the pages of a large one that nothing
+writes never become resident.
 """
 
 import pytest
 from test_established import body
 
 from cairn.compiler.cairnc import compile_source
-from emitted import watched
+from emitted import native, watched
 
 BOTH = ["clang++", "g++"]
 
@@ -144,6 +146,99 @@ fn main() -> i32 {
   match run() { Ok(step) => { return i32(step); } Err(e) => { return 100 + e.code; } }
 }
 """
+
+
+# Zeroed storage of every kind a Buf holds: bytes, floats, a record, a sum, a fixed array, a record aligned past what
+# calloc promises, and owners, each read back as zero and then released by an assignment over it, which the address
+# sanitizer watches.
+ZEROED = """
+struct Wide { a:u64; b:f64; on:bool; }
+struct Slot align(64) { hits:u64; }
+struct Held { bytes:Buf[u8]; used:usize; }
+enum Shape { Dot; Box(u64); }
+
+fn main() -> i32 {
+  let mut bytes = Buf[u8](1048576);
+  for b in bytes { if b != 0 { return 1; } }
+  let mut floats = Buf[f64](1000);
+  let mut wides = Buf[Wide](1000);
+  let mut slots = Buf[Slot](100);
+  let mut helds = Buf[Held](8);
+  let mut shapes = Buf[Shape](100);
+  let mut rows = Buf[Array[u32, 4]](100);
+  for i in 0..1000 { if floats[i] != 0.0 || wides[i].a != 0 || wides[i].b != 0.0 || wides[i].on { return 2; } }
+  for i in 0..100 { if slots[i].hits != 0 { return 3; } }
+  for i in 0..8 { if len(helds[i].bytes) != 0 || helds[i].used != 0 { return 4; } }
+  for i in 0..100 {
+    match shapes[i] { Dot => {} Box(_) => return 6; }                   // the first variant, as new T[n]() gives
+    for k in 0..4 { if rows[i][k] != 0 { return 7; } }
+  }
+  helds[3] = Held(Buf[u8](5), 5);
+  bytes[1048575] = 9;
+  bytes = Buf[u8](16);
+  floats = Buf[f64](2);
+  wides = Buf[Wide](2);
+  slots = Buf[Slot](2);
+  helds = Buf[Held](2);
+  shapes = Buf[Shape](2);
+  rows = Buf[Array[u32, 4]](2);
+  if len(bytes) + len(floats) + len(wides) + len(slots) + len(helds) + len(shapes) + len(rows) != 28 { return 5; }
+  return 0;
+}
+"""
+
+# A Buf of 256 MiB of which two bytes are written adds little to the process's peak resident set. The Buf is printed
+# afterwards: clang++ drops an allocation nothing reads, and then the test would pass whatever the runtime does.
+RESIDENT = """
+import std.core (Option, Result);
+import std.fs;
+import std.text as text;
+import std.vec (Vec);
+
+// The process's peak resident set in KiB, from /proc/self/status, or 0 when it cannot be read.
+fn peak_kib() -> u64 {
+  match fs.read("/proc/self/status") {
+    Ok(status) => {
+      match text.find(status, "VmHWM:") {
+        Some(at) => {
+          let mut value:u64 = 0;
+          for i in at + 6..status.len {
+            let c = status.data[i];
+            if c >= '0' && c <= '9' { value = value * 10 + u64(c - '0'); } else if value > 0 { return value; }
+          }
+          return value;
+        }
+        None => return 0;
+      }
+    }
+    Err(_) => return 0;
+  }
+}
+
+fn main() -> i32 {
+  let before = peak_kib();
+  let mut big = Buf[u8](268435456);
+  big[0] = 1;
+  big[268435455] = 2;
+  let after = peak_kib();
+  if before == 0 || after < before { return 1; }
+  println(after - before);
+  eprint(big[0..1]);                     // the Buf escapes, so no compiler drops the allocation
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", BOTH)
+def test_every_kind_of_zeroed_storage_reads_zero_and_is_released_once(tmp_path, cxx):
+    done = watched(tmp_path, compile_source(ZEROED)[0], cxx, "address,undefined")
+    assert done.returncode == 0 and "Sanitizer" not in done.stderr, (done.returncode, done.stderr[-3000:])
+
+
+@pytest.mark.parametrize("cxx", BOTH)
+def test_a_large_zeroed_buf_is_resident_only_where_it_is_written(tmp_path, cxx):
+    grown = int(native(tmp_path, RESIDENT, cxx).stdout)
+    assert grown < 16384, f"{grown} KiB more for two bytes of a 256 MiB Buf"
 
 
 @pytest.mark.parametrize("cxx", BOTH)

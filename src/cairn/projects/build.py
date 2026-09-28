@@ -232,7 +232,8 @@ def emitted(project: Project, *, kind: str, tests: tuple[str, ...] = (), header:
     # A library exports everything; a program contains only what its entry point reaches.
     roots = tests or ((entry,) if entry else ())
     origin = project.origin if debug else ""
-    interface, bodies, receipt = generate(project.source, origin, roots, keep_guards, project.site, parsed)
+    # A refused program is refused as `cairn check` refuses it, with every independent refusal: `run` is a loop too.
+    interface, bodies, receipt = generate(project.source, origin, roots, keep_guards, project.site, parsed, every=True)
     generated = joined(interface, bodies)  # The front end runs once; an incremental build cuts the same pass.
     if bare:  # No hosted runtime stands behind the image, so no effect may assume one; no test is in the image.
         audit_effects({name: row for name, row in receipt["functions"].items() if not row.get("test")})
