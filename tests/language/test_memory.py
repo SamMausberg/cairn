@@ -335,6 +335,41 @@ def test_a_swap_of_places_neither_inside_the_other_holds_no_cycle(cxx, tmp_path)
     assert done.returncode == 0, done.stderr[-3000:]
 
 
+INDEXED_FIELDS = """
+import std.vec (Vec);
+struct Slot { buf:Buf[u8]; n:u64; }
+struct Pool { data:Buf[Slot]; }
+fn pick(i:u64) -> usize = usize(i);
+
+fn main() -> i32 {
+  let mut pool = Pool(Buf[Slot](3));
+  let i:u64 = 1;
+  pool.data[usize(i)].buf = Buf[u8](4);
+  pool.data[pick(i)].buf[2] = 7;
+  pool.data[min(pick(i) + 1, 2)].n = 5;
+  let src = take(pool.data[usize(i)].buf);
+  swap(pool.data[len(pool.data) - 1].buf, pool.data[pick(0)].buf);
+  let mut slots = vec.new[Slot]();
+  vec.push(slots, Slot(Buf[u8](2), 1));
+  let held = take(slots.data[usize(i - 1)].buf);
+  if len(src) != 4 || src[2] != 7 || pool.data[2].n != 5 || len(pool.data[usize(i)].buf) != 0 { return 1; }
+  if len(held) != 2 || len(slots.data[0].buf) != 0 { return 2; }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_a_call_in_the_index_of_a_field_place_is_resolved_once(cxx, tmp_path):
+    """A field of an element is a place the checker reads twice, its base first and then the field; a call in the
+    index, `usize(i)`, `pick(i)` or `len(pool.data)`, was resolved again on the second look and crashed the check.
+    Each form is assigned, taken and swapped here, and runs as written."""
+    round_trips(INDEXED_FIELDS)
+    done = run(tmp_path, compile_source(INDEXED_FIELDS)[0], *SANITIZED, *WARNINGS, cxx=cxx,
+               env={"ASAN_OPTIONS": "detect_leaks=1"})  # fmt: skip
+    assert done.returncode == 0, done.stderr[-3000:]
+
+
 def test_semantics_models_scratch_storage_and_a_moved_owner():
     from cairn.verify.scalar.semantics import equivalent
 
