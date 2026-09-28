@@ -268,7 +268,7 @@ An implementation has one name in the history, the selection that runs it: `plan
 
 ## Resuming an investigation
 
-`cairn state --symbol f` prints the investigation of `f`, the performance work done on it, from its history. The history is `--history DIR`, by default `.cairn/history` beside the manifest, and the answer is current for this host (`--arch`, `--cxx`) and for the [device target](tools.md#the-device-target) (`--device-target`):
+`cairn state --symbol f` prints the investigation of `f`, the performance work done on it, from its history. The history is `--history DIR`, by default `.cairn/history` beside the manifest, and the answer is current for this host (`--arch`, `--cxx`) and for the [device target](devices.md#the-device-target) (`--device-target`):
 
 ```sh
 cairn state app --symbol lib.spread > before.json
