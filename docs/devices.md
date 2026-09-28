@@ -441,7 +441,11 @@ Every other rule sees an access as the part `x[i..i + K]` it reaches. A lane tha
 
 A program that indexes `@device` views is built for one device target. The target is spelled as nvcc spells it, and is separate from the CPU architecture that `--arch` names. `sm_120` runs on compute capability 12.0 and every later 12.x device. `sm_120f` adds the features the family shares and runs on its devices from 12.0. `sm_120a` adds every feature of exactly 12.0 and runs only there.
 
-`--device-target` on `build`, `run`, `predict` and `tune` names the target. Without it the target is `[build] device_target` of the manifest; else, for `predict` and `tune`, the target of the [card](tools.md#other-gpus) `--card` names; else the one GPU `nvidia-smi` reports, which asks the driver and launches nothing. With none of these a device build is refused with `E-TARGET`. Nothing defaults to `-arch=native`.
+`--device-target` on `build`, `run`, `predict` and `tune` names the target. Without it the target is `[build] device_target` of the manifest. Else a command that builds device code takes the one GPU `nvidia-smi` reports, which asks the driver and launches nothing, and with no GPU the build is refused with `E-TARGET`. Nothing defaults to `-arch=native`.
+
+`predict` and `tune` never take the GPU on the machine, so they give the same answer everywhere. Without a named target they take the target of the [card](tools.md#other-gpus) that prices their device work: the one `--card` names, else the device of the profile `--profile` names, else the RTX 5070 Ti, for `sm_120a`. A card that `make calibrate-device` measured gives the target it was measured for. On a GH200, `--card h100` prices on the H100 and compiles for `sm_90a`.
+
+A device timing is the one place the GPU here matters, since a timing measures it. When the target's code does not run on that GPU, `tune --device --measure` and `make tune-device` are refused with `E-TARGET-MISMATCH` before anything is built, and the refusal names `--card` and `--device-target`. On a GH200, `make tune-device CARD=h100` passes `--card h100` and times code for `sm_90a` ([tools.md](tools.md#measuring-comparing-and-the-history)).
 
 ```toml
 [build]
@@ -458,7 +462,7 @@ nvcc runs the host half of a device build with the `--cxx` compiler, clang++ by 
 | a spelling other than `sm_` and a compute capability with an optional `f` or `a`, `a` below sm_90 or `f` below sm_100, and GPUs of two capabilities with no target named | `E-TARGET` |
 | a target the installed nvcc does not compile | `E-TARGET-TOOLKIT` |
 | a program needing a feature the target lacks: `bf16` on sm_75, `mma_f8f6f4` on plain sm_120, `tcgen05` on any sm_120 | `E-TARGET-FEATURE` |
-| a result recorded for another target: a ptxas report, a timing, a measured device card, or a card for a device the target's code does not run on | `E-TARGET-MISMATCH` |
+| a result recorded for another target: a ptxas report, a timing, a measured device card, or a card for a device the target's code does not run on; a device timing on a GPU the target's code does not run on | `E-TARGET-MISMATCH` |
 
 The features are `FEATURES` in `src/cairn/projects/target.py`. `tests/tooling/test_target.py` assembles one probe instruction per feature for each of sixteen targets the installed nvcc compiles, and holds the table to what ptxas accepts. The limits (registers per thread, shared memory per block and per SM, threads per block, warps per SM) are the CUDA Programming Guide's for 7.5, 8.0, 8.6, 8.7, 8.9, 9.0, 10.0, 10.3, 10.7, 11.0, 12.0 and 12.1. They are a specification that nothing here measured, and every packaged card is held to its row. A target without a row has unknown limits, and its record says so.
 

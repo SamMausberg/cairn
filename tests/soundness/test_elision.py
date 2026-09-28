@@ -8,6 +8,7 @@ its guard written, that a fault planted in facts.py reaches no emitted program, 
 every guard.
 """
 
+import collections
 import re
 import shutil
 import subprocess
@@ -24,7 +25,7 @@ from cairn.projects.project import load_project
 from emitted import build, sanitized
 
 ROOT = Path(__file__).resolve().parents[2]
-GUARD = re.compile(r"\bcr::(?:at|part|add|sub|convert|shr|shl_wrap)\b")
+GUARD = re.compile(r"\bcr::(?:at|part|add|sub|mul|convert|shr|shl_wrap)\b")
 
 
 def corpus() -> dict[str, str]:
@@ -120,6 +121,126 @@ def test_a_fault_planted_in_facts_reaches_no_emitted_program(name, monkeypatch):
     cpp, receipt = compile_source(PLANTED[name])
     assert receipt["functions"]["f"].get("refused_discharges"), "the planted fault discharged nothing"
     assert len(GUARD.findall(cpp)) == len(GUARD.findall(honest)), cpp
+
+
+# `x * C` and `let q = a / C`: k < q = n / 4 gives k * 4 <= q * 4 - 4 <= n - 4, so neither the multiply nor the index
+# below keeps a guard. The audit derives the quotient's facts from the `let` itself, so a proof that cites them from
+# anywhere else, with another divisor, or tighter than the `let` gives, is refused.
+QUOTIENT = """
+fn f(n:usize, x:ro<u64>[n]) -> u64 {
+  let q = n / 4;
+  let p = n / 3;
+  let r = n - q;
+  let mut t:u64 = 0;
+  for k in 0..q { t = add_wrap(t, x[k * 4 + 3]); }
+  return add_wrap(t, u64(p + r));
+}
+fn g(k:usize) -> usize = k * 4;
+"""
+
+
+def let(p, name: str) -> Stmt:
+    return next(s for f in p.functions for s in f.body if s.tag == "let" and s.name == name)
+
+
+def product(p, function: str) -> Expr:
+    f = next(f for f in p.functions if f.name == function)
+    return next(e for s in f.body for e in walk(s) if e.tag == "binary" and e.val == "*")
+
+
+def walk(node):
+    if isinstance(node, Expr):
+        yield node
+        for a in node.args:
+            yield from walk(a)
+    elif isinstance(node, Stmt):
+        for x in [*node.exprs, *node.body, *node.other, *(s for a in node.arms for s in a.body)]:
+            yield from walk(x)
+
+
+def moved(site: Expr, origin, atom: str = "q*4", k: int | None = None) -> tuple:
+    """The site's proof with its quotient fact (on `atom`) given another origin, another atom or another constant."""
+    return ("facts", tuple(Fact(atom, f[1], f[2] if k is None else k, origin) if f[0] == "q*4" else f
+                           for f in site.proof[1]))  # fmt: skip
+
+
+FORGED = {
+    "another_divisor": lambda site, p: moved(site, ("let", let(p, "p"))),
+    "not_a_quotient": lambda site, p: moved(site, ("let", let(p, "r"))),
+    "another_stride": lambda site, p: moved(site, ("let", let(p, "q")), atom="q*8"),
+    "tighter_than_the_let": lambda site, p: moved(site, ("let", let(p, "q")), k=2**64 - 9),
+    "no_cap": lambda site, p: ("facts", tuple(f for f in site.proof[1] if f[0] != "q*4")),
+}
+
+
+def test_the_quotient_and_the_product_are_discharged_and_their_proofs_accepted():
+    p, checker, _ = compile_program(QUOTIENT)
+    site = product(p, "f")
+    assert site.established and any(f[0] == "q*4" for f in site.proof[1])
+    emitter = Emitter(p, checker)
+    assert emitter.elision["f"]["refused"] == {} and emitter.elision["f"]["accepted"]["overflow"] >= 2
+    f, g = ("\n".join(lines) for _, lines in emitter.units()[1])
+    assert "(v_k * static_cast<std::size_t>(4ULL))" in f and not re.search(r"cr::(at|mul)", f)
+    assert "cr::mul<std::size_t>(v_k, static_cast<std::size_t>(4ULL))" in g
+
+
+@pytest.mark.parametrize("how", FORGED)
+def test_a_forged_quotient_or_product_proof_is_refused_and_its_guard_written(how):
+    p, checker, _ = compile_program(QUOTIENT)
+    site = product(p, "f")
+    site.proof = FORGED[how](site, p)
+    emitter = Emitter(p, checker)
+    assert emitter.elision["f"]["refused"].get("overflow") == 1, emitter.elision["f"]
+    assert "cr::mul<std::size_t>(v_k, static_cast<std::size_t>(4ULL))" in "\n".join(emitter.units()[1][0][1])
+
+
+def test_a_product_facts_py_never_discharged_is_refused_whatever_it_cites():
+    """A multiply marked by hand, citing the one fact that would cap it, from a `let` that says nothing of it."""
+    p, checker, _ = compile_program(QUOTIENT)
+    site = product(p, "g")
+    assert not site.established
+    site.established, site.proof = True, ("facts", (Fact("k*4", "", 2**64 - 1, ("let", let(p, "q"))),))
+    emitter = Emitter(p, checker)
+    assert emitter.elision["g"]["refused"] == {"overflow": 1}
+    assert "cr::mul<std::size_t>(v_k, static_cast<std::size_t>(4ULL))" in "\n".join(emitter.units()[1][1][1])
+
+
+PLANTED_RULES = {  # Each plants one slip in a new rule of facts.py; the audit, which derives its own, refuses it.
+    "a_quotient_one_step_short": (
+        "fn f(n:usize, x:ro<u64>[n]) -> u64 { let q = n / 4; let mut t:u64 = 0; "
+        "for k in 0..q { t = add_wrap(t, x[k * 4 + 4]); } return t; }",
+        "quotient",
+        lambda real: lambda c, name, value: [(a, b, k - 4 if b else k) for a, b, k in real(c, name, value)],
+    ),
+    "a_product_with_no_cap": (
+        "fn f(k:usize) -> usize = k * 4;",
+        "product",
+        lambda real: lambda c, e: (setattr(c, "cited", []), True)[1],
+    ),
+    "a_sum_one_past_its_side": (
+        "fn f(i:usize, k:usize) -> usize { if i < 16 && k < 16 { let s = i + k; return s - (k + 1); } return 0; }",
+        "bounds",
+        lambda real: lambda c, e: plus_one(real, c, e),
+    ),
+}
+
+
+def plus_one(real, c, e):
+    """The bounds of `e`, with a sum's lower bounds each one higher than its sides give."""
+    high, low = real(c, e)
+    return high, [(x, k + 1) if e.tag == "binary" and e.val == "+" and x else (x, k) for x, k in low]
+
+
+@pytest.mark.parametrize("name", PLANTED_RULES)
+def test_a_fault_planted_in_a_new_rule_reaches_no_emitted_program(name, monkeypatch):
+    """Every guard the honest rule keeps is still written. A proof that cites the planted fact is refused whole, so a
+    guard the honest rule could drop may be written too."""
+    source, rule, slip = PLANTED_RULES[name]
+    honest = collections.Counter(GUARD.findall(compile_source(source)[0]))
+    monkeypatch.setattr(facts, rule, slip(getattr(facts, rule)))
+    cpp, receipt = compile_source(source)
+    assert receipt["functions"]["f"].get("refused_discharges"), "the planted fault discharged nothing"
+    assert not honest - collections.Counter(GUARD.findall(cpp)), cpp
 
 
 def test_a_conservative_build_writes_every_guard():

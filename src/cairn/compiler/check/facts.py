@@ -4,19 +4,20 @@ A fact is an edge `x - y <= k` between two atoms. An atom is ZERO, an immutable 
 field reached from an immutable local (`c.rows`), the length of an owner reached that way (`len(data)`,
 or the field a record declares as its extent), or such an atom times a positive constant (`b*256`). A
 loop, lane or collector binder brings its bounds, a `let` brings what bounds its initializer (an owner's
-length for `Buf[T](n)`), a branch brings its condition, the left side of `&&` (true) or `||` (false) brings
-itself to the right side, a collector's predicate to its projection, and an `if` with one arm that leaves gives
-the other arm's condition to the rest of the block. Facts are dropped with the block that made them and name
-only values that cannot change while they are in scope, so a fact holds wherever it is visible. A fact
-between plain atoms also holds scaled by any constant a product atom names, so `b < k` gives
-`b*256 + 256 <= k*256`.
+length for `Buf[T](n)`, and `q*C <= a` for `let q = a / C`), a branch brings its condition, the left side
+of `&&` (true) or `||` (false) brings itself to the right side, a collector's predicate to its projection,
+and an `if` with one arm that leaves gives the other arm's condition to the rest of the block. Facts are
+dropped with the block that made them and name only values that cannot change while they are in scope, so
+a fact holds wherever it is visible. A fact between plain atoms also holds scaled by any constant a product
+atom names, so `b < k` gives `b*256 + 256 <= k*256`.
 
 A guard is discharged when the shortest path through those facts shows it cannot fail: an index
-below its view's extent, a usize `+` that stays below the maximum, a usize `-` whose right side is
-no larger than its left, a shift count below the width, a conversion whose operand fits, a part
-`x[lo..hi]` with `lo <= hi <= len(x)` whose extent is `hi - lo`. The site still counts as a syntactic check
-site and its function's row still says `trap`; lowering omits the guard, and the receipt counts it under
-`discharged_check_sites`. Nothing here changes which programs are accepted.
+below its view's extent, a usize `+` or `x * C` (C a positive constant) that stays at most the maximum,
+a usize `-` whose right side is no larger than its left, a shift count below the width, a conversion
+whose operand fits, a part `x[lo..hi]` with `lo <= hi <= len(x)` whose extent is `hi - lo`. The site
+still counts as a syntactic check site and its function's row still says `trap`; lowering omits the
+guard, and the receipt counts it under `discharged_check_sites`. Nothing here changes which programs are
+accepted.
 
 Every fact remembers its origin, and a discharged site keeps the facts its decision used (`Expr.proof`).
 This module only proposes: `verify/elision.py` checks each proof on its own terms before lowering acts on it.
@@ -91,12 +92,8 @@ def exact(c: Checker, e: Expr) -> Term | None:
         return exact(c, e.ref) if isinstance(e.ref, Expr) else atom(c, e)
     if e.tag == "call" and len(e.args) == 1 and e.val in {"len", "usize"}:
         return extent(c, e.args[0]) if e.val == "len" else exact(c, e.args[0])
-    if e.tag == "binary" and e.val == "*":  # A name times a positive constant is an atom of its own: `b*256`.
-        (x, j), (y, k) = (exact(c, a) or (None, 0) for a in e.args)
-        if x == ZERO and y == ZERO:  # two constants: `2 * BINS`
-            return ZERO, j * k
-        name, times = (x, k) if y == ZERO and x and not j else (y, j) if x == ZERO and y and not k else ("", 0)
-        return (f"{name}*{times}", 0) if name and times > 0 else None
+    if e.tag == "binary" and e.val == "*":
+        return times(c, *e.args)
     if e.tag == "binary" and e.val in {"+", "-"}:
         (x, j), (y, k) = (exact(c, a) or (None, 0) for a in e.args)
         if x is not None and y == ZERO:
@@ -104,6 +101,16 @@ def exact(c: Checker, e: Expr) -> Term | None:
         if x == ZERO and y is not None and e.val == "+":
             return y, j + k
     return None
+
+
+def times(c: Checker, a: Expr, b: Expr) -> Term | None:
+    """`a * b` as one term: a name times a positive constant is an atom of its own (`b*256`), and two constants
+    multiply (`2 * BINS`)."""
+    (x, j), (y, k) = (exact(c, arg) or (None, 0) for arg in (a, b))
+    if x == ZERO and y == ZERO:
+        return ZERO, j * k
+    name, n = (x, k) if y == ZERO and x and not j else (y, j) if x == ZERO and y and not k else ("", 0)
+    return (f"{name}*{n}", 0) if name and n > 0 else None
 
 
 def extent(c: Checker, e: Expr) -> Term | None:
@@ -128,9 +135,10 @@ def bounds(c: Checker, e: Expr) -> tuple[list[Term], list[Term]]:
     if e.tag == "binary" or (e.tag == "call" and e.val == "min" and len(e.args) == 2):
         (ha, la), (hb, lb) = (bounds(c, a) for a in e.args)
         op = e.val
-        if op == "+":
+        if op == "+":  # A sum reaches either side's lower bound plus a constant the other reaches.
             high += plus(c, ha, hb)
             low += [(x, j + k) for x, j in la for y, k in lb if y == ZERO]
+            low += [(y, j + k) for x, j in la for y, k in lb if x == ZERO]
         elif op == "-":
             high += [(x, j - k) for x, j in ha for y, k in lb if y == ZERO]
             low += [(x, j - k) for x, j in la for y, k in hb if y == ZERO]
@@ -277,9 +285,22 @@ def defined(c: Checker, name: str, value: Expr, origin: Origin | None = None):
     kept whole, so that `linear` can see through the name to what it was bound to."""
     if value.ty == USIZE:
         c.values[name] = (c.env.get(name), value)
+    c.facts += [Fact(x, y, k, origin) for x, y, k in quotient(c, name, value)]
     if value.tag == "call" and value.val == "Buf" and value.ty.name == "Buf" and len(value.args) == 1:
         name, value = f"len({name})", value.args[0]
     binder(c, name, value, value, strict=False, origin=origin)
+
+
+def quotient(c: Checker, name: str, value: Expr) -> list[tuple[str, str, int]]:
+    """What `let q = a / C` says beside q <= a, for a positive constant C: q*C is at most a, so it is at most the
+    maximum and every bound of a (`divFacts` in Facts.lean)."""
+    if value.ty != USIZE or value.tag != "binary" or value.val != "/":
+        return []
+    d = exact(c, value.args[1])
+    if d is None or d[0] != ZERO or d[1] <= 0:
+        return []
+    q = f"{name}*{d[1]}"
+    return [(q, ZERO, MAX), *((q, x, j) for x, j in bounds(c, value.args[0])[0])]
 
 
 def linear(c: Checker, e: Expr | str, depth: int = 4) -> dict[str, int] | None:
@@ -357,6 +378,15 @@ def arithmetic(c: Checker, e: Expr) -> bool:
     if e.val == "+":
         return any(at_most(c, x, (ZERO, MAX)) for x in plus(c, ha, hb))
     return e.val == "-" and any(at_most(c, y, x) for y in hb for x in la)
+
+
+def product(c: Checker, e: Expr) -> bool:
+    """A usize `x * C`, x an atom and C a positive constant, whose product the facts cap at the maximum (`mulOk` in
+    Facts.lean). The product atom has no bound of its own: it is capped only through a value the program computed
+    from it, such as `let w = x * 32` or the quotient of `let q = a / C`."""
+    c.cited = []
+    t = times(c, *e.args)
+    return t is not None and t[0].count("*") == 1 and at_most(c, t, (ZERO, MAX))
 
 
 def shift(c: Checker, e: Expr) -> bool:
