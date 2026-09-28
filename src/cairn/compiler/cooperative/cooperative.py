@@ -588,15 +588,13 @@ def lower_blocks(g: Emitter, s: Stmt, es: list[str]):
     g.need("cairn_gpu.hpp" if block.device else "cairn_parallel.hpp")
     g.need("cairn_coop.hpp")
 
-    def body():
-        grid = [f"cr_g{k}" for k in range(count)]
-        if count == 1:
-            g.put(f"{NAMED} v_{block.grid[0]} = cr_b;")
-        else:
-            below = "cr_b"
-            for k, name in enumerate(block.grid):
-                g.put(f"{NAMED} v_{name} = {below} % {grid[k]};" if k < count - 1 else f"{NAMED} v_{name} = {below};")
-                below = f"({below} / {grid[k]})"
+    def body():  # block (bx, by) is block bx + gx * by: each name the remainder of a quotient the launch's divider gives
+        below = "cr_b"
+        for k, name in enumerate(block.grid[:-1]):
+            g.put(f"const std::size_t cr_q{k} = cr_d{k}.div({below});")
+            g.put(f"{NAMED} v_{name} = {below} - cr_q{k} * cr_g{k};")
+            below = f"cr_q{k}"
+        g.put(f"{NAMED} v_{block.grid[-1]} = {below};")
         thread_names(g, block)
         g.block(s.body)
 
@@ -608,6 +606,10 @@ def lower_blocks(g: Emitter, s: Stmt, es: list[str]):
         if count > 1:
             for k in range(count):
                 g.put(f"const std::size_t cr_g{k} = {es[k]};")
+            # Made once, on the host, so no block divides by a value known only at run time. Not const: to nvcc with
+            # clang++ 14 as its host compiler, a device lambda that captures a const object is not trivially copyable.
+            for k in range(count - 1):
+                g.put(f"cr::coop::Divider cr_d{k}(cr_g{k});")
             total = "cr_g0"
             for k in range(1, count):
                 total = f"cr::mul<std::size_t>({total}, cr_g{k})"  # the number of blocks is checked

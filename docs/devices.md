@@ -171,7 +171,7 @@ fn block_sums(n:usize, x:ro<u64>[n], g:usize, out:rw<u64>[g]) {
 
 ### Shape, barriers and warp operations
 
-Each side names up to three binders, fastest first. In `blocks bx, by in gx, gy threads tx, ty in 32, 8`, thread `(tx, ty)` is thread `tx + 32 * ty` of its block. The grid's extents are any `usize` values. The thread extents are literals or constants whose product is a whole number of warps, from 32 to 1024 threads (`E-COOP-SHAPE`).
+Each side names up to three binders, fastest first. In `blocks bx, by in gx, gy threads tx, ty in 32, 8`, thread `(tx, ty)` is thread `tx + 32 * ty` of its block. The grid's extents are any `usize` values, and block `(bx, by)` is block `bx + gx * by` of the launch: each block finds its names with a multiply-high and two shifts by a divider the launch makes once per extent, not with a 64-bit division. The thread extents are literals or constants whose product is a whole number of warps, from 32 to 1024 threads (`E-COOP-SHAPE`).
 
 A `shared` array is declared directly in the body, with a constant length. Each one starts on a 128-byte boundary, so a tensor core fragment may load from it ([numerics.md](numerics.md#tensor-core-fragments)). A block's shared arrays hold at most 48 KiB together (`E-COOP-SHARED`).
 
@@ -499,7 +499,7 @@ Queued work runs to completion at its `spawn`, in program order. That is one of 
 
 [`cairn validate --emulate`](tools.md#cairn-validate) tests a device implementation against its reference this way, and its evidence is `finite-tested-emulated`: finite testing of the host emulation, and never of the device. [`cairn tune`](tools.md#cairn-tune) chooses an implementation on that evidence only with `--accept-emulated`.
 
-Every record says the device work was emulated. The build receipt and the records of `cairn run`, `cairn test` and `cairn validate` carry `emulation`, with the target the program was judged against, and `cairn run` at a terminal prints the same note on standard error. An emulated result is evidence about the host, and never about a device. It does not time device code either: the lanes run on a few host threads, and each block's threads meet at operating system barriers, so a time the program prints measures those. [numerics.md](numerics.md#emulated-device-runs) says where an emulated result can differ from a device run.
+Every record says the device work was emulated. The build receipt and the records of `cairn run`, `cairn test` and `cairn validate` carry `emulation`, with the target the program was judged against, and `cairn run` prints the same note on standard error before the program starts. An emulated result is evidence about the host, and never about a device. It does not time device code either: the lanes run on a few host threads, and each block's threads meet at operating system barriers, so a time the program prints measures those. [numerics.md](numerics.md#emulated-device-runs) says where an emulated result can differ from a device run.
 
 ## What fast kernels use
 

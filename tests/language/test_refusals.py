@@ -229,6 +229,35 @@ def test_a_check_that_stops_after_the_first_refusal_says_what_stopped_it(monkeyp
     assert error.value.abandoned is None
 
 
+def test_a_fault_while_checking_a_statement_is_refused_at_its_line(monkeypatch, tmp_path, capsys):
+    """A fault of the compiler inside one statement's rule is E-INTERNAL at the innermost statement's line, says it is
+    the compiler's, keeps the fault for whoever tests the check, and ends the check: after a first refusal it is
+    what `further_stopped` names. The record stays short, where the fault used to print a Python traceback."""
+    from cairn.compiler.check.checking import Checker
+
+    def fault(self, s):
+        raise TypeError("'Function' object is not iterable")
+
+    monkeypatch.setattr(Checker, "s_assign", fault)
+    source = "fn main() -> i32 {\n  let mut x:u64 = 1;\n  if x > 0 {\n    x = 2;\n  }\n  return i32(x);\n}\n"
+    for all_of_them in (False, True):
+        with pytest.raises(Diagnostic) as error:
+            compile_program(source, every=all_of_them)
+        assert where(error.value.data) == ("E-INTERNAL", 4, 5) and error.value.data["fault"] == "TypeError"
+        assert "a fault of the compiler, not of the program" in error.value.data["message"]
+        assert isinstance(error.value.abandoned, TypeError)
+    with pytest.raises(Diagnostic) as error:
+        compile_program("fn first() -> u32 { let y:u64 = 1; return y; }\n" + source, every=True)
+    assert error.value.data["code"] == "E-TYPE-MISMATCH" and error.value.data["further_stopped"] == "E-INTERNAL"
+    path = tmp_path / "fault.cairn"
+    path.write_text(source + "\nfn unkept() -> u64 = 7;\n")  # a source of its own, so no cached check answers for it
+    assert main(["check", str(path), "--format", "json"]) == 1
+    out = capsys.readouterr()
+    record = json.loads(out.out)
+    assert record["code"] == "E-INTERNAL" and record["card"] == "limits" and "Traceback" not in out.err
+    assert len(out.out) < 1000
+
+
 def test_a_parse_error_is_reported_alone():
     record = every("fn a( -> u64 = 1;\nfn b() -> u64 = ;\n")
     assert record == alone("fn a( -> u64 = 1;\nfn b() -> u64 = ;\n")
