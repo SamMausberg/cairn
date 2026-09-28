@@ -39,6 +39,8 @@ Every refusal names the rule card that owns its code, and [`cairn rules`](#cairn
 
 A guard is a check the compiler writes wherever it cannot prove an operation safe, such as a bounds or an overflow check. A program stopped by a failed guard is reported as stopped by `SIGABRT`.
 
+A fault of the compiler itself, met while it checks a statement, is refused as `E-INTERNAL` at that statement's line, and the message names the fault's class. It says nothing about the program: the check did not finish, so nothing is accepted, and the refusal is a compiler bug to report with the program.
+
 ## Every refusal in one check
 
 `cairn check` reports every refusal it can judge on its own, so three mistakes in three functions cost one check. The record is the first refusal exactly as a check that stopped there would report it, with the others beside it:
@@ -50,7 +52,7 @@ A guard is a check the compiler writes wherever it cannot prove an operation saf
              {"code": "E-TYPE-MISMATCH", "message": "Expected bool, got u64.", "line": 11, "column": 10, ...}]}
 ```
 
-Each entry of `further` is a whole diagnostic at its own file, line and column, in source order. A record lists at most twenty, and `further_omitted` counts the rest. `not_judged` counts the functions that got no verdict because of a refusal, and none of them is accepted. `further_stopped` says that the check stopped after the first refusal and what stopped it: a limit's code, such as `E-EFFECT-LIMIT`, or the class of an internal fault, which is a compiler bug to report. Nothing after that point was judged.
+Each entry of `further` is a whole diagnostic at its own file, line and column, in source order. A record lists at most twenty, and `further_omitted` counts the rest. `not_judged` counts the functions that got no verdict because of a refusal, and none of them is accepted. `further_stopped` says that the check stopped after the first refusal and what stopped it: a limit's code, such as `E-EFFECT-LIMIT`, `E-INTERNAL` for a fault met while checking a statement, or the class of another internal fault; each fault is a compiler bug to report. Nothing after that point was judged.
 
 The check never reports a refusal that may follow from another. Every function has an effect row, the list of what it may do that a caller can observe (`alloc`, `io`, `trap`, `write:out`, ...), and a signature may cap it with a ceiling. Once a function's body is refused, its row is unknown. A function that reaches it is then not held to its ceiling or to the rule on operand order (`E-EFFECT-ORDER`), and is counted in `not_judged`. So is a function that reaches a reference with [implementations](abstractions.md#implementations), because the reference's row joins theirs only after the rules about implementations run.
 
