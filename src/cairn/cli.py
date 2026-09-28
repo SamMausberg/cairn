@@ -324,8 +324,9 @@ def cairn_emit(a: Any, project: Project) -> int:
 def cairn_check(a: Any, project: Project) -> int:
     receipt = compile_source(project.source, sites=project.site, every=True)[1]
     library = sum(1 for name in receipt["functions"] if name.startswith("std."))  # what the imports bring in
+    # The project's hashes are a build's to keep (receipt.json); an agent that checks acts on the verdict alone.
     result = {"status": "typed", "functions": receipt["function_count"], "library_functions": library,
-              "formal_status": "not-verified", "project": project.receipt()}  # fmt: skip
+              "formal_status": "not-verified"}  # fmt: skip
     if a.generics:  # "ok": every instance within the bounds checks; else what the body needed beyond them.
         linked = tuple(module + "." for module in receipt["modules"] if module.startswith("std."))
         verdicts = certify_templates(project.source).items()

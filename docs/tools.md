@@ -239,7 +239,7 @@ fn encode_Header(out:rw<u8>[16]@host, value:Header) {
 `--generics` also checks each generic function once against its bounds, as [abstractions.md](abstractions.md#certifying-a-template) describes:
 
 ```json
-{"status": "typed", "functions": 172, "library_functions": 84, "formal_status": "not-verified", ...,
+{"status": "typed", "functions": 172, "library_functions": 84, "formal_status": "not-verified",
  "generics": {"analytics.agg.run_static": "ok", "analytics.agg.bins_new": "ok", ...,
               "analytics.query.map_par": "ok", "analytics.query.map_loop": "ok"}}
 ```
