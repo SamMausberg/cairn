@@ -7,7 +7,7 @@ compiles device candidates for their registers and shared memory within the comp
 the best-ranked few and the plan the function has now, halving the field each round with more blocks for the
 survivors, within the run budget, and says how the measured order agreed with the predicted one. Host plans are
 timed on this host. Device plans are timed only with `--device`, which runs device code and so runs only where
-`make tune-device` allows it: the owner's target, holding the device lock.
+`make tune-device` allows it: a device make target, holding the device lock.
 
 With a history (`agent/history.py`), the search records what it tried, what the checker or a compiler refused, what
 each compile read and what each run measured, and it answers from the history what an earlier search already
@@ -344,7 +344,7 @@ def tune(source: str, name: str, sizes: list[dict[str, float]], profile: Profile
     predicted = result["chosen"]
     best = legal[rows.index(predicted)]
     if measure and "device" in kinds and not device:
-        result["measured"] = "Not measured: device plans are timed only by `make tune-device`, which the owner runs."
+        result["measured"] = "Not measured: device plans are timed only by `make tune-device`."
     elif measure:
         usable_keys = {x.key() for x, r in zip(legal, rows, strict=True) if not isinstance(r.get("validated"), str)}
         eligible = [x.key() for x in predicted_order if x.key() in usable_keys]
@@ -475,7 +475,7 @@ def timed(source: str, name: str, ranked: list[Any], current: Any, sizes: list[d
             break
         field = sorted(field, key=lambda plan: times[plan])[: max(2, len(field) // 2)]
         blocks *= 2
-    ran = "on the device, under the owner's make target" if device else "on this host"
+    ran = "on the device, under a device make target" if device else "on this host"
     note = (f"Timed {ran} by cairn.perf.measure, the median of each round's blocks; a busy machine adds noise, so "
             "a close measured order says little.")  # fmt: skip
     if not times:
