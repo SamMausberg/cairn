@@ -25,6 +25,7 @@ from ..syntax.tree import (
     USIZE,
     VOID,
     Expr,
+    Stmt,
     Type,
     fail,
     is_view,
@@ -111,7 +112,7 @@ def check_convert(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected:
     return Type(e.val)
 
 
-def contract(c: Checker, e: Expr, op: str, source: str, target: str, **terms: str):
+def contract(c: Checker, e: Expr | Stmt, op: str, source: str, target: str, **terms: str):
     """The numerical contract of a rounding the source wrote, as the receipt lists it beside the row."""
     record = {"line": e.line, "op": op, "from": source, "to": target, "rounding": "nearest-even", **terms}
     c.numerics.setdefault(c.f.name, []).append(record)

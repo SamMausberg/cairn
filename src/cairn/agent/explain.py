@@ -53,6 +53,7 @@ SYNCHRONIZATION = {  # What blocks, or starts something to block on later, and h
     "lock": ".with(",
     "host region completes": "cr::par::run(",
     "pooled reduce completes": "cr::par::reduce<",
+    "pooled float sum completes": "cr::par::sum<",  # the exact sum, rounded once (runtime/cairn_sum.hpp)
     "device region completes": "cr::gpu::run",  # its own stream, on the thread's execution context
     "queued device work": "cr::gpu::queue",
     "transfer": "cr::gpu::copy_on(",

@@ -113,6 +113,7 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::run`, i
 | `cairn_runtime.hpp` | the guards (checked arithmetic, bounds, entry checks) and the scoped scalar buffer; every guard can be called on the host and on the device, and below sm_100 the device compiler is not told that a failed guard's trap ends the thread, since NVVM 7.0.1 deleted loop exits around one it was told of |
 | `cairn_owners.hpp` | the movable zeroed `Buf`, `Defer`, borrowed callables, checked parts |
 | `cairn_parallel.hpp` | the host lane pool with its pooled reduction and its scan in two passes, `Mutex` and `Atomic` with explicit orders; it includes `cairn_tasks.hpp` |
+| `cairn_sum.hpp` | the exact float sum of `reduce + parallel`: per block eight TwoSum expansions in SIMD registers, an integer accumulator for what they leave over and for chunks with a special value or an overflow, blocks merged by integer atomic adds, and the one rounding at the end |
 | `cairn_tasks.hpp` | the crew of reusable task threads, linear tasks, task groups with a bounded ring of completions |
 | `cairn_kernels.hpp` | the device side of every region in plain CUDA: the lane, chunk and staged tile kernels, and their launch on a stream the caller names, with no execution context |
 | `cairn_gpu.hpp` | CUDA as the machine `cairn_exec.hpp` runs on: streams, events, allocation and copies; and synchronous entry points (`launch`, `Ticket`) that wait for the whole device and that generated code does not call |

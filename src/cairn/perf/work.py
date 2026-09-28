@@ -140,7 +140,8 @@ class Counter:
             lane.seen |= {(k, False) for k in body.writes}
         if folds:
             self.expr(tail.exprs[1], lane)
-            body.op(combining(tail), ONE)
+            for kind, many in combining(tail).items():
+                body.op(kind, Poly.of(many))
         del self.bound[-len(binders) :]
         for name in chain.scratch:
             for table in (body.reads, body.writes, body.footprint):
@@ -269,7 +270,8 @@ class Counter:
         self.expr(value, inner)
         if store is not None:
             self.access(store, inner, write=True)
-        inner.work.op(combining(s), inner.times)
+        for kind, many in combining(s).items():
+            inner.work.op(kind, inner.times * many)
         if not region:
             return
         if out is not None:
@@ -529,10 +531,13 @@ class Counter:
         return None if lo is None or hi is None else hi - lo
 
 
-def combining(s: Stmt) -> str:
+def combining(s: Stmt) -> dict[str, int]:
     """One step of a reduction or a scan: an in-order float fold and a checked sum wait on the step before; wrapping,
-    min and max reassociate."""
-    return f"{s.ty.name}_fold" if s.ty.name in FLOAT else "int_fold" if s.op == "+" else "int"
+    min and max reassociate. A float sum on the lane pool is exact: each term, an f32 one widened first, goes through
+    two error-free sums, twelve double additions that wait only on their own expansion (runtime/cairn_sum.hpp)."""
+    if s.ty.name in FLOAT and s.op == "+" and s.pooled and s.ref == "host":
+        return {"f64": 12, **({"convert": 1} if s.ty.name == "f32" else {})}
+    return {f"{s.ty.name}_fold" if s.ty.name in FLOAT else "int_fold" if s.op == "+" else "int": 1}
 
 
 def fold(target: Expr, value: Expr, binders: tuple[str, ...]) -> str | None:

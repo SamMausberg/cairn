@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..plans import chunks, fusion, staging
 from ..primitives import atomics, wide
-from ..primitives.builtins import WRAPPING, crossing
+from ..primitives.builtins import WRAPPING, contract, crossing
 from ..syntax.tree import (
     BOOL,
     FLOAT,
@@ -225,8 +225,12 @@ def s_reduce(c: Checker, s: Stmt):
     ty = c.region(s, [value], lambda: c.expr(value, declared), placed)
     combining(c, s, ty, "E-REDUCE-OP")
     if s.pooled and s.ref == "host" and ty.name in FLOAT:
-        fail("E-REDUCE-ORDER", f"reduce {s.op} parallel adds {ty.name} in blocks on the lane pool, and floating "
-             "addition in another order gives another answer: fold with for, or write the blocks yourself.", s)  # fmt: skip
+        if s.op != "+":  # A product rounded in blocks is another number, and no exact product is offered.
+            fail("E-REDUCE-ORDER", f"reduce {s.op} parallel multiplies {ty.name} in blocks on the lane pool, and a "
+                 "product rounded in another order is another number: fold it with for. A float sum may run on the "
+                 "pool: reduce + parallel is the exact sum of the terms, rounded once.", s)  # fmt: skip
+        # The exact sum, rounded once: the same bits for every lane count and block (runtime/cairn_sum.hpp).
+        contract(c, s, "sum", ty.name, ty.name, sum="exact")
     s.ty = ty
     if not target:
         return c.bind(s.name, Binding(ty), s)

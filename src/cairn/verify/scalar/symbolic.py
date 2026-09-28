@@ -653,7 +653,7 @@ class Symbolic:
     def seeded(self, op: str, ty: Type) -> Term:
         """What the emitted fold starts from; a float total would depend on the order it is taken in."""
         if ty.name in FLOAT:
-            raise Unsupported("A float reduction combines in an unspecified order; it is not modeled.")
+            raise Unsupported("A float reduction is not modeled: in order on the host, or the exact sum on the pool.")
         lo, hi = bounds(ty.name)
         return self.q.term(ty, constant({"mul_wrap": 1, "&": hi, "min": hi, "max": lo}.get(op, 0), ty.name))
 
