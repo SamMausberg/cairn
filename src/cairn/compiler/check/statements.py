@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
 from ..syntax.parser import copied
-from ..syntax.tree import BOOL, USIZE, VOID, Arm, Expr, Function, Stmt, Type, fail, is_view
+from ..syntax.tree import BOOL, USIZE, VOID, Arm, Expr, Function, Stmt, Type, fail, is_view, nested
 from . import facts
 from .calls import COMPUTES
 from .places import FORGED, field_path, path, settle
@@ -406,7 +406,10 @@ def s_unsafe(c: Checker, s: Stmt):
 
 
 def s_defer(c: Checker, s: Stmt):
-    """A visible cleanup: checked here, run at every normal exit of the enclosing block."""
+    """A visible cleanup: checked here, run at every normal exit of the enclosing block. The call reads its arguments
+    there, so every local they and its closures name is held until the block ends: none may move away before then
+    (places.consume), since the call would read what is left. A place may still be written, taken or swapped; the
+    call reads what it then holds."""
     inner = s.body[0]
     c.host_only(s, "defer schedules a host call")
     if inner.tag != "expr" or inner.exprs[0].tag != "call":
@@ -415,3 +418,20 @@ def s_defer(c: Checker, s: Stmt):
     c.stmt(inner)
     c.deferred |= c.moved - before
     c.moved, c.leases = before, leases  # The call runs at block exit; until then nothing is returned.
+    for name in reads(inner.exprs[0]):
+        if name in c.env:
+            c.holds.setdefault(name, s.line)
+
+
+def reads(e: Expr) -> Iterator[str]:
+    """Every name an expression reads, what a closure written in it reads included."""
+    if e.tag == "name":
+        yield e.val
+    for a in e.args:
+        yield from reads(a)
+    stack = list(e.ref.body) if e.tag == "lambda" else []
+    while stack:
+        s = stack.pop()
+        stack += nested(s)
+        for x in s.exprs:
+            yield from reads(x)

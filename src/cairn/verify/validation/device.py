@@ -8,7 +8,7 @@ infinity, -0.0), a view of more than `SHORT` elements decoded from a table of it
 element off an aligned allocation as a part one element into its storage. A case it cannot write is counted with its
 reason in the coverage it returns, never dropped unseen. `sanitized` builds those tests into one executable and runs
 every test under each Compute Sanitizer tool, `memcheck`, `racecheck`, `initcheck` and `synccheck`, as a separate
-result per tool; a tool that ran no test is `unknown`, never clean.
+result per tool; a tool that ran no test, or instrumented none because none made a CUDA call, is `unknown`, never clean.
 
 Nothing here runs outside `make gpu` (perf/on_device.py `allowed`): without `CAIRN_GPU_TESTS=1` it says
 why and runs nothing, and every run holds the machine-wide device lock. Generating the tests and compiling them for
@@ -198,16 +198,29 @@ def agreed(a: str, b: str, ty: str, agree: str) -> str:
 # debugger interface: a fact about the machine, not an error of the program.
 UNINSTRUMENTED = ("Error: Device not supported", "Error: Failed to initialize WDDM debugger interface")
 
+# What Compute Sanitizer prints when a test ends before its first CUDA call, as one whose views are empty does, since
+# it allocates and launches nothing: the tool instrumented nothing, and its exit status (255) says nothing of how the
+# program ended, so the test runs once more without the tool. `--require-cuda-init no` is never passed: with it the
+# tool exits 0 for a program that fails before any CUDA call, which would read as clean.
+NO_CUDA_CALL = "Target application terminated before first instrumented API call"
+
 
 def verdict(runs: list[dict[str, Any]]) -> dict[str, Any]:
-    """One tool's result over its runs: clean only when some test ran and every run exited cleanly, and unavailable,
-    never clean or reported, when the tool said it could not instrument the device."""
+    """One tool's result over its runs: unavailable, never clean or reported, when the tool said it could not
+    instrument the device; reported when any test ended other than cleanly, where a test that made no CUDA call ends
+    as it did when run without the tool; unknown when no test ran or none made a CUDA call for the tool to
+    instrument; and clean otherwise."""
     if not runs:
         return {"status": "unknown", "reason": "no test ran under it", "runs": runs}
     if cannot := next((line for r in runs for line in r.get("report", "").splitlines() if line.lstrip("= ").startswith(
             UNINSTRUMENTED)), None):  # fmt: skip
         return {"status": "unavailable", "reason": cannot.lstrip("= "), "runs": runs}
-    return {"status": "clean" if all(r["exit_code"] == 0 for r in runs) else "reported", "runs": runs}
+    if any(r["exit_code"] if r.get("device_work", True) else r["program_exit_code"] for r in runs):
+        return {"status": "reported", "runs": runs}
+    if not any(r.get("device_work", True) for r in runs):
+        reason = "no test made a CUDA call, so the tool instrumented nothing"
+        return {"status": "unknown", "reason": reason, "runs": runs}
+    return {"status": "clean", "runs": runs}
 
 
 def sanitized(program: str, tests: list[str], timeout: int = 300) -> dict[str, Any]:
@@ -233,11 +246,18 @@ def sanitized(program: str, tests: list[str], timeout: int = 300) -> dict[str, A
             return {"status": built["status"], "reason": built.get("stderr", "")[-2000:], "tools": {}}
         results: dict[str, Any] = {}
         with locked():
+            plain: dict[int, int] = {}  # each test's own exit status without a tool, run at most once
             for name in TOOLS:
                 runs = []
                 for index, test in enumerate(tests):
                     done = subprocess.run([tool, "--tool", name, "--error-exitcode", "97", built["artifact"], str(index)],
                                           capture_output=True, text=True, timeout=timeout)  # fmt: skip
-                    runs.append({"test": test, "exit_code": done.returncode, "report": done.stdout[-4000:]})
+                    run = {"test": test, "exit_code": done.returncode, "report": done.stdout[-4000:]}
+                    if NO_CUDA_CALL in done.stdout:
+                        if index not in plain:
+                            alone = [built["artifact"], str(index)]
+                            plain[index] = subprocess.run(alone, capture_output=True, timeout=timeout).returncode
+                        run |= {"device_work": False, "program_exit_code": plain[index]}
+                    runs.append(run)
                 results[name] = verdict(runs)
     return {"status": "run", "tools": results}

@@ -35,9 +35,16 @@ def written(project: Project, chosen: str = "", exact: bool = False) -> list[Fun
     return [f for f in picked if (label(f) == chosen if exact else chosen in label(f))]
 
 
+# The error a trap in a device lane leaves for the next CUDA call, so it reads as the guard that failed.
+LAUNCH_FAILURE = "cairn: cuda: unspecified launch failure"
+
+
 def reason(done: subprocess.CompletedProcess) -> str:
-    """Why a test failed, in one line: the assert that failed when it said so, else how its process ended."""
-    said = [line for line in done.stderr.splitlines() if line.startswith("assertion failed ")]
+    """Why a test failed, in one line: the assert that failed when it said so, else the CUDA error the runtime
+    stopped on, other than a trap's launch failure, else how its process ended."""
+    lines = done.stderr.splitlines()
+    said = [line for line in lines if line.startswith("assertion failed ")]
+    said = said or [line for line in lines if line.startswith("cairn: cuda: ") and line != LAUNCH_FAILURE]
     if said:
         return said[-1]
     if done.returncode < 0 and -done.returncode in signal.valid_signals():
