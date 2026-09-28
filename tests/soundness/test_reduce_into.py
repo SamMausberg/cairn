@@ -50,7 +50,7 @@ VIEWS = (
         ("E-PARALLEL-RACE", "reduce add_wrap out[0] for i in 4 yield out[i];"),  # no yield reads what takes the total
         ("E-REDUCE-OP", "reduce + so[0] for i in n yield s[i];"),  # a signed partial sum may overflow alone
         ("E-REDUCE-OP", "reduce * out[0] for i in n yield x[i];"),  # a checked product may overflow before a zero
-        ("E-REDUCE-ORDER", "reduce + fo[0] parallel i in n yield d[i];"),
+        ("E-REDUCE-ORDER", "reduce * fo[0] parallel i in n yield d[i];"),  # a float product in blocks is another
         ("E-COLLECT-BINDING", "let t = reduce + out[0] for i in n yield x[i];"),  # an element, or a binding
         ("E-COLLECT-BINDING", "reduce + for i in n yield x[i];"),
         ("E-UNBOUND", "reduce + out[i] for i in n yield x[i];"),  # the element is one, named before the lanes

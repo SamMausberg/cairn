@@ -251,7 +251,7 @@ On the host a reduction folds in index order. Over device views it combines in a
 
 Checked `+` is allowed on unsigned integers. No partial sum of unsigned values can overflow unless the total does, so whether the sum traps cannot depend on the order. Signed `+` and integer `*` are refused (`E-REDUCE-OP`), because a partial result can overflow while the total fits.
 
-Writing `parallel` in place of `for` runs a host reduction on the lane pool, in blocks fixed by the count alone. Every operator allowed is associative, so the answer equals the fold in index order on any number of lanes, and a checked `+` traps exactly when that fold would. Floats are refused (`E-REDUCE-ORDER`), because a sum in blocks is a different function of the same inputs. Each `yield` runs under the rules of a lane.
+Writing `parallel` in place of `for` runs a host reduction on the lane pool, in blocks fixed by the count alone. Every integer operator allowed is associative, so the answer equals the fold in index order on any number of lanes, and a checked `+` traps exactly when that fold would. A float `+` gives the exact sum of the terms, rounded once, which is the same bits on any number of lanes and differs from the fold in index order only where that fold rounded ([numerics.md](numerics.md#parallel-float-sums)). A float `*` is refused (`E-REDUCE-ORDER`), because a product in blocks is a different function of the same inputs. Each `yield` runs under the rules of a lane.
 
 ```cairn
 fn checksum(n:usize, bytes:ro<u8>[n]) -> u64 {
@@ -259,12 +259,17 @@ fn checksum(n:usize, bytes:ro<u8>[n]) -> u64 {
   let mixed = reduce ^ parallel i in n yield mul_wrap(u64(bytes[i]), 0x9e3779b97f4a7c15);
   return total ^ mixed;
 }
+
+fn dot(n:usize, x:ro<f64>[n], y:ro<f64>[n]) -> f64 {
+  let s = reduce + parallel i in n yield x[i] * y[i];          // the exact sum of the products, rounded once
+  return s;
+}
 ```
 
 ```cairn rejects E-REDUCE-ORDER
-fn dot(n:usize, x:ro<f64>[n], y:ro<f64>[n]) -> f64 {
-  let s = reduce + parallel i in n yield x[i] * y[i];
-  return s;
+fn product(n:usize, x:ro<f64>[n]) -> f64 {
+  let p = reduce * parallel i in n yield x[i];
+  return p;
 }
 ```
 
@@ -470,7 +475,7 @@ plan blur { stage 1; block 128; }   // each element of x crosses from memory onc
 
 `cairn predict` prices a staged region as it prices the region without the plan. What a tile saves is what the device's caches would have missed, and only a device run measures that. [`cairn tune`](tools.md#cairn-tune) reads a staged candidate's registers and tile from its compile, so a tile that costs resident warps is priced as costing them.
 
-`fuse K`, from 2 to 16, runs up to `K` adjacent regions as one pass over the indices: each lane runs the first body at its index, then the next body. The regions must share a placement, host or device, and an extent, the count of indices they run over, and each lane must touch what the regions write only at its own index. No body may trap, loop without end, or do anything observable from outside. A local array that only the chain touches then lives in each lane as one value and is never allocated. A host `reduce` over the same extent may end the chain, and it keeps its fold order.
+`fuse K`, from 2 to 16, runs up to `K` adjacent regions as one pass over the indices: each lane runs the first body at its index, then the next body. The regions must share a placement, host or device, and an extent, the count of indices they run over, and each lane must touch what the regions write only at its own index. No body may trap, loop without end, or do anything observable from outside. A local array that only the chain touches then lives in each lane as one value and is never allocated. A host `reduce` over the same extent may end the chain, and it keeps its meaning: the fold in index order, or the exact sum of a float `reduce + parallel`.
 
 ```cairn
 fn blend(n:usize, out:rw<f64>[n], x:ro<f64>[n], a:f64, b:f64) {

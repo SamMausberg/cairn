@@ -360,6 +360,8 @@ class Concrete:
         collect = s.tag == "compact"
         if not collect and len(s.exprs) > 2:
             raise Unsupported("A reduction into an element is not modeled.")
+        if not collect and s.ty.name in FLOAT:  # in order, or the exact sum on the pool; symbolic.py models neither
+            raise Unsupported("A float reduction is not modeled.")
         count = self.expr(s.exprs[1] if collect else s.exprs[0], env, stack)
         if count > MAX_UNROLL:
             raise Unsupported("Concrete replay exceeded the loop unrolling budget.")

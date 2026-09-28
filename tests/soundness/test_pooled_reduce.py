@@ -2,8 +2,9 @@
 
 Each block folds in index order and the block totals fold in block order, so every operator the form admits
 gives exactly what the in-order fold gives, on any number of lanes. Checked unsigned `+` traps exactly when the
-in-order fold does: every block total, and every running total of them, is at most the whole sum. Floats are
-refused, because a sum in blocks is a different function of the same inputs.
+in-order fold does: every block total, and every running total of them, is at most the whole sum. A float product is
+refused, because a product in blocks is a different function of the same inputs; a float sum is the exact sum rounded
+once, which tests/soundness/test_exact_sum.py holds to an exact oracle.
 """
 
 import os
@@ -21,7 +22,7 @@ VIEWS = "fn f(n:usize, x:ro<u64>[n], s:ro<i32>[n], d:ro<f32>[n]@device) -> u64 {
 @pytest.mark.parametrize(
     ("code", "body"),
     [
-        ("E-REDUCE-ORDER", "let t = reduce + parallel i in n yield f64(x[i]); return 0;"),
+        ("E-REDUCE-ORDER", "let t = reduce * parallel i in n yield f64(x[i]); return 0;"),
         ("E-REDUCE-ORDER", "let t = reduce * parallel i in n yield f32(x[i]); return 0;"),
         (
             "E-REDUCE-OP",
