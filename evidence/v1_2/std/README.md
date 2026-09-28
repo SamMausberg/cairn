@@ -1,6 +1,6 @@
-# Reading standard input into a Vec
+# Reading input and counting words with std
 
-How long reading all of standard input into a `Vec[u8]` takes, and how much memory it holds at its peak, before and after `std.vec` grew through views and `std.io.read_to_end` sized the rest of a file after its first read. A newcomer probe found that 77 MB read with the skill's loop took about a second and peaked at 2.6 times the input, with 58% of a run in `std.vec.reserve[u8]`.
+How long reading all of standard input into a `Vec[u8]` takes, and how much memory it holds at its peak, before and after `std.vec` grew through views and `std.io.read_to_end` sized the rest of a file after its first read. A newcomer probe found that 77 MB read with the skill's loop took about a second and peaked at 2.6 times the input, with 58% of a run in `std.vec.reserve[u8]`. Below that, a word count keyed by `Vec[u8]` against the one the probe wrote.
 
 Everything ran on 2026-09-25 on an AMD Ryzen 7 7800X3D (8 cores, 16 threads) under WSL2 (Linux 6.18), with clang++ 21.1.8 and Python 3.12.3. Four other agents ran builds and test suites on the machine throughout; each record holds the load average at its start and end. Host timing only; no device code ran.
 
@@ -47,6 +47,17 @@ python3 bench/host/std_input.py --before VARIANT --runs 7 --megabytes 77 \
 ```
 
 `chunk_loop`, the only program whose growth goes through `extend_from`, took 0.21 s (0.20 to 0.23) with the copy against 0.24 s (0.22 to 0.24) from a file, and 0.24 s (0.22 to 0.25) against 0.26 s (0.23 to 0.26) through a pipe, with the same peaks; the other rows are level. The ranges overlap, so this record does not show the copy faster, though its medians are about a tenth lower. The branch keeps one growth path; a quieter machine would have to settle whether a second one earns its place.
+
+## Words as map keys
+
+The word-frequency probe keyed its map by a record wrapping a `Vec[u8]`, with its own `Hash` and `Eq`, and refilled a scratch key for every lookup. `words/word_freq_probe.cairn` is that program as the probe wrote it; `words/word_freq_view.cairn` is the same program keyed by `Vec[u8]` itself, filled by `map.entry_view` from a view of the input and read with `io.read_stdin_to_end`. Both were built by `cairn build --kind exe` from the branch that adds `entry_view`, and run seven times each, alternating, under GNU time over 29,362,089 bytes of lines of 1000 words drawn with Zipf weights from 50,000 random lowercase words (Python's `random.Random(3)`), at load 9 to 18. Both printed the same ten lines.
+
+| Program | Seconds, median (fastest to slowest) | Peak, MiB |
+|---|---|---|
+| `word_freq_probe.cairn` | 0.22 (0.19 to 0.24) | 51 |
+| `word_freq_view.cairn` | 0.15 (0.14 to 0.18) | 37 |
+
+The difference is the whole program an agent writes, not the map alone: the probe's version also reads its input 4096 bytes at a time, and copies each word into its scratch key before every lookup.
 
 ## What was not done
 
