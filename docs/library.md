@@ -78,7 +78,7 @@ fn main() -> i32 {
 
 `std.core` implements `Ord` and `Eq` for every integer type, `Eq` for `bool`, and `Hash` for the unsigned integers. For a type of your own, write an `impl` or generate one with [std.derived](#stdderived). Every trait member is `pure`, so an implementation of `less` that prints is refused with `E-EFFECT-CEILING`.
 
-`std.core` also names each integer type's least and greatest value, from `U8_MAX` to `USIZE_MAX` and from `I8_MIN` to `I64_MAX`, so `if total > U64_MAX - x { ... }` tests an add before it traps. Import them by name, as `import std.core (Option, U64_MAX);`, or write `core.U64_MAX`.
+`std.core` also names each integer type's least and greatest value, from `U8_MAX` to `USIZE_MAX` and from `I8_MIN` to `I64_MAX`, so `if total > U64_MAX - x { ... }` tests an add before it traps. Import them by name, as `import std.core (Option, U64_MAX);`, or import the module, `import std.core;`, and write `core.U64_MAX`.
 
 ## std.vec
 
