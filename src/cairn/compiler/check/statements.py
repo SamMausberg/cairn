@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
 from ..syntax.parser import copied
-from ..syntax.tree import BOOL, USIZE, VOID, Arm, Expr, Function, Stmt, Type, fail, is_view, nested
+from ..syntax.tree import BOOL, USIZE, VOID, Arm, Expr, Function, Stmt, Type, fail, is_view, nested, root
 from . import facts
 from .calls import COMPUTES
 from .concurrency import PINNED
@@ -145,6 +145,10 @@ def s_assign(c: Checker, s: Stmt):
     if c.releases(ty):  # Whatever the place held is released where the new value lands.
         c.effect("free")
     c.expr(s.exprs[1], ty)
+    name = root(target).val
+    if target.tag != "name" and name in c.moved - before:  # `t.kids[0] = t`: the value would be stored inside itself
+        fail("E-ALIAS", f"The right side moves {name}, and the place it is assigned to lies inside {name}, so {name} "
+             f"would come to hold itself. Assign it to a place outside {name}.", s, inside=name)  # fmt: skip
     consumed = target.tag == "name" and target.val in c.moved - before
     if c.kind(ty) == "linear" and not consumed:
         shown, own = path(target), target.tag == "name" and c.env[target.val].ty.mode == "value"

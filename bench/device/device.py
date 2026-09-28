@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """Hand-written CUDA beside its CAIRN twin: build both, compare their SASS, and time them on a device.
 
-    python3 bench/device/device.py build [PAIR ...]   compile every pair for sm_120 under results/device/
+    python3 bench/device/device.py build [PAIR ...]   compile every pair for sm_120, or --arch, under results/device/
     python3 bench/device/device.py sass [PAIR ...]    the kernels' instructions, registers and local memory, as JSON
     python3 bench/device/device.py run PAIR [REPS [SKIP]]  one device process, only with CAIRN_GPU_TESTS=1
 
 `build` and `sass` launch nothing. `run` runs one built pair on the GPU, holding /tmp/cairn-gpu.lock, under a
 30-second timeout, and prints its JSON; it refuses unless CAIRN_GPU_TESTS=1 is set for this one process. `--src`
 names the `src` directory whose compiler and runtime build the CAIRN side, so a pair can be built at another
-revision; `--out` names where the builds go.
+revision; `--out` names where the builds go; `--arch` names the device architecture both sides compile for, sm_120
+unless it is given.
 
 The CAIRN side is the generated C++ of PAIR.cairn and its C header, compiled by CAIRN's own device command line
 (projects/toolchain.py) with g++ as nvcc's host compiler. The CUDA side is PAIR.cu, compiled the way its author
-would, `nvcc -O3 -arch=sm_120`, with the pair's main. Both link into one program, so the two run in one process on
+would, `nvcc -O3 -arch=ARCH`, with the pair's main. Both link into one program, so the two run in one process on
 one stream, interleaved.
 """
 
@@ -32,8 +33,14 @@ ROOT = HERE.parents[1]
 PAIRS = ["overheads", "reduce", "reduce_wide", "reduction", "saxpy", "layernorm", "transpose", "stencil", "capture"]
 # A pair whose CAIRN side is not PAIR.cairn: its sources, compiled as one program.
 SOURCES = {"reduction": [ROOT / "examples/reduction/src/device_sum.cairn", HERE / "reduce_wide.cairn"]}
-ARCH = "sm_120"
-PLAIN = ["-std=c++20", "-O3", f"-arch={ARCH}"]  # how the hand-written side is compiled
+ARCH = "sm_120"  # the architecture both sides compile for, unless --arch names another
+
+
+def plain(arch: str) -> list[str]:
+    """How the hand-written side is compiled."""
+    return ["-std=c++20", "-O3", f"-arch={arch}"]
+
+
 # The hand-written side's CUB lives in a namespace of its own: two objects of one program that instantiate the same
 # CUB kernel under the same name fail at run time with "invalid device function".
 WRAPPED = ["-DTHRUST_CUB_WRAPPED_NAMESPACE=bench"]
@@ -50,7 +57,7 @@ def load(src: Path):
     return RUNTIME_FILES, compile_source, header, parse, device_prefix
 
 
-def build(pair: str, src: Path, out: Path) -> Path:
+def build(pair: str, src: Path, out: Path, arch: str = ARCH) -> Path:
     """PAIR's program under out/PAIR/, and the two objects its SASS is read from."""
     runtime, compile_source, header, parse, device_prefix = load(src)
     where = out / pair
@@ -65,13 +72,13 @@ def build(pair: str, src: Path, out: Path) -> Path:
         (where / f"{pair}_cairn.cpp").write_text(compile_source(text)[0] + "\n" + checks)
         for name, body in runtime.items():
             (where / name).write_text(body)
-        line = [p for p in device_prefix("g++", None, "exe", parse(ARCH)) if p != "-shared"]
+        line = [p for p in device_prefix("g++", None, "exe", parse(arch)) if p != "-shared"]
         line += ["-c", f"-I{where}", str(where / f"{pair}_cairn.cpp"), "-o", str(where / "cairn.o")]
         subprocess.run(line, check=True, timeout=900)
         objects.append(where / "cairn.o")
     line = [
         "nvcc",
-        *PLAIN,
+        *plain(arch),
         *WRAPPED,
         f"-DBENCH_ENQUEUE={int(enqueue)}",
         f"-I{where}",
@@ -81,7 +88,7 @@ def build(pair: str, src: Path, out: Path) -> Path:
     ]
     subprocess.run([*line, "-o", str(where / "cuda.o")], check=True, timeout=900)
     objects.append(where / "cuda.o")
-    subprocess.run(["nvcc", f"-arch={ARCH}", *map(str, objects), "-o", str(where / pair)], check=True, timeout=300)
+    subprocess.run(["nvcc", f"-arch={arch}", *map(str, objects), "-o", str(where / pair)], check=True, timeout=300)
     return where / pair
 
 
@@ -176,6 +183,7 @@ def main() -> int:
     parser.add_argument("pairs", nargs="*")
     parser.add_argument("--src", type=Path, default=ROOT / "src")
     parser.add_argument("--out", type=Path, default=ROOT / "results/device")
+    parser.add_argument("--arch", default=ARCH, help="the device architecture both sides compile for (build)")
     args = parser.parse_args()
     if args.action == "run":
         if not args.pairs:
@@ -184,7 +192,7 @@ def main() -> int:
     chosen = args.pairs or PAIRS
     if args.action == "build":
         for pair in chosen:
-            print(build(pair, args.src.resolve(), args.out))
+            print(build(pair, args.src.resolve(), args.out, args.arch))
         return 0
     print(json.dumps({pair: sass(pair, args.out) for pair in chosen}, indent=1))
     return 0

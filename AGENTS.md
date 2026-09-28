@@ -116,6 +116,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `verify/scalar/symbolic.py` | the SMT translator |
 | `verify/scalar/concrete.py` | the concrete replay |
 | `verify/scalar/semantics.py` | the query, the counterexample check and the receipt |
+| `verify/scalar/native.py` | an `smt-equivalent` verdict run natively on validation's boundary inputs before it is given, and the translator fault a difference there is |
 | `verify/scalar/smt.py` | the optional Z3 C-API bridge |
 
 Project manifests are data, never build scripts. The formatter owns layout: `ruff format` at 120 columns, `cairn fmt` for `.cairn`. The smallest clear program wins, never by hiding a cost or deleting a check. No source file is longer than 800 lines; split by responsibility, under a name that says what the piece owns.

@@ -12,7 +12,7 @@
 //        --extended-lambda --expt-relaxed-constexpr -Werror all-warnings
 //        -Xcompiler -Wall,-Wextra,-Werror,-Wno-unused-parameter,-Wno-unused-variable,
 //                   -Wno-unused-but-set-variable,-fexceptions,-fno-rtti,
-//                   -ffp-contract=off,-fno-fast-math
+//                   -ffp-contract=off,-fno-fast-math,-fno-finite-loops
 //        prog.cu -o prog
 //
 // (-Xcompiler takes one comma separated word: the three indented lines are one argument.)

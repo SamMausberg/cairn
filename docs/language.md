@@ -116,6 +116,8 @@ A function with a block body returns through explicit `return` statements, and e
 
 The control forms are `if`, `else if` and `else`, `while`, `for i in lo..hi`, `for x in xs`, `break`, `continue` and nested `{ }` blocks. A `for` evaluates `lo` and then `hi`, each once, and an empty or reversed range runs no iteration. `&&` and `||` evaluate their right side only when the left side does not decide the result.
 
+A `while` loop whose condition stays true runs forever, as does a function that keeps calling itself, and the row of the function holding either says `diverge` ([memory.md](memory.md#effects)). The build keeps such a loop even when it computes nothing. C++ lets a compiler assume that every loop without input, output, volatile or atomic access ends, so the host compilers are told not to (`-fno-finite-loops`) and device code marks each such loop ([internals.md](internals.md#undefined-behaviour-the-lowering-rules-out)).
+
 `for x in xs { }` walks the elements of a view, a `Buf`, an `Array` or a fixed array, and `for i, x in xs { }` names the position too. It means `for i in 0..len(xs) { let x = xs[i]; }` and pays the guards that loop pays. Each element is copied, so the elements must be copyable (`E-ELEMENT-LOOP`). An owner in an array is reached through `xs[i]`, which you take, swap or lend.
 
 ```cairn

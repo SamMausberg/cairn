@@ -83,6 +83,25 @@ def overlaps(a: str, b: str, others: Any = ()) -> bool:
     return base_a == base_b or base_a.startswith(base_b + ".") or base_b.startswith(base_a + ".")
 
 
+def steps(e: Expr) -> list[tuple[str, str]]:
+    """A place as the steps that reach it from its local: ("", t), (".", kids), ("[]", "0") for `t.kids[0]`. An
+    index step keeps a literal index, and "" for any other, whose value is not known here."""
+    out = []
+    while e.tag in {"field", "index"}:
+        out.append((".", e.val) if e.tag == "field" else ("[]", e.args[1].val if e.args[1].tag == "int" else ""))
+        e = e.args[0]
+    return [("", e.val), *reversed(out)]
+
+
+def inside(a: Expr, b: Expr) -> bool:
+    """May place `a` lie strictly inside place `b`, as a field or an element of it or anything inside one of those?
+    Two indices name one element unless both are literals that differ; a place is never inside itself."""
+    x, y = steps(a), steps(b)
+    return len(y) < len(x) and all(
+        p == q or (p[0] == q[0] == "[]" and not (p[1] and q[1])) for p, q in zip(x, y, strict=False)
+    )
+
+
 def extent_of(c: Checker, e: Expr) -> str | None:
     """The name/literal identity of an extent expression, or None when it has none."""
     if e.tag == "name" and e.val not in c.env:  # A named constant is its literal.
