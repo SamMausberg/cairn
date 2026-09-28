@@ -110,7 +110,7 @@ def test_the_handshake_negotiates_a_version_and_lists_a_few_one_sentence_tools(c
     client.send(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}))  # no answer is owed
     assert client.request("ping")["result"] == {}
     tools = client.request("tools/list")["result"]["tools"]
-    assert [t["name"] for t in tools] == [t["name"] for t in TOOLS] and len(tools) <= 8
+    assert [t["name"] for t in tools] == [t["name"] for t in TOOLS] and len(tools) <= 9
     for t in tools:  # one sentence each, and a schema any client can read
         assert t["description"].count(". ") == 0 and t["description"].endswith(".")
         assert t["inputSchema"]["type"] == "object"
@@ -181,6 +181,31 @@ def test_check_answers_every_refusal_each_at_its_file_and_line_with_its_fix(proj
     [further] = record["further"]
     assert (further["code"], further["file"], further["line"]) == ("E-TYPE-MISMATCH", "src/other.cairn", 3)
     assert further["repair_hint"].startswith("Convert explicitly") and "u32(i)" in further["source_line"]
+    said = {"automatic_edit", "acceptance_boundary"}  # said of every refusal, so said once, by the first
+    assert said <= set(record) and not said & set(further)
+
+
+def test_a_rule_card_goes_to_the_agent_once_whichever_host_sends_it(project):
+    tools = Tools(project)
+    edit, _ = tools.call("edit_open", {"path": ".", "symbol": "lib.spread"})
+    reference = "fn total(n:usize, xs:ro<u64>[n]) -> u64 {\n  let mut s:u64 = 0;\n  for i in 0..n { s += xs[i]; }\n  return s;\n}\n"
+    packet, failed = tools.call("implementation_open", {"source": reference, "reference": "total"})
+    assert not failed and "base" in edit["rule_cards"] and "base" in packet["sent_before"]
+    assert "implementations" in packet["rule_cards"] and not set(packet["rule_cards"]) & set(edit["rule_cards"])
+
+
+def test_check_says_what_the_command_line_says_beside_each_line_of_source(project, capsys):
+    from cairn.cli import main
+
+    (project / "src/lib.cairn").write_text(LIB.replace("add_wrap(x, 1)", "add_wrap(x, y)"))
+    (project / "src/other.cairn").write_text(OTHER.replace("u64(i)", "u32(i)"))
+    record, _ = Tools(project).call("check", {"path": "."})
+    assert main(["check", str(project), "--format", "json"]) == 1
+    printed = json.loads(capsys.readouterr().out)
+    lined = [{k: v for k, v in d.items() if k != "source_line"} for d in record.pop("further")]
+    assert lined == printed.pop("further")
+    assert {k: v for k, v in record.items() if k not in {"automatic_edit", "acceptance_boundary", "source_line",
+                                                        "cached"}} == printed  # fmt: skip
 
 
 def test_an_edit_session_writes_an_admitted_edit_back_and_nothing_else(client, project):
@@ -280,6 +305,17 @@ def test_state_after_the_first_answers_only_what_changed_unless_the_whole_is_ask
 
 
 # The same rules without a process: the version table, and the split of a combined source into files.
+
+
+def test_find_names_the_program_s_own_functions_before_the_library_s(client, project):
+    record, failed = client.tool("find", path=".", takes=["u64"], returns="u64")
+    assert not failed and record["hits"][0].startswith("lib.bump(x:u64) -> u64  pure")
+    assert not any(line.startswith("lib.mix") for line in record["hits"])  # private to lib: no call from outside
+    record, failed = client.tool("find", words="parse integer", limit=1)
+    assert not failed and record["hits"][0].startswith("std.text.parse_i64(") and record["more"] == 1
+    for wrong in ({"takes": "u64"}, {"returns": 0}, {"returns": False, "words": "sort"}, {"effects": 0, "words": "x"}):
+        record, failed = client.tool("find", **wrong)
+        assert failed and record["code"] == "E-REQUEST", wrong
 
 
 def test_every_version_it_speaks_is_answered_as_asked():

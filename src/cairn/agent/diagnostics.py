@@ -3,9 +3,9 @@
 Every refusal record names the rule card that owns its code (`teaching.card_of`) and carries the smallest fix the
 compiler can state without guessing: a close name for an unknown one, the construct behind an effect the ceiling
 does not allow, the request that discloses a callee, the conversion between two types. `taught` adds both to one
-record, wherever it is printed. A code whose message already says how to repair it carries no hint, so nothing is
-said twice, and a fix that speaks of a host's contract is given only inside a host. A host's refusal also says where
-it sits in the reply the model wrote (`located`).
+record, wherever it is printed. A code whose message already says how to repair it carries no hint, and a hint takes
+the place of the data it states, so nothing is said twice. A fix that speaks of a host's contract is given only
+inside a host. A host's refusal also says where it sits in the reply the model wrote (`located`).
 """
 
 from __future__ import annotations
@@ -171,15 +171,28 @@ def observed(outcome: dict[str, Any]) -> str:
 
 def taught(d: dict[str, Any], known: tuple[str, ...] = (), host: bool = False) -> dict[str, Any]:
     """One refusal record with the card that owns its code and, where the compiler can state one without guessing,
-    the smallest fix, and so each refusal under `further`. Every field it had keeps its meaning; `known` are names a
-    close one may be taken from."""
+    the smallest fix, and so each refusal under `further`. Every field it keeps keeps its meaning, and the data a hint
+    states is left out (`stated`); `known` are names a close one may be taken from."""
     said = dict(d)
     if card := card_of(d.get("code")):
         said["card"] = card
     if hint := fix(d, known, host):
+        said = {k: v for k, v in said.items() if k not in stated(d, hint)}
         said["repair_hint"] = hint
     if isinstance(d.get("further"), list):
         said["further"] = [taught(f, known, host) for f in d["further"]]
+    return said
+
+
+def stated(d: dict[str, Any], hint: str) -> set[str]:
+    """The fields of `d` that `hint` says in words: the names a close one was taken from, the binding a literal's type
+    came from, and the library function an import put in place of a builtin. Beside the hint they are said twice."""
+    close = {"available_names", "available_fields", "available_variants"} & set(d)
+    said = close if hint.startswith("Did you mean") else set()
+    if (b := d.get("literal_binding")) and f"let {'mut ' if b['mutable'] else ''}{b['name']}:" in hint:
+        said.add("literal_binding")
+    if d.get("hides_builtin") and f"call {d.get('callee')} through its module" in hint:
+        said |= {"hides_builtin", "callee"}
     return said
 
 

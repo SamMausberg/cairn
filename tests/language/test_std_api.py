@@ -301,7 +301,7 @@ def test_the_api_reference_is_what_the_compiler_says_today():
     whole = standard_library()
     for name in set(pages) - {"std_api.md"}:  # each page is its module's section of the one document, word for word
         assert pages[name].removeprefix(GENERATED).removesuffix("\n\n" + NOTE + "\n") in whole, name
-    alone = standard_library(["std.text"]).removeprefix(GENERATED + NOTE + "\n\n")
+    alone = standard_library(["std.text"]).removeprefix(NOTE + "\n\n")
     assert alone.startswith("# std.text") and alone.removesuffix("\n") in whole and "# std.io" not in alone
     own = document("module m;\n// Doubles.\npub fn twice[T: integer](x:T) -> T = x + x;\nfn hidden() {}\n")
     assert "pub fn twice[T:integer](x:T) -> T" in own and "Doubles." in own and "hidden" not in own
