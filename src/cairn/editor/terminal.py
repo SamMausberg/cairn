@@ -28,8 +28,8 @@ def human(choice: str | None, stream: TextIO | None = None) -> bool:
 
 def record(value: dict, lines: bool = False) -> str:
     """The JSON record as a command prints it: indented for a person at a terminal who asked for JSON, else one
-    compact line. A piped record is read by a program or an agent, which reads its indentation too, and that was 15%
-    to 36% of each record's tokens (evidence/v1_2/terse). `lines` asks for one line even at a terminal."""
+    compact line. A piped record is read by a program or an agent, which reads its indentation too, and that was 8%
+    to 37% of each record's tokens. `lines` asks for one line even at a terminal."""
     if sys.stdout.isatty() and not lines:
         return json.dumps(value, indent=2, allow_nan=False)
     return json.dumps(value, separators=(",", ":"), allow_nan=False)

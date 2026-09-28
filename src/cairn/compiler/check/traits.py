@@ -129,6 +129,8 @@ def infer(c: Checker, f: Function, args: list[Expr], targs: tuple, expected: Typ
             bound.update({declared.extent: int(extent)} if extent.isdigit() else {})
         if unbound(c, declared, generics, bound):
             actual = c.peek(a.args[0] if a.tag == "slice" else a)  # A part has the element type of its base.
+            if declared.extent and not is_view(actual) and not actual.args:  # `sort(x)` of a scalar or a record
+                fail("E-TYPE-MISMATCH", f"{actual.display()} has no elements: it does not fit {declared.display()}.", a)
             element = actual if not declared.extent or is_view(actual) else actual.args[0]
             if not bind(declared, element):
                 fail("E-TYPE-MISMATCH", f"{actual.display()} does not fit {declared.display()}.", a)
@@ -247,6 +249,8 @@ def dispatch(c: Checker, e: Expr, trait: str, member: Function, position: int, a
     c.host_only(e, "A dynamic reference points at a host table")
     if len(args) != len(member.params):
         fail("E-ARITY", f"{member.name} expects {len(member.params)} arguments.", e)
+    if is_view(held := c.peek(args[position])):  # `size(frames)` of a view of Dyn[T]: a call has one receiver
+        c.expect(held, Type("dyn", member.params[position][1].mode, args=(Type(trait),)), args[position])
     if member.params[position][1].mode == "rw" and not c.writable(args[position]):
         fail("E-WRITE-LEASE", f"{member.name} writes its receiver; it needs an rw<dyn {trait}> reference.", e)
 
