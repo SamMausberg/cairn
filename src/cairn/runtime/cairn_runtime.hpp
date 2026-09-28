@@ -29,6 +29,16 @@ extern "C" [[noreturn]] void cr_exit(int status) noexcept;
 #define CR_DEVICE
 #define CR_EITHER
 #endif
+// CR_PROGRESS() opens the body of every `while` loop and of every function that can call itself, the two things CAIRN
+// lets run forever. C++ lets a compiler assume that a loop with no I/O, volatile or atomic access ends, and nvcc's
+// device pass deleted such a loop for sm_90 and sm_120. An empty volatile asm is a side effect it must keep, and it
+// emits no instruction. The host compilers are given -fno-finite-loops instead (projects/toolchain.py), so on the
+// host, emulated device work included, it is nothing.
+#if defined(__CUDA_ARCH__)
+#define CR_PROGRESS() asm volatile("")
+#else
+#define CR_PROGRESS()
+#endif
 namespace cr {
 // A failed guard aborts the process. In a device lane PTX's trap ends the kernel and poisons the
 // context, so the next cr::gpu wait reports the failure and aborts the host process. assert()

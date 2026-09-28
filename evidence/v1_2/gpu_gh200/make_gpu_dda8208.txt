@@ -1,0 +1,86 @@
+.s......F.......s...................s.........F....F                     [100%]
+=================================== FAILURES ===================================
+_____ test_the_device_implementation_runs_against_its_reference_on_the_gpu _____
+
+tmp_path = PosixPath('/tmp/pytest-of-ubuntu/pytest-5/test_the_device_implementation0')
+
+    @needs_nvcc
+    def test_the_device_implementation_runs_against_its_reference_on_the_gpu(tmp_path):
+        """Only `make gpu` runs this: validation's device tests transfer the inputs, launch the kernel and compare."""
+        with on_device():
+            project = load_project(DEVICE)
+            reference = next(f for f in compile_program(project.source)[0].functions if f.name == "stencil_1d")
+            cases = boundaries.generate(reference, {}, {"largest_extent": 256}, budget=12, device=True)
+            tests, names, _ = cases_as_tests(project.source, "stencil_1d", "stencil_tiled", cases)
+            done = run_tests(replace(project, source=project.source + "\n" + tests), cxx=NVCC_HOST, chosen="device_",
+                             output=tmp_path)  # fmt: skip
+>           assert done["status"] == "passed-test-blocks" and done["passed"] == len(names), json.dumps(done)[-3000:]
+E           AssertionError: led_3", "file": "foreign_device", "line": 123, "status": "failed", "exit_code": -6, "reason": "stopped by SIGABRT: a guard failed", "stdout": "", "stderr": "cairn: cuda: no kernel image is available for execution on the device\n", "elapsed_seconds": 1.2228733790007027}, {"name": "device_stencil_tiled_4", "file": "foreign_device", "line": 145, "status": "failed", "exit_code": -6, "reason": "stopped by SIGABRT: a guard failed", "stdout": "", "stderr": "cairn: cuda: no kernel image is available for execution on the device\n", "elapsed_seconds": 1.2812807000000248}, {"name": "device_stencil_tiled_5", "file": "foreign_device", "line": 167, "status": "failed", "exit_code": -6, "reason": "stopped by SIGABRT: a guard failed", "stdout": "", "stderr": "cairn: cuda: no kernel image is available for execution on the device\n", "elapsed_seconds": 1.1960802619996684}, {"name": "device_stencil_tiled_6", "file": "foreign_device", "line": 191, "status": "failed", "exit_code": -6, "reason": "stopped by SIGABRT: a guard failed", "stdout": "", "stderr": "cairn: cuda: no kernel image is available for execution on the device\n", "elapsed_seconds": 1.3304144920002727}, {"name": "device_stencil_tiled_7", "file": "foreign_device", "line": 215, "status": "failed", "exit_code": -6, "reason": "stopped by SIGABRT: a guard failed", "stdout": "", "stderr": "cairn: cuda: no kernel image is available for execution on the device\n", "elapsed_seconds": 1.42436410099981}, {"name": "device_stencil_tiled_8", "file": "foreign_device", "line": 237, "status": "failed", "exit_code": -6, "reason": "stopped by SIGABRT: a guard failed", "stdout": "", "stderr": "cairn: cuda: no kernel image is available for execution on the device\n", "elapsed_seconds": 1.3390060609999637}, {"name": "device_stencil_tiled_9", "file": "foreign_device", "line": 259, "status": "failed", "exit_code": -6, "reason": "stopped by SIGABRT: a guard failed", "stdout": "", "stderr": "cairn: cuda: no kernel image is available for execution on the device\n", "elapsed_seconds": 0.6268547300005594}, {"name": "device_stencil_tiled_10", "file": "foreign_device", "line": 279, "status": "failed", "exit_code": -6, "reason": "stopped by SIGABRT: a guard failed", "stdout": "", "stderr": "cairn: cuda: no kernel image is available for execution on the device\n", "elapsed_seconds": 0.5864189069998247}, {"name": "device_stencil_tiled_11", "file": "foreign_device", "line": 299, "status": "failed", "exit_code": -6, "reason": "stopped by SIGABRT: a guard failed", "stdout": "", "stderr": "cairn: cuda: no kernel image is available for execution on the device\n", "elapsed_seconds": 0.5926053559996944}], "passed": 1, "failed": 11, "build": {"status": "native-built", "artifact": "/tmp/pytest-of-ubuntu/pytest-5/test_the_device_implementation0/foreign_device-hwz96c4j/foreign_device", "directory": "/tmp/pytest-of-ubuntu/pytest-5/test_the_device_implementation0/foreign_device-hwz96c4j", "exit_code": 0, "stderr": "", "message": null}, "workers": 8}
+E           assert ('test-blocks-failed' == 'passed-test-blocks'
+E             
+E             - passed-test-blocks
+E             + test-blocks-failed)
+
+tests/projects/test_foreign.py:229: AssertionError
+__________ test_each_kernel_keeps_the_contract_on_the_device[tile64] ___________
+
+tmp_path = PosixPath('/tmp/pytest-of-ubuntu/pytest-5/test_each_kernel_keeps_the_con0')
+name = 'tile64'
+
+    @pytest.mark.parametrize("name", KERNELS)
+    def test_each_kernel_keeps_the_contract_on_the_device(tmp_path, name):
+        source = (TENSOR / f"{name}.cairn").read_text() + DEVICE.replace("T", KERNELS[name][0]).replace("NAME", name)
+>       ran_on_device(tmp_path, compile_source(source)[0])  # only under `make gpu`
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/soundness/test_tensor_kernels.py:135: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+tmp_path = PosixPath('/tmp/pytest-of-ubuntu/pytest-5/test_each_kernel_keeps_the_con0')
+cpp = '// Generated by cairn-native/1.1.0. Do not edit; edit the CAIRN source.\n#include "cairn_runtime.hpp"\n#include "cair...;\n  return cr::add<std::int32_t>(cr::add<std::int32_t>(cr::add<std::int32_t>(v_one, v_tails), v_wide), v_whole);\n}\n'
+timeout = 240
+
+    def ran_on_device(tmp_path: Path, cpp: str, timeout=240):
+        """A device program built by `contract` under g++ and run on the device, only under `make gpu` (`on_device`); it
+        must exit 0."""
+        with on_device():
+            done = contract(tmp_path, cpp, "g++", cuda=True, timeout=timeout)
+>       assert done.returncode == 0, (done.returncode, done.stderr[-2000:])
+               ^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: (-6, 'cairn: cuda: unspecified launch failure\n')
+
+tests/emitted.py:256: AssertionError
+________ test_each_sanitizer_tool_is_a_result_of_its_own_on_the_device _________
+
+    def test_each_sanitizer_tool_is_a_result_of_its_own_on_the_device():
+        if reason := device_reason():
+            pytest.skip(reason)
+        tests, names, _ = generated()
+        result = sanitized(SOURCE + "\n" + tests, names)
+        assert result["status"] == "run" and set(result["tools"]) == set(TOOLS)
+        statuses = {tool: result["tools"][tool]["status"] for tool in TOOLS}
+>       assert set(statuses.values()) <= {"clean", "unavailable"}, result
+E       AssertionError: {'status': 'run', 'tools': {'initcheck': {'runs': [{'exit_code': 255, 'report': '========= COMPUTE-SANITIZER
+E         ========...COMPUTE-SANITIZER
+E         ========= ERROR SUMMARY: 0 errors
+E         ', 'test': 'device_scale_twice_5'}, ...], 'status': 'reported'}}}
+E       assert {'reported'} <= {'clean', 'unavailable'}
+E         
+E         Extra items in the left set:
+E         'reported'
+
+tests/verification/test_device_validation.py:167: AssertionError
+=========================== short test summary info ============================
+FAILED tests/projects/test_foreign.py::test_the_device_implementation_runs_against_its_reference_on_the_gpu
+FAILED tests/soundness/test_tensor_kernels.py::test_each_kernel_keeps_the_contract_on_the_device[tile64]
+FAILED tests/verification/test_device_validation.py::test_each_sanitizer_tool_is_a_result_of_its_own_on_the_device
+SKIPPED [2] tests/emitted.py:246: a run that traps on the device on purpose needs CAIRN_GPU_TRAPS=1 beside `make gpu`, set by hand
+SKIPPED [1] tests/runtime/test_native_runtime.py:221: a run that traps on the device on purpose needs CAIRN_GPU_TRAPS=1 beside `make gpu`, set by hand
+3 failed, 46 passed, 3 skipped, 672 deselected in 210.64s (0:03:30)
+
+real	3m30.845s
+user	2m55.716s
+sys	0m36.881s
+exit 1
+memory.used [MiB], utilization.gpu [%]
+73 MiB, 0 %

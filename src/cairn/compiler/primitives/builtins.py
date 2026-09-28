@@ -333,10 +333,22 @@ def check_shared(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: 
 
 
 def check_exchange(c: Checker, e: Expr, args: list[Expr], targs: tuple, expected: Type | None) -> Type:
-    """take and swap are the only ways to move an owner out of a place."""
+    """take and swap are the only ways to move an owner out of a place. What lives where it is declared never moves,
+    and swap never exchanges a place with one inside it, which would leave the value holding itself; two elements of
+    one array may be one element, and swapping a place with itself changes nothing."""
+    from ..check.places import PINNED, inside, path  # places imports this module through concurrency
+
     take = e.val == "take"
     arity(e, args, 1 if take else 2, f"{e.val} takes {'one place' if take else 'two places'}.")
     types = [c.place(a, write=True) for a in args]
+    if types[0].name in PINNED:
+        fail("E-PINNED", f"{types[0].display()} lives where it is declared: {e.val} cannot move it.", e)
+    outer = next((path(b) for a, b in (args, args[::-1]) if inside(a, b)), None) if not take else None
+    if outer is not None:
+        shown = outer.replace("[]", "[...]")
+        fail("E-ALIAS", f"A mutable view cannot be passed to overlapping call arguments: swap exchanges {shown} with "
+             f"a place that may lie inside it, so {shown} would come to hold itself. Take the inner value out first "
+             "with take, then assign or swap it.", e, inside=shown)  # fmt: skip
     if take and c.kind(types[0]) == "linear":
         fail("E-LINEAR-STORAGE", "take would leave a forged linear value behind; swap two places instead.", e)
     c.effects |= {"read:" + root(a).val for a in args}

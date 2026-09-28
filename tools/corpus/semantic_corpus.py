@@ -22,11 +22,12 @@ from cairn.verify.scalar.semantics import equivalent, outcome_key, prepared
 from checks.native_scalar import NativeScalar
 from support import check_generated
 
-# What records a run rather than a lesson: tool versions, build hashes, the SMT text's rendering, and the input the
-# solver happened to choose to tell two versions apart, with the outcomes computed from it. A drift check skips these.
+# What records a run rather than a lesson: tool versions, build hashes, the SMT text's rendering, the input the
+# solver happened to choose to tell two versions apart, with the outcomes computed from it, and the native run of a
+# verdict on this machine. A drift check skips these.
 RUN = frozenset({"solver_version", "version", "library", "logic", "query_sha256", "implementation_sha256", "compiler",
                  "instrumented_runtime_sha256", "generated_sha256", "counterexample", "values", "expected", "actual",
-                 "native_counterexample_replays"})  # fmt: skip
+                 "native_counterexample_replays", "native_replay"})  # fmt: skip
 
 
 def cases():
