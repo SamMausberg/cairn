@@ -20,6 +20,7 @@ class Scope:
     counts: dict[str, int] = field(default_factory=dict)
     moved: set[str] = field(default_factory=set)
     deferred: set[str] = field(default_factory=set)
+    holds: dict[str, int] = field(default_factory=dict)  # a local a pending defer reads -> that defer's line
     loop_depth: int = 0
     unsafe_depth: int = 0
     device_depth: int = 0
