@@ -4,8 +4,9 @@
 The generator writes functions of one shape, `gN(n, m, k, x:ro<u64>[n], y:ro<u64>[m]) -> u64`, out of statements
 that stress what guard elision reasons about: early returns, branches, `&&` and `||` conditions, immutable `let`s,
 owners replaced by assignment, narrowing conversions, parts with their extents left out or written as `hi - lo`,
-products by a constant, quotients `let q = a / C` and the multiples of `C` below them, sums taken apart again, and
-arithmetic next to the largest usize. Each batch is emitted twice, once as the compiler emits it and once with
+products by a constant, quotients `let q = a / C` and the multiples of `C` below them (with `C` sometimes a product of
+two constants, and a multiple sometimes written `j * 1 * C`, a product atom times a constant), sums taken apart again,
+and arithmetic next to the largest usize. Each batch is emitted twice, once as the compiler emits it and once with
 `keep_guards`, which writes every guard, and both are built with clang++ under AddressSanitizer and
 UndefinedBehaviorSanitizer (and, with `--gcc`, with g++, under the same sanitizers with `--sanitize-gcc`). A driver runs every function on every input of a grid that
 includes empty views and `k` next to the largest usize, each in a child process, and prints what it returned,
@@ -47,7 +48,7 @@ CONDITIONS = ["i < m", "i + 1 < n", "k < n", "i > 0 && i < m", "!(i >= m)", "i <
 LETS = ["n - k", "k + 1", "min(n, k)", "m / 2", "n - m", "k % n", "n", "m - 1", "k * 2"]
 NARROW = ["u32(k)", "u8(n)", "u16(k % 65536)", "u32(a)", "u8(i & 255)", "u8(i)", "u64(u32(n))"]
 DIVIDENDS = ["n", "m", "k", "a", "n + m", "k + 3", "n - 1"]
-DIVISORS = ["1", "2", "3", "4", "8", "256"]
+DIVISORS = ["1", "2", "3", "4", "8", "256", "(2 * 4)", "(2 * 128)"]  # the last two fold to constants
 
 
 def scaled(rng: random.Random, view: str) -> str:
@@ -56,7 +57,7 @@ def scaled(rng: random.Random, view: str) -> str:
     c, src, choice = rng.choice(DIVISORS), rng.choice(DIVIDENDS), rng.random()
     if choice < 0.45:  # j < q = src / c, so j * c + (c - 1) < src when nothing else is known
         off = rng.choice(["0", "1", f"{c} - 1", c, "j", "a"])
-        use = rng.choice([f"{view}[j * {c} + {off}]", f"{view}[{off} + {c} * j]"])
+        use = rng.choice([f"{view}[j * {c} + {off}]", f"{view}[{off} + {c} * j]", f"{view}[j * 1 * {c} + {off}]"])
         return f"{{ let q = {src} / {c}; for j in 0..q {{ t = add_wrap(t, {use}); }} }}"
     if choice < 0.6:
         off = rng.choice(["0", f"{c} - 1", c])

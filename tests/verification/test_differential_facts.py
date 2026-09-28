@@ -4,7 +4,8 @@ The Lean side is proved sound: a discharged index is in bounds, a discharged `+`
 discharged below a constant is at most it, and the facts `let q = a / C` adds are true. This comparison is what ties
 that proof to the Python that lowering runs. A small run is part of `make test`; `CAIRN_DIFFERENTIAL_N` asks for a
 large one. The other tests plant a slip in `facts.py` and require the comparison to report it, because a comparison
-that cannot fail is not evidence.
+that cannot fail is not evidence: among them, the two ways `times` differed from Facts.lean before they agreed, a
+product atom times a constant named as an atom and two constants left unfolded.
 """
 
 import json
@@ -84,17 +85,44 @@ def one_past(real):
     return bounds
 
 
-SLIPS = {"quotient": under_lower_bounds, "product": uncapped, "bounds": one_past}
+def nested(real):
+    """A product atom times a constant named as an atom of its own (`x0*256*2`), which Facts.lean names nothing."""
+
+    def times(c, a, b):
+        (x, j), (y, k) = (F.exact(c, e) or (None, 0) for e in (a, b))
+        return (f"{x}*{k}", 0) if x and "*" in x and y == F.ZERO and not j and k > 0 else real(c, a, b)
+
+    return times
 
 
-@pytest.mark.parametrize("rule", SLIPS)
-def test_a_slip_in_a_new_rule_would_be_reported(rule, monkeypatch):
+def unfolded(real):
+    """Two constants multiplied and left unfolded, where Facts.lean folds them."""
+
+    def times(c, a, b):
+        both = all((F.exact(c, e) or (None, 0))[0] == F.ZERO for e in (a, b))
+        return None if both else real(c, a, b)
+
+    return times
+
+
+SLIPS = {  # a slip's name: the function of facts.py it replaces, and the slip
+    "quotient": ("quotient", under_lower_bounds),
+    "product": ("product", uncapped),
+    "bounds": ("bounds", one_past),
+    "nested": ("times", nested),
+    "unfolded": ("times", unfolded),
+}
+
+
+@pytest.mark.parametrize("slip", SLIPS)
+def test_a_slip_in_a_new_rule_would_be_reported(slip, monkeypatch):
     from checks import differential_facts as harness
 
     lake = find_lake()
     if lake is None:
         pytest.skip("lake is not installed")
-    monkeypatch.setattr(harness.F, rule, SLIPS[rule](getattr(harness.F, rule)))
+    rule, planted = SLIPS[slip]
+    monkeypatch.setattr(harness.F, rule, planted(getattr(harness.F, rule)))
     with tempfile.TemporaryDirectory() as scratch:
         report = harness.compare(300, 1, lake, Path(scratch) / "Facts.lean", 600)
     assert report["status"] == "disagreed" and report["disagreements"]

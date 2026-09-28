@@ -6,9 +6,11 @@ six decisions lowering acts on and the facts `let q = a / C` adds, and proves ea
 sets and usize expressions, asks the real Python functions (`index`, `arithmetic` for `+` and `-`, `shift`,
 `conversion` to `u32`, `inside` for a part, `product` for `x * C`, and `quotient`) through a checker that holds only
 the facts and the bindings, renders the same inputs as Lean terms, and requires every answer to match on every input:
-eight decisions, the last an index `x5 * C` with `x5 < x4` after `let x4 = a / C`, and the facts `quotient` adds, fact
-by fact. It compares the rule on its inputs, not on whole programs: which facts are in scope where is checked per site
-by `verify/elision.py` and tested in `tests/soundness/test_established.py`.
+nine decisions, the eighth an index `x5 * C` with `x5 < x4` after `let x4 = a / C`, written in one of several shapes,
+and the ninth a product minus itself, which only the two sides' exact terms decide; and the facts `quotient` adds,
+fact by fact. The expressions include two constants multiplied, which both sides fold, and a product atom times a
+constant, which neither names. It compares the rule on its inputs, not on whole programs: which facts are in scope
+where is checked per site by `verify/elision.py` and tested in `tests/soundness/test_established.py`.
 """
 
 from __future__ import annotations
@@ -28,7 +30,7 @@ from support import lean_differential, run_lean
 ATOMS = 4  # x0..x3 are immutable usize values; m0 is one that can change.
 STRIDES = (2, 4, 8, 256)
 CONSTANTS = (0, 1, 2, 3, 7, 8, 63, 64, 255, 256, 4096, 2**32 - 1, 2**32, F.MAX - 1, F.MAX)
-DECISIONS = ("index", "add", "sub", "shift", "u32", "part", "mul", "div")
+DECISIONS = ("index", "add", "sub", "shift", "u32", "part", "mul", "div", "exact")
 DIVISORS = (0, 1, 2, 3, 4, 8, 256, 1024)
 
 
@@ -52,9 +54,8 @@ def expression(rng: random.Random, depth: int) -> tuple:
             if leaf < 0.4
             else ("atom", rng.randrange(ATOMS))
         )
-    if choice < 0.45:  # A product atom: the one shape `exact` gives a stride.
-        pair = [("atom", rng.randrange(ATOMS)), ("lit", rng.choice(STRIDES))]
-        return ("mul", *(pair if rng.random() < 0.5 else pair[::-1]))
+    if choice < 0.5:
+        return product(rng)
     op = rng.choice(("add", "add", "sub", "sub", "div", "mod", "band", "min"))
     return (op, expression(rng, depth - 1), expression(rng, depth - 1))
 
@@ -65,18 +66,48 @@ def case(rng: random.Random) -> dict:
     facts = [f for f in facts if f[0] != f[1]]  # `learn` records nothing between an atom and itself
     extent = (F.ZERO, rng.choice(CONSTANTS[:11])) if rng.random() < 0.3 else ("x" + str(rng.randrange(ATOMS)), 0)
     return {"facts": facts, "x": expression(rng, rng.choice((2, 3))), "y": expression(rng, 2), "extent": extent,
-            "product": factors(rng), "dividend": expression(rng, 2), "divisor": divisor(rng)}  # fmt: skip
+            "product": factors(rng), "dividend": expression(rng, 2), "divisor": (d := divisor(rng)),
+            "scaled": scaled(rng, d)}  # fmt: skip
+
+
+def product(rng: random.Random) -> tuple:
+    """A `*` whose sides `exact` reads: mostly an atom times a stride, the one shape that gives a product atom, and
+    otherwise two constants, which multiply, or a product atom times a stride, which names nothing."""
+    choice = rng.random()
+    pair = [("atom", rng.randrange(ATOMS)), ("lit", rng.choice(STRIDES))]
+    if choice < 0.2:
+        pair = [("lit", rng.choice(CONSTANTS)), ("lit", rng.choice(CONSTANTS[:11]))]
+    elif choice < 0.35:
+        pair = [product(rng), ("lit", rng.choice((*STRIDES, 1)))]
+    return ("mul", *(pair if rng.random() < 0.5 else pair[::-1]))
 
 
 def factors(rng: random.Random) -> tuple[tuple, tuple]:
-    """The two sides of a `*`: mostly an atom and a constant in either order, sometimes two constants or anything."""
+    """The two sides of a `*`: mostly an atom and a constant in either order, sometimes two constants, a product atom
+    and a constant, or anything."""
     choice = rng.random()
     if choice < 0.2:
         return expression(rng, 1), expression(rng, 1)
     if choice < 0.3:
         return ("lit", rng.choice(STRIDES)), ("lit", rng.choice(STRIDES))
+    if choice < 0.4:
+        pair = (("mul", ("atom", rng.randrange(ATOMS)), ("lit", rng.choice(STRIDES))), ("lit", rng.choice(STRIDES)))
+        return pair if rng.random() < 0.5 else pair[::-1]
     pair = (("atom", rng.randrange(ATOMS)), ("lit", rng.choice((*STRIDES, 0, 1, 3))))
     return pair if rng.random() < 0.5 else pair[::-1]
+
+
+def scaled(rng: random.Random, d: tuple) -> tuple:
+    """`x5 * C` for the divisor `C` of the quotient, as a program may write it: either way round, with the divisor a
+    product of two constants, or the product times one again, which names nothing."""
+    x5, choice = ("atom", 5), rng.random()
+    if choice < 0.5:
+        return ("mul", x5, d)
+    if choice < 0.7:
+        return ("mul", d, x5)
+    if choice < 0.85:
+        return ("mul", x5, ("mul", ("lit", 1), d))
+    return ("mul", ("mul", x5, d), ("lit", 1))
 
 
 def divisor(rng: random.Random) -> tuple:
@@ -106,7 +137,7 @@ def python_row(c: dict) -> str:
     d = python_expr(c["divisor"])
     added = F.quotient(checker, "x4", Expr("binary", "/", args=[python_expr(c["dividend"]), d], ty=USIZE))
     below = SimpleNamespace(**{**vars(checker), "facts": [*c["facts"], *added, ("x5", "x4", -1)]})
-    scaled = Expr("binary", "*", args=[Expr("name", "x5", ty=USIZE), d], ty=USIZE)
+    p = Expr("binary", "*", args=[python_expr(e) for e in c["product"]], ty=USIZE)
     answers = (
         F.index(checker, Expr("index", args=[xs, x])),
         F.arithmetic(checker, Expr("binary", "+", args=[x, y], ty=USIZE)),
@@ -114,8 +145,9 @@ def python_row(c: dict) -> str:
         F.shift(checker, Expr("binary", "<<", args=[Expr("int", "1", ty=Type("u64")), x], ty=Type("u64"))),
         F.conversion(checker, Expr("call", "u32", args=[x], ty=Type("u32"))),
         F.inside(checker, x, y, (c["extent"][0], c["extent"][1])),
-        F.product(checker, Expr("binary", "*", args=[python_expr(e) for e in c["product"]], ty=USIZE)),
-        F.index(below, Expr("index", args=[xs, scaled])),
+        F.product(checker, p),
+        F.index(below, Expr("index", args=[xs, python_expr(c["scaled"])])),
+        F.arithmetic(checker, Expr("binary", "-", args=[p, p], ty=USIZE)),
     )
     listed = ";".join(f"{a or '0'},{b or '0'},{k}" for a, b, k in added)
     return "row:" + "".join("1" if a else "0" for a in answers) + "|" + listed
@@ -138,7 +170,7 @@ def lean_row(c: dict) -> str:
     facts = "[" + ", ".join(f"({lean_atom(a)}, {lean_atom(b)}, ({k} : Int))" for a, b, k in c["facts"]) + "]"
     extent = f"({lean_atom(c['extent'][0])}, ({c['extent'][1]} : Int))"
     product = " ".join(lean_expr(e) for e in c["product"])
-    quotient = f"{lean_expr(c['dividend'])} {lean_expr(c['divisor'])}"
+    quotient = f"{lean_expr(c['dividend'])} {lean_expr(c['divisor'])} {lean_expr(c['scaled'])}"
     return f"row {facts} {lean_expr(c['x'])} {lean_expr(c['y'])} {extent} {product} {quotient}"
 
 
@@ -146,13 +178,12 @@ def lean_source(rows: list[str], chunk: int = 100) -> str:
     lines = ["import Cairn.Facts", "", "open Cairn.Facts", ""]
     lines.append('def bit (b : Bool) : String := if b then "1" else "0"')
     lines.append('def atom : Atom → String | .zero => "0" | .plain n => s!"x{n}" | .prod n S => s!"x{n}*{S}"')
-    lines.append("def row (fs : List Fact) (x y : E) (ext : Term) (p q a d : E) : String :=")
+    lines.append("def row (fs : List Fact) (x y : E) (ext : Term) (p q a d s : E) : String :=")
     lines.append("  let added := divFacts fs 4 a d")
     lines.append('  "row:" ++ bit (index fs x ext) ++ bit (addOk fs x y) ++ bit (subOk fs x y)')
     lines.append("    ++ bit (atMostConst fs 63 x) ++ bit (atMostConst fs 4294967295 x) ++ bit (partOk fs x y ext)")
-    lines.append(
-        "    ++ bit (mulOk fs p q) ++ bit (index (fs ++ added ++ [(.plain 5, .plain 4, -1)]) (.mul (.atom 5) d) ext)"
-    )
+    lines.append("    ++ bit (mulOk fs p q) ++ bit (index (fs ++ added ++ [(.plain 5, .plain 4, -1)]) s ext)")
+    lines.append("    ++ bit (subOk fs (.mul p q) (.mul p q))")
     lines.append('    ++ "|" ++ ";".intercalate (added.map fun f => s!"{atom f.1},{atom f.2.1},{f.2.2}")')
     for start in range(0, len(rows), chunk):
         lines += [

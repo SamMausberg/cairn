@@ -108,8 +108,10 @@ class Walk:
             return self.extent(e.args[0])
         if e.tag == "call" and len(e.args) == 1 and e.val == "usize" and e.args[0].ty == USIZE:
             return self.exact(e.args[0])
-        if e.tag == "binary" and e.val == "*":
+        if e.tag == "binary" and e.val == "*":  # two constants multiply; an atom times one is a product atom
             (x, j), (y, k) = (self.exact(a) or (None, 0) for a in e.args)
+            if x == ZERO and y == ZERO:
+                return ZERO, j * k
             if x and y == ZERO and not j and k > 0 and "*" not in x:
                 return f"{x}*{k}", 0
             if y and x == ZERO and not k and j > 0 and "*" not in y:

@@ -1,0 +1,18 @@
+{
+  "status": "agreed",
+  "inputs": 20000,
+  "seed": 1,
+  "discharged": {
+    "index": 1455,
+    "add": 2519,
+    "sub": 2203,
+    "shift": 3470,
+    "u32": 5544,
+    "part": 343,
+    "mul": 573,
+    "div": 1296,
+    "exact": 11588,
+    "quotient_facts": 32408
+  },
+  "disagreements": []
+}
