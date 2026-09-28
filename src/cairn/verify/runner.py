@@ -60,7 +60,8 @@ def run_tests(project: Project, *, cxx: str = "clang++", chosen: str = "", exact
         return record
     built = build(project, output=output, cxx=cxx, timeout=min(300, max(timeout, 60)),
                   tests=tuple(f.name for f in tests), device_target=device_target, emulate=emulate)  # fmt: skip
-    record["build"] = {k: built.get(k) for k in ("status", "artifact", "directory", "exit_code", "stderr", "message")}
+    said = ("status", "artifact", "directory", "exit_code", "stderr", "message")  # an empty or zero one says nothing
+    record["build"] = {k: built[k] for k in said if built.get(k) not in (None, "", 0)}
     record.update({"emulation": built["emulation"]} if "emulation" in built else {})
     if built["status"] != "native-built":
         return {**record, "status": built["status"]}
@@ -81,10 +82,15 @@ def run_tests(project: Project, *, cxx: str = "clang++", chosen: str = "", exact
             done = subprocess.CompletedProcess(late.cmd, -signal.SIGKILL, out, err)
             result["reason"] = f"timed out after {timeout} s"
         passed = done.returncode == 0 and "reason" not in result
-        result.update(status="passed" if passed else "failed", exit_code=done.returncode)
+        result["status"] = "passed" if passed else "failed"
         if not passed:
-            result.setdefault("reason", reason(done))
-        result.update(stdout=done.stdout[:8000], stderr=done.stderr[:8000], elapsed_seconds=time.monotonic() - started)
+            result.update(exit_code=done.returncode, reason=result.get("reason") or reason(done))
+        # What the test printed, where it says more than the reason, which is an assert's own line of stderr.
+        if done.stdout:
+            result["stdout"] = done.stdout[:8000]
+        if done.stderr.strip() not in ("", result.get("reason")):
+            result["stderr"] = done.stderr[:8000]
+        result["elapsed_seconds"] = round(time.monotonic() - started, 3)
         return result
 
     workers = jobs or min(8, os.cpu_count() or 1)

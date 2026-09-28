@@ -200,7 +200,7 @@ answer = host.respond({"protocol": "cairn.implementation/1", "handle": "i1", "ki
 assert answer["status"] == "validated" and answer["select_with"] == "plan prefix use prefix_blocks;"
 ```
 
-The packet shows the reference's declaration, row, ceiling and roundings, and the implementations it already has. It also shows what the host pinned, each with its digest: the tolerance on float results and the [numerical policy](verification.md#validating-an-implementation) that applies it, the test policy (cases, seed, shrinking budget, time per call), and the permitted inputs. A submission is one implementation of the reference, new or replacing one of the same name, with any helpers it calls.
+The packet shows the reference's declaration, row, ceiling and roundings, the implementations it already has, and the rule cards the host has not sent before, naming the others under `sent_before`. Over [`cairn mcp`](tools.md#cairn-mcp) the edit and implementation hosts share what they sent, so a card reaches the agent once. It also shows what the host pinned, each with its digest: the tolerance on float results and the [numerical policy](verification.md#validating-an-implementation) that applies it, the test policy (cases, seed, shrinking budget, time per call), and the permitted inputs. A submission is one implementation of the reference, new or replacing one of the same name, with any helpers it calls.
 
 The host splices it in, checks the whole program again under every `E-IMPL-*` rule, and runs [`cairn validate`](tools.md#cairn-validate) under the pinned policy. Only a validated implementation advances the source. The answer says how to select it, and selecting is the host's decision.
 
