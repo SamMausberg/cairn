@@ -169,7 +169,7 @@ fn main() -> i32 {
 }
 ```
 
-The lane rule: whatever any lane writes may be touched only at element `[i]`, or inside the lane's own block (`E-PARALLEL-RACE`). Apart from atomic updates, two lanes therefore never touch one element where either writes, so the lanes of a region cannot race.
+The lane rule: whatever any lane writes may be touched only at element `[i]`, or inside the lane's own block (`E-PARALLEL-RACE`). Apart from atomic updates, and the atomics and mutexes a host lane may use, two lanes therefore never touch one element where either writes, so the lanes of a region cannot race.
 
 ```cairn rejects E-PARALLEL-RACE
 fn shade(n:usize, out:rw<u64>[n]) { parallel i in n { out[0] = u64(i); } }
@@ -229,7 +229,7 @@ fn main() -> i32 {
 shade calls f from parallel lanes, where it cannot write:calls.
 ```
 
-Host lanes run on one pool, made by the first region, of one thread per core or `CAIRN_LANES` threads. A region below 16384 elements runs as the ordinary loop on the calling thread. The number of lanes changes how long a region takes, and it never changes a result.
+Host lanes run on one pool, made by the first region, of one thread per hardware thread the system reports, or `CAIRN_LANES` threads. Without a plan's `grain`, a region below 16384 elements runs as the ordinary loop on the calling thread. The number of lanes changes how long a region takes, and no result the language fixes. What atomic updates leave and return follows the order the lanes arrive in, which the number of lanes can change.
 
 ## reduce and compact
 
@@ -337,7 +337,7 @@ Writing `parallel` in place of `for` runs the scan on the lane pool in two passe
 fn running(n:usize, out:rw<f64>[n], x:ro<f64>[n]) { scan + out parallel i in n yield x[i]; }
 ```
 
-Over `@device` views the scan is CUB's. It compiles for the device, and the suite runs it on a device only under `make gpu`, which ran it on one RTX 5070 Ti in the 1.1.0 session ([evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)). A device scan whose total nobody binds leaves its prefixes in device memory and returns nothing to the host, so nothing waits for it until the host observes something ([devices.md](devices.md#results-that-stay-on-the-device)).
+Over `@device` views the scan is CUB's. It compiles for the device, and the suite runs it on a device only under `make gpu`, which ran it on an RTX 5070 Ti in the 1.1.0 session ([evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)) and on a GH200 at `449189b` ([evidence/v1_2/gpu_gh200](../evidence/v1_2/gpu_gh200/README.md)). A device scan whose total nobody binds leaves its prefixes in device memory and returns nothing to the host, so nothing waits for it until the host observes something ([devices.md](devices.md#results-that-stay-on-the-device)).
 
 `std.sort.radix_sort` uses `scan + exclusive` to place each digit, so it is stable and allocates nothing. On one shared machine with sixteen lanes, the pooled scan ran 1.3 to 1.7 times as fast as the loop it replaces, from a hundred thousand to ten million `u64` elements, and the radix sort ran 5.6 to 10.5 times as fast as the heapsort (`evidence/v1_0/scan/`).
 
@@ -427,7 +427,9 @@ fn spread(n:usize, out:rw<u64>[n]) { parallel i in n { out[i] = mix(u64(i)); } }
 plan spread { grain 1; lanes 8; }     // a few dozen slow lanes: one index per claim, eight threads
 ```
 
-A plan only picks one of the ways to split a region's indices that its lanes already allow, since the lanes cannot race. So a plan changes how long a region takes, and the rules are made so that it never changes the region's result, effect row or guards. The suite tests that, each planned region against the region as written on the host and on a GPU, and no Lean model covers the plan rules.
+A plan only picks one of the ways to split a region's indices that its lanes already allow, since the lanes cannot race. So a plan changes how long a region takes, and the rules are made so that it never changes the region's effect row or guards, or a result the language fixes. What atomic updates leave and return follows the order the lanes arrive in, which a plan can change as another run can.
+
+The suite tests planned regions against the regions as written: host plans and `fuse` on the host, and `block`, `per_lane`, `unroll`, `vector` and `stage` on an RTX 5070 Ti and a GH200. A fused device chain is compiled and has not run on a GPU, and no Lean model covers the plan rules.
 
 Without a plan the pool claims at least 8192 elements at a time, which suits cheap bodies. A body that costs microseconds per index wants a grain of 1.
 

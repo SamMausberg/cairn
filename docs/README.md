@@ -1,6 +1,6 @@
 # CAIRN documentation
 
-These pages teach the CAIRN language and its tools, from a first program to the proofs behind the checker. The [README](../README.md) says what CAIRN is and how to install it. The same pages are published as a website at https://sammausberg.github.io/cairn/.
+These pages teach the CAIRN language and its tools, from a first program to the Lean proofs about hand-written models of its rules. The [README](../README.md) says what CAIRN is and how to install it. The same pages are published as a website at https://sammausberg.github.io/cairn/.
 
 The groups below are in reading order. A newcomer starts with the guide, then reads the language reference as the need arises.
 
@@ -32,7 +32,7 @@ Each reference page shows its rules with programs the compiler accepts and progr
 
 ## Trust and internals
 
-- [verification.md](verification.md): see what you trust and what checks each part, what each Lean proof covers (the collector, ownership and leases, task groups, the lane pool, guard elision, layouts and the phase rule), what SMT source equivalence, `cairn diff` and `cairn validate` establish, and what each test covers and leaves out; then a table of every feature and what it has shown: compiled, run on a CPU or a GPU, sanitizer-tested, measured.
+- [verification.md](verification.md): see what you trust and what checks each part, what each Lean proof covers (the collector, ownership and leases, task groups, the lane pool, guard elision, layouts and the phase rule), what SMT source equivalence, `cairn diff` and `cairn validate` establish, and what the tests cover and leave out; then a table of the features and what each has shown: compiled, run on a CPU or a GPU, sanitizer-tested, measured.
 - [internals.md](internals.md): learn the compiler's stages, which file owns which rule, the test layers, continuous integration, what an accepted program promises, and how a release is cut.
 
 ## Plans

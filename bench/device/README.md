@@ -16,7 +16,7 @@ Each pair is a CAIRN program and hand-written CUDA of the same computation, buil
 
 Each program prints one JSON record. For each variant and size it gives the median over the timed calls of four times. `gpu_us` is the time on the caller's stream between events recorded around one call, as a leaderboard harness measures. `host_us` runs until the stream has finished what the call queued, `return_us` until the call returned, and `burst_us` is ten calls back to back, per call. `bench.cuh` says exactly what each one is.
 
-The CAIRN side runs on the harness's stream through `NAME_device_stream`, and through the enqueued entries `cq_NAME` where the compiler gives them. Results are checked: sums against the exact sum, transposes and stencils element for element against the CUDA side, and layer norms within float rounding.
+The CAIRN side runs on the harness's stream through `NAME_device_stream`, and through the enqueued entries `cq_NAME` where the compiler gives them. Each row's `relative_error` records how far its result is from the reference: sums from the exact sum, transposes and stencils element for element from the CUDA side, and layer norms within float rounding. A difference is recorded, not refused, and `saxpy` and `overheads` compare no result.
 
 ```sh
 python3 bench/device/device.py build              # every pair for sm_120, under results/device/; nothing runs

@@ -1,7 +1,8 @@
 // Drawing into an Image on the CPU: filled rectangles, lines, filled circles, source-over blending, blits of one
 // image onto another, text in a built-in 8 by 13 bitmap font, and the layout record and frame capture that let a
 // person or an agent see what a program drew. Every shape is clipped, so a shape partly outside draws its inside
-// part and none traps. Coordinates are i64, so a shape may start left of or above the image. Pixel (x, y)
+// part. Coordinates are i64, so a shape may start left of or above the image; they use checked arithmetic, so a
+// shape whose corner plus its size, or whose radius squared, does not fit an i64 traps. Pixel (x, y)
 // belongs to a rectangle when x0 <= x < x0 + w and y0 <= y < y0 + h, and to a circle when dx * dx + dy * dy <= r * r.
 // Colours blend source over destination with integer rounding: each colour channel becomes
 // (s * a + d * (255 - a) + 127) / 255, and alpha becomes a + (d_a * (255 - a) + 127) / 255, so an opaque colour

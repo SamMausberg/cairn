@@ -241,7 +241,7 @@
       "compiles": "yes: sm_120 in the suite; sm_80, sm_89, sm_90a, sm_100a and sm_120a for the suite's kernels",
       "ran_on_cpu": "yes: emulated, and on a host stand-in for the CUDA runtime",
       "ran_on_gpu": "partial: `parallel` regions, the `reduce` collector, `reduce op out[k]` over device views, a device `scan` and a device `compact` ran on an RTX 5070 Ti, each result checked against the host, CUDA or the exact sum; a checked total that overflows has not trapped on a GPU",
-      "sanitizers": "partial: the host sanitizers on emulated builds; on a GH200, memcheck, racecheck, initcheck and synccheck each clean over the two `parallel` regions of the device validation tests",
+      "sanitizers": "partial: the host sanitizers on emulated builds; on a GH200, memcheck, racecheck, initcheck and synccheck each clean over the three `parallel` regions of the device validation tests (`scale` and its two-region implementation)",
       "measured": "partial: regions and `reduce` against hand-written CUDA on an RTX 5070 Ti; `scan` and `compact` untimed",
       "records": ["evidence/v0_8_3/gpu/benchmark.json", "evidence/v1_1/catalog/README.md", "evidence/v1_1/emulation/README.md", "evidence/v1_0/execution/README.md", "evidence/v1_1/device_perf/README.md", "evidence/v1_1/gpu/README.md", "evidence/v1_2/gpu_gh200/README.md"]
     },

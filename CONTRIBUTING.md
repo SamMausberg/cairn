@@ -15,7 +15,7 @@ make lint test
 
 ## Tests and checks
 
-Run `make lint test` before and after you touch code, or `make lint test JOBS=4` for an agent on a shared machine, as [AGENTS.md](AGENTS.md#development) says. Run `make native` when you touch the runtime or the lowering, `make lean` when you touch a rule the calculus models, and `make gpu` or `make embedded` where the hardware is present. Code runs on a device only through `make gpu`, `make tune-device`, `make calibrate-device`, or a narrow run of the device tests a change touches. Each holds the lock `/tmp/cairn-gpu.lock`, so runs queue one behind another, and where the GPU also drives a display only the owner of the machine starts them ([AGENTS.md](AGENTS.md#development)).
+Run `make lint test` before and after you touch code, or `make lint test JOBS=4` for an agent on a shared machine, as [AGENTS.md](AGENTS.md#development) says. Run `make native` when you touch the runtime or the lowering, together with the native tests under both compilers and the sanitizer that bites, since `make native` sanitizes the clang++ build alone. When you touch a rule a Lean model covers, regenerate the certificates with `tools/checks/export_lean_certificates.py` and run `make lean`, which only checks them and rebuilds `proofs/`. Run and `make gpu` or `make embedded` where the hardware is present. Code runs on a device only through `make gpu`, `make tune-device`, `make calibrate-device`, or a narrow run of the device tests a change touches. Each holds the lock `/tmp/cairn-gpu.lock`, so runs queue one behind another, and where the GPU also drives a display only the owner of the machine starts them ([AGENTS.md](AGENTS.md#development)).
 
 A pull request needs one check green, `ci-passed`, which passes only when every job the workflow ran passed. On a pull request those jobs are the lint and example checks, the suite, the proofs, device code compiled under CUDA 13.2 with both host compilers, and the installed package. The compatibility jobs run on `main` and every Monday: device code under CUDA 12.9, the oldest supported and the newest compilers, Python 3.11, 3.13 and 3.14, and an AArch64 host ([internals.md](docs/internals.md#continuous-integration)).
 
@@ -31,11 +31,11 @@ By contributing you agree that your contribution is licensed under the same term
 
 ## Pull requests
 
-Every change reaches `main` through a pull request that merges itself when CI passes. [AGENTS.md](AGENTS.md#development) says how to branch, title and land one, and each section of [the template](.github/PULL_REQUEST_TEMPLATE.md) says what the description holds.
+Every change reaches `main` through a pull request, which its author sets to merge itself once CI passes (`gh pr merge --auto --squash`). [AGENTS.md](AGENTS.md#development) says how to branch, title and land one, and each section of [the template](.github/PULL_REQUEST_TEMPLATE.md) says what the description holds.
 
 ## Issues and labels
 
-Open an issue with one of its forms: a bug, a language change, a performance problem, or a kernel or benchmark request. Each form asks for what reproduces the problem and applies its `kind:` label. A soundness bug goes privately to the owner, as [SECURITY.md](SECURITY.md) says.
+Open an issue with one of its forms: a bug, a language change, a performance problem, or a kernel or benchmark request. The bug and performance forms ask for what reproduces the problem, the language form for the change's elaboration, cost and refusal, and the kernel form for the problem, its reference and its target. Each form applies its `kind:` label. A soundness bug goes privately to the owner, as [SECURITY.md](SECURITY.md) says.
 
 The labels are listed in [.github/labels.yml](.github/labels.yml), and `tools/release/sync_labels.py` applies that file when the owner runs it. Each prefix answers one question, so an issue has one `kind:` label and any number of the others.
 

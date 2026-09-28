@@ -2,7 +2,7 @@
 
 # std.sort
 
-In-place ordering. Heapsort, because it is the one O(n log n) algorithm that needs no recursion (no `diverge` in the effect row), no scratch buffer (no `alloc`) and moves elements only with `swap`, so it sorts owners as happily as scalars. Cost: O(n log n) comparisons and swaps, no allocation; the order of equal elements is not kept.
+In-place ordering. Heapsort, because it is the one O(n log n) algorithm that needs no recursion, no scratch buffer (no `alloc`) and moves elements only with `swap`, so it sorts owners as happily as scalars. Cost: O(n log n) comparisons and swaps, no allocation; the order of equal elements is not kept.
 
 ```cairn
 // effects: diverge, ffi_precondition, indirect_call, read:less, read:xs, trap, write:xs

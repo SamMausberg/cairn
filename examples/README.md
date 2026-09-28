@@ -1,6 +1,6 @@
 # Examples
 
-Each directory here holds a CAIRN project or a set of single CAIRN files. The test suite builds and runs each project here where its tools are present. [docs/examples.md](../docs/examples.md) shows what each one prints and which of its effect rows are worth reading.
+Each directory here holds a CAIRN project or a set of single CAIRN files. The test suite builds each project here where its tools are present, and runs each one that has an entry, apart from `cooperative/tuned.toml` and `harness`, which it only compiles. [docs/examples.md](../docs/examples.md) shows what each one prints and which of its effect rows are worth reading.
 
 | Directory | What it is |
 |---|---|
@@ -21,8 +21,8 @@ Each directory here holds a CAIRN project or a set of single CAIRN files. The te
 | [proof_scope](proof_scope) | what `cairn verify` covers and what it cannot reach ([more](../docs/examples.md#examplesproof_scope)) |
 | [sketch](sketch) | one named choice settled by SMT, with no model ([more](../docs/examples.md#examplessketch)) |
 | [agent](agent) | the fixture behind the edit and repair loop ([more](../docs/examples.md#examplesagent)) |
-| [implementations](implementations) | one prefix sum, three validated implementations, one searched over its parameter, and a scripted agent session ([more](../docs/examples.md#examplesimplementations)) |
-| [cooperative](cooperative) | three cooperative kernels run on host threads and held to plain loops; `gpu.toml` is the device build, `tuned.toml` a row sum whose block shape and pipeline depth `cairn tune` searches, and `refused/` five programs the phase rule refuses ([more](../docs/examples.md#examplescooperative)) |
+| [implementations](implementations) | one prefix sum and three implementations, one searched over its parameter, and a scripted agent session; `prefix_lanes` applies only from n = 65536, past the policy's largest extent, so validation never runs it ([more](../docs/examples.md#examplesimplementations)) |
+| [cooperative](cooperative) | three cooperative kernels run on host threads and held to plain loops; `gpu.toml` is the device build, `tuned.toml` a row sum whose block shape and pipeline depth `cairn tune` searches, and `refused/` five programs the phase and stage rules refuse ([more](../docs/examples.md#examplescooperative)) |
 | [reduction](reduction) | an f32 sum in one launch, with wide streaming loads, warp and block sums through shared memory nobody zeroes, and a finish; beside it the same sum through an atomic add; `gpu.toml` is the device build ([more](../docs/examples.md#examplesreduction)) |
 | [tensor](tensor) | single files: a transpose through a shared tile laid out three ways, and two tensor-core multiplies written with fragments ([more](../docs/examples.md#examplestensor)) |
 | [foreign/host](foreign/host) | a histogram of 256 bins and the vendored C++ implementation `cairn foreign` holds to it ([more](../docs/examples.md#examplesforeign)) |
@@ -30,4 +30,4 @@ Each directory here holds a CAIRN project or a set of single CAIRN files. The te
 | [harness](harness) | GPU MODE's vectoradd_v2 and KernelBench's level-1 ReLU as CAIRN kernels, each with the mapping `cairn export --harness` packages it by ([more](../docs/examples.md#examplesharness)) |
 | [bazel](bazel) | a Bazel workspace that builds, runs and tests CAIRN code with nothing fetched ([more](../docs/examples.md#examplesbazel)) |
 
-`apps/simulator`, `apps/gpu_pipeline`, the `gpu.toml` builds, `foreign/device` and `harness` need `nvcc`, and their device code runs only under `make gpu`. `embedded` needs `qemu-system-aarch64` on an AArch64 host, and `bazel` needs Bazel. Everything else needs only a C++20 compiler.
+`apps/simulator`, `apps/gpu_pipeline`, the `gpu.toml` builds and `foreign/device` need `nvcc` and a CUDA device, and their device code runs only under `make gpu`. `harness`, `cooperative/tuned.toml` and the two fragment multiplies of `tensor` need `nvcc` to compile, and nothing runs `harness`. `sketch` and `proof_scope` need `libz3`, `embedded` needs `qemu-system-aarch64` on an AArch64 host, and `bazel` needs Bazel. Everything else needs only a C++20 compiler.

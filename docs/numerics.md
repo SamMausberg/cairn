@@ -2,7 +2,7 @@
 
 This page says where a CAIRN program rounds a float beyond plain `f32` and `f64` arithmetic, and what each rounding promises. It covers the storage floats and `quantize`, the tensor core multiply and its fragments, atomic float addition, `derive grad`, and where a device program run on the host can differ from a run on the device. After reading it you can store numbers in 16 or 8 bits, use the tensor cores, and say exactly how far a result may be from the exact one. Plain `f32` and `f64` arithmetic is in [language.md](language.md#values-and-arithmetic).
 
-Every rounding a program performs is named in its source and listed under `numerics` in its build receipt, the record a build writes beside what it built.
+Every rounding this page covers is named in the source and listed under `numerics` in the build receipt, the record a build writes beside what it built: storage float conversions, `quantize`, `mma_unordered` and `atomic_add_unordered`. A device float `reduce` combines in an order its source does not name, and the receipt does not list it.
 
 ## Storage floats
 
@@ -48,7 +48,7 @@ bf16 is a storage float: widen it with f32(x) to compute, and round back with bf
 
 `quantize[T](x, scale)` is `x / scale`, rounded once to nearest with ties to even and clamped to `T`'s finite range, so it saturates where a conversion would overflow. `T` is a storage float or one of `i8`, `u8`, `i16` and `u16` (`E-QUANTIZE`), and `x` and `scale` are `f32` (`E-TYPE-MISMATCH`). A scale that is not positive and finite traps. `quantize_stochastic[T](x, scale, noise)` rounds away from zero when the dropped fraction exceeds the caller's `u32` noise, so it is unbiased over uniform noise and gives the same answer for the same noise. `f32(q) * scale` turns a quantized value back into a number, and `to_bits(h)` and `from_bits[T](u)` move between a float and its bits.
 
-One integer routine rounds on the host and in a device lane alike. The suite holds it to an independent model over every bit pattern of all four formats and every tie, under both compilers and the sanitizers. The SMT model behind `cairn verify` answers `unknown` for a function that uses a storage float.
+One integer routine rounds on the host and in a device lane alike. The suite holds it to an independent model over every bit pattern of all four formats and every tie under both compilers, and round-trips every pattern under the sanitizers. Storage floats have not run on a GPU. The SMT model behind `cairn verify` answers `unknown` for a function that uses a storage float.
 
 ## The tensor-core multiply
 
@@ -63,7 +63,7 @@ fn layer(m:usize, n:usize, k:usize, cn:usize, c:rw<f32>[cn]@device, an:usize, a:
 
 The multiply's contract, and nothing stronger, has three parts. Every product is exact in `f32`, which holds for every `f16` and 8-bit product, and for every `bf16` product that stays inside `f32`'s range. Every output is its old value plus its `k` products, each partial sum rounded to `f32`, in an order the hardware picks. Every finite output lies within `(k + 1) * 2^-22 * (|c[i][j]| + sum |a[i][p] * b[p][j]|)` of the exact sum.
 
-Two runs on one device give the same bits. The host and the device need not.
+The device multiply fixes its tiling and its order over `k` and uses no atomic update, so two runs on one device should give the same bits, though no test has compared two device runs. The host and the device need not agree.
 
 On the host the multiply is the written loop, in increasing `p`. On the device, where all three views must live (`E-PLACEMENT`), it runs 64 x 64 tiles on the tensor cores through two stages in shared memory. The extents are checked once, at the call.
 
@@ -75,7 +75,7 @@ fn widened(n:usize, c:rw<f32>[n], a:ro<f32>[n], b:ro<f32>[n]) { mma_unordered(1,
 
 `cairn verify` answers `unknown` for the multiply. `cairn predict` prices it at the published tensor peak, which is a roofline.
 
-The host suite checks the reference loop bit for bit against Python, and the bound against the exact rational sum. It runs the device tiling thread by thread on the host under the sanitizers. Only `make gpu` checks that the tensor cores meet the contract, and it passed there on one RTX 5070 Ti in the 1.1.0 session ([evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)).
+The host suite checks the reference loop bit for bit against Python, and the bound against the exact rational sum. It runs the device tiling thread by thread on the host under the sanitizers. Only `make gpu` runs the tensor cores. There each format's result must lie within twice the contract's bound of the host's reference loop, and an f16 layer of `examples/apps/matmul` within the bound of an f64 sum. Both passed on an RTX 5070 Ti in the 1.1.0 session ([evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)) and on a GH200 at `449189b` ([evidence/v1_2/gpu_gh200](../evidence/v1_2/gpu_gh200/README.md)).
 
 ## Atomic float addition
 
@@ -183,7 +183,7 @@ layout SWIZZLED = swizzle(rows(16, 16), 1, 3, 3);
 fn first(a:ro<f16>[256]@device) { let x = mma_load[WmmaA[f16, 16, 16, 16]](a, SWIZZLED, 0, 0); }
 ```
 
-An accumulator's elements are reached one at a time where the family says which lane holds which. `mma_get(acc, v)` is the value `v` that this thread's lane holds of an `mma.sync` accumulator, and `acc = mma_set(acc, v, x)` replaces it. Lane `l`'s value `v` is element `(l / 4 + 8 * (v / 2), 2 * (l % 4) + v % 2)`, the share the PTX ISA states. A program names that share as the layout `spread(rows(16, 8), 8, 4, 1, 2)`: in a region of `threads t in 32`, `SHARE.col(t, v)` is the column of `mma_get(acc, v)`. `proofs/Cairn/Layout.lean` checks that this spread is the ISA's formula and gives each element one lane. WMMA leaves the share unspecified, so there reaching an element is `E-FRAGMENT`.
+An accumulator's elements are reached one at a time where the family says which lane holds which. `mma_get(acc, v)` is the value `v` that this thread's lane holds of an `mma.sync` accumulator, and `acc = mma_set(acc, v, x)` replaces it. Lane `l`'s value `v` is element `(l / 4 + 8 * (v / 2), 2 * (l % 4) + v % 2)`, the share the PTX ISA states. A program names that share as the layout `spread(rows(16, 8), 8, 4, 1, 2)`: in a region of `threads t in 32`, `SHARE.col(t, v)` is the column of `mma_get(acc, v)`. `proofs/Cairn/Layout.lean` checks, in its own model of layouts, that this spread is the ISA's formula and gives each element one lane, and `tests/soundness/test_fragments.py` holds the compiler's evaluation of it to the same formula. WMMA leaves the share unspecified, so there reaching an element is `E-FRAGMENT`.
 
 The family is a capability the build's device target must provide ([tools.md](devices.md#the-device-target)). `TmemAcc` needs tcgen05 and tensor memory, which sm_120 does not have. Nothing here lowers `TmemAcc`, so it is refused, and it is never emulated.
 
@@ -193,7 +193,7 @@ fn tensor_memory() { let acc = TmemAcc[f32, 128, 256, 16](0.0); }
 
 On the host every thread of a warp holds each fragment whole and adds in increasing `k`. It stores only the elements its lane holds on the device, so a warp's threads write each element once.
 
-`examples/tensor` writes two matrix multiplies with `mma_unordered`'s signature this way. `tile64` is the tiling `mma_unordered` fixes: 64 x 64 tiles, four warps of 2 x 2 WMMA fragments, and `k` in steps of 32 through two padded stages. `tile32` is another: 64 x 32 tiles, eight warps of two `mma.sync` fragments, and one stage whose A tile is swizzled. On generated shapes with partial tiles in every direction, each output of both lies within the contract's bound of the exact sum, and equals the reference loop's bit for bit under both compilers. Their threads run clean under the thread sanitizer. Both compile for sm_120, to `HMMA.16816.F32` and `HMMA.16816.F32.BF16` fed by `LDSM`, and on an RTX 5070 Ti each kept the contract ([evidence](../evidence/v1_0/tensor/README.md), [device run](../evidence/v1_1/gpu/README.md)).
+`examples/tensor` writes two matrix multiplies with `mma_unordered`'s signature this way. `tile64` is the tiling `mma_unordered` fixes: 64 x 64 tiles, four warps of 2 x 2 WMMA fragments, and `k` in steps of 32 through two padded stages. `tile32` is another: 64 x 32 tiles, eight warps of two `mma.sync` fragments, and one stage whose A tile is swizzled. On generated shapes with partial tiles in every direction, each output of both lies within the contract's bound of the exact sum, and equals the reference loop's bit for bit under both compilers. Their threads run clean under the thread sanitizer. Both compile for sm_120, to `HMMA.16816.F32` and `HMMA.16816.F32.BF16` fed by `LDSM`, and on an RTX 5070 Ti, and after #164 on a GH200, each output of both lay within twice the contract's bound of the reference loop ([evidence](../evidence/v1_0/tensor/README.md), [device runs](../evidence/v1_1/gpu/README.md), [GH200](../evidence/v1_2/gpu_gh200/README.md)).
 
 ## Emulated device runs
 
@@ -214,4 +214,4 @@ A device program built with `--emulate` ([devices.md](devices.md#emulating-devic
 | `atomic_add_unordered` | may differ in the last places, within its bound: the host's scheduler and the hardware pick the order, and a device `f32` add flushes subnormals |
 | code that relies on a warp running in step, and memory ordering | nothing to observe: a block's threads share memory only across the barriers the phase rule demands, a warp operation needs its whole warp, and a lane touches only its own elements of what any lane writes |
 
-An emulated run of `examples/tensor` therefore equals the reference loop bit for bit, and a device run is held only to the contract's bound. Only `make gpu` checks that the tensor cores meet that bound, and it did so on one RTX 5070 Ti in the 1.1.0 session ([evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)).
+An emulated run of `examples/tensor` therefore equals the reference loop bit for bit, and a device run is held only to the contract's bound. Only `make gpu` runs the tensor cores, and it holds each result to twice that bound of the reference loop. It passed on an RTX 5070 Ti in the 1.1.0 session and on a GH200 at `449189b` ([evidence/v1_2/gpu_gh200](../evidence/v1_2/gpu_gh200/README.md)).

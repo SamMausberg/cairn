@@ -204,7 +204,7 @@ Device code has run on a rented GH200 for the 0.8.0 to 0.8.2 records, on an RTX 
 
 On the GH200 the same 52 tests first failed three, each a defect since fixed: a tensor-core kernel that NVVM 7.0.1, which CUDA uses below sm_100, had compiled without its loop exit; a test built for the wrong GPU; and a Compute Sanitizer result read wrongly. At commit `449189b` 49 passed ([evidence/v1_2/gpu_gh200](evidence/v1_2/gpu_gh200/README.md)).
 
-Both times the three tests that trap on purpose were left out. The fourth test needs Compute Sanitizer, which cannot instrument the RTX 5070 Ti under WSL2. On the GH200 its four tools, memcheck, racecheck, initcheck and synccheck, each ran clean over that test's program, which is two `parallel` regions and the transfers around them; no other device code has run under Compute Sanitizer. Storage floats, gradients and asserts in a lane have not run on a GPU.
+Both times the three tests that trap on purpose were left out. The fourth test needs Compute Sanitizer, which cannot instrument the RTX 5070 Ti under WSL2. On the GH200 its four tools, memcheck, racecheck, initcheck and synccheck, each ran clean over that test's program, which is three `parallel` regions and the transfers around them; no other device code has run under Compute Sanitizer. Storage floats, gradients and asserts in a lane have not run on a GPU.
 
 ### Performance
 
