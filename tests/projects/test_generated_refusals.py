@@ -12,7 +12,7 @@ import pytest
 from cairn.cli import main
 from cairn.compiler.cairnc import compile_source
 from cairn.compiler.lower.codegen import Emitter
-from cairn.projects.build import build
+from cairn.projects.build import build, refusal
 from cairn.projects.project import load_project
 from emitted import NVCC_HOST
 
@@ -95,6 +95,29 @@ def test_a_terminal_reads_the_line_and_the_fault(tmp_path, broken, capsys):
     assert main(["build", str(path), "--kind", "exe", "--out", str(tmp_path), "--format", "human"]) == 2
     shown = capsys.readouterr().out
     assert "native-build-failed: clang++ refused the C++ generated from doomed.cairn:11." in shown
+
+
+@pytest.mark.parametrize(
+    ("compiler", "said"),
+    [
+        ("clang++", "cairn_runtime.hpp:3:10: fatal error: '{}' file not found"),
+        ("g++", "cairn_runtime.hpp:3:10: fatal error: {}: No such file or directory"),
+        ("nvcc", 'cairn_runtime.hpp(3): catastrophic error: cannot open source file "{}"'),
+    ],
+)
+def test_a_header_the_installation_lacks_claims_no_defect(tmp_path, compiler, said):
+    """clang++ without libstdc++'s headers refuses every program at the runtime's first include; that is the
+    installation's fault, not the generated C++'s. A runtime header missing beside program.cpp is the build's own."""
+    path = tmp_path / "doomed.cairn"
+    path.write_text("fn main() -> i32 { return 0; }\n", encoding="utf-8")
+    project = load_project(path)
+
+    def refused(header: str) -> dict:
+        stderr = f"In file included from {tmp_path}/program.cpp:2:\n{tmp_path}/{said.format(header)}\n1 error\n"
+        return refusal(project, stderr, lambda: pytest.fail("no line of program.cpp is named"), compiler, tmp_path)
+
+    assert refused("algorithm") == {}
+    assert refused("cairn_coop.hpp")["compiler_defect"]
 
 
 def test_a_debug_build_names_the_line_of_each_match_arm():

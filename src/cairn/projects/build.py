@@ -46,6 +46,11 @@ Judged = TypeVar("Judged", DeviceTarget, None)  # a program's device target, or 
 # names the line that instantiated a template `at line N of file`. A #line directive names a `.cairn` line.
 PLACED = re.compile(r"([^\s:()]+)(?::(\d+):\d+:|\((\d+)\):)|at line (\d+) of (\S+)")
 DIRECTIVE = re.compile(r'\s*#line (\d+) "(.*)"$')
+# A header the compiler cannot find, as clang++, g++ and nvcc say it: unless it is the runtime's own, which the build
+# writes beside program.cpp, the compiler's installation lacks it, and the generated C++ is not at fault.
+MISSING = re.compile(
+    r"'([^']+)' file not found|fatal error: ([^\s:]+): No such file|cannot open source file \"([^\"]+)\""
+)
 
 
 def intact(target: Path, digest: Path) -> bool:
@@ -153,11 +158,14 @@ def lowered_from(debug: str) -> list[tuple[str, int] | None]:
 def refusal(project: Project, stderr: str, directed: Callable[[], Emitted], compiler: str, directory: Path) -> dict:
     """What a build adds when its compiler refuses the C++ CAIRN generated, which a program that checks should never
     meet: the `.cairn` line the refused C++ came from, and that the fault is the CAIRN compiler's, to be reported.
-    Nothing when the refusal is elsewhere, in a vendored source or at the link. `directed` makes the same program with
-    its #line directives, called only when a line of program.cpp needs them."""
+    Nothing when the refusal is elsewhere, in a vendored source or at the link, or when the compiler cannot find a
+    header its installation should hold. `directed` makes the same program with its #line directives, called only when
+    a line of program.cpp needs them."""
     named = [(Path(m[1] or m[5]), int(m[2] or m[3] or m[4])) for m in PLACED.finditer(stderr)]
     places = [(path, n) for path, n in named if path.name in {"program.cpp", *RUNTIME_FILES} or path.suffix == ".cairn"]
-    if not places:
+    said = next((line.strip() for line in stderr.splitlines() if "error" in line), "")
+    missing = MISSING.search(said)
+    if not places or (missing and Path(next(filter(None, missing.groups()))).name not in RUNTIME_FILES):
         return {}
     lowered = lowered_from(directed().generated) if any(path.name == "program.cpp" for path, _ in places) else []
 
@@ -168,7 +176,6 @@ def refusal(project: Project, stderr: str, directed: Callable[[], Emitted], comp
 
     found = next(filter(None, (source(path, n) for path, n in places)), None)  # the first a statement was lowered to
     where = f"{os.path.relpath(found[0], project.root)}:{found[1]}" if found else ""
-    said = next((line.strip() for line in stderr.splitlines() if "error" in line), "")
     said = said.replace(f"{directory}/", "").replace(f"{project.root}/", "")
     message = (f"{compiler} refused the C++ generated {f'from {where}' if where else 'for this program'}. A program "
                "that checks should always build, so this is a fault of the CAIRN compiler, never of the program: "
