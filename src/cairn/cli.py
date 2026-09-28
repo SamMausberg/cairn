@@ -12,6 +12,7 @@ import json
 import os
 import platform
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -33,7 +34,7 @@ from .projects.toolchain import SANITIZER_ENVIRONMENT, emulator, host_family, re
 FORMAT: str | None = None  # --format as given; None lets the stream decide (see editor/terminal.py)
 LINES = False  # a watched check's records, one per line (JSON Lines), so a reader can take each as it comes
 # The commands that read no project: their function takes the arguments alone.
-ALONE = {"doctor", "cards", "certificates", "rules", "new", "fmt", "completions", "lsp", "mcp", "diff", "verify"}
+ALONE = set("doctor cards certificates rules find new fmt completions lsp mcp diff verify".split())
 REFUSED = {"counterexample", "rejected", "invalid-contract", "invalid-domain", "invalid-reference"}  # verify exits 1
 
 
@@ -70,6 +71,14 @@ def printed(built: dict) -> dict:
     return {**kept, "receipt": str(Path(built["directory"]) / "receipt.json")} if "directory" in built else kept
 
 
+def limit(code: int, a: Any, capped: bool) -> str:
+    """What a limit of `cairn run` may have to do with how its program ended. `--timeout` is also the CPU time its
+    threads may use together, and an allocation past `--memory-mib` traps as a failed guard does, with nothing said."""
+    if code == -signal.SIGXCPU:
+        return f": its threads used the {a.timeout} s of CPU time --timeout allows"
+    return f", or an allocation passed the {a.memory_mib} MiB cap" if code == -signal.SIGABRT and capped else ""
+
+
 def preconditions(items: list[str]) -> dict[str, str]:
     """`--assume symbol=expression` entries, one per function; the expression keeps its own `=` signs."""
     given: dict[str, str] = {}
@@ -89,16 +98,15 @@ def written(d: dict, own: str) -> str:
 
 
 def carded(supplied, name: str | None) -> tuple:
-    """`--card NAME`: the profile that prices host work on this machine and device work on that card, and the
-    card's compute capability and key, from which the device target is resolved when nothing names one."""
-    if not name:
-        return supplied, None
+    """The profile that prices host work on this machine and device work on one card (`--card NAME`, else the
+    profile's own device, else the default card), and that card as `resolve` takes it for the device target when
+    nothing names one, so the GPU on this machine never enters a prediction or a search."""
     if name == "all":
         raise ProjectError("--card all is for cairn predict; a search or a comparison prices one card.")
-    from .perf.profile import card, carrying, default
+    from .perf.profile import card_target, carrying, default, pricing
 
-    chosen = card(name)
-    return carrying(supplied or default(), chosen), (chosen.device.compute_capability, chosen.source["card"])
+    chosen = pricing(supplied or default(), name)  # the card the report prices on, CAIRN_PROFILE's included
+    return (carrying(supplied or default(), chosen) if name else supplied), card_target(chosen)
 
 
 def stamps(path: str) -> tuple:
@@ -188,6 +196,16 @@ def cairn_rules(a: Any) -> int:
         raise Diagnostic("E-RULE", f"{asked!r} is no diagnostic code, card or path; cairn rules --list names "
                          "every card.")  # fmt: skip
     terminal.rules(record) if terminal.human(FORMAT) else report(record)
+    return 0
+
+
+def cairn_find(a: Any) -> int:
+    """The program searched is the one --in names, else a project here; with neither, the library alone."""
+    from .agent.find import find, lines
+
+    within = a.within or ("." if Path("cairn.toml").is_file() else None)
+    source = load_project(within).source if within else None
+    show(find(source, " ".join(a.words), a.takes, a.returns, a.effects, a.limit), lines)
     return 0
 
 
@@ -448,7 +466,7 @@ def cairn_predict(a: Any, project: Project) -> int:
         show(answer, priced.lines_across)
         return 0
     supplied, card = carded(supplied, a.card)
-    device = resolve_device(a.device_target, project.device_target, required=a.inspect, card=card)
+    device = resolve_device(a.device_target, project.device_target, card=card)
     if a.against:
         before = load_project(a.against).source
         answer = priced.delta(before, project.source, sizes, chosen, supplied, arch, device, a.inspect)
@@ -470,7 +488,7 @@ def cairn_tune(a: Any, project: Project) -> int:
 
     supplied, card = carded(Profile.load(a.profile) if a.profile else None, a.card)
     arch = resolve_arch(a.arch or project.arch)
-    device = resolve_device(a.device_target, project.device_target, required=False, card=card)
+    device = resolve_device(a.device_target, project.device_target, card=card)
     budget = Budget(a.budget_compiles, a.budget_seconds, a.budget_runs)
     kept = None if a.no_history else a.history or beside(project.root)
     sizes = priced.parse_sizes(a.at)
@@ -543,13 +561,23 @@ def cairn_test(a: Any, project: Project) -> int:
 
 
 def cairn_build(a: Any, project: Project) -> int:
-    """`cairn build`, and the build `cairn run` starts from: what it built, or with `run` what the program did."""
+    """`cairn build`, and the build `cairn run` starts from: what it built, or with `run` what the program did.
+
+    `run` hands the program its own standard input, output and error, piped or not, and exits with its status, so its
+    output can be diffed as it is; a signal is 128 plus its number, as a shell reports it. What `cairn` has to add goes
+    to standard error in one line or a refusal: a check or build that failed, how the program ended when that was not
+    a zero status, and the limit it may have met. `--format json` or `CAIRN_FORMAT=json` asks for the record instead,
+    with the program's streams inside it. An agent's shell is never a terminal, and the record put what a run printed
+    inside a JSON string, which cannot be compared with an expected output without a parser."""
     from .projects.build import build
 
     result = build(project, output=a.out, cxx=a.cxx, arch=a.arch, kind="exe" if a.command == "run" else a.kind,
                    timeout=a.timeout, target=a.target, debug=a.debug, incremental=a.incremental,
                    keep_guards=a.keep_guards, header=getattr(a, "header", False), device_target=a.device_target,
                    emulate=a.emulate, sanitizer=a.sanitize)  # fmt: skip
+    if a.command == "run" and result["status"] != "native-built" and terminal.human(FORMAT):
+        terminal.summary(printed(result), sys.stderr)  # standard output is the program's, which never ran
+        return 2
     if a.command == "build" or result["status"] != "native-built":
         report(printed(result), brief=True)
         return 0 if result["status"] == "native-built" else 2
@@ -571,13 +599,17 @@ def cairn_build(a: Any, project: Project) -> int:
     run: dict = {"stdin": subprocess.DEVNULL} if machine else {"preexec_fn": limits}
     if a.sanitize:
         run["env"] = {**os.environ, **SANITIZER_ENVIRONMENT[a.sanitize]}
-    if terminal.human(FORMAT):  # A person sees the program itself: its streams are the terminal's.
+    if terminal.human(FORMAT):  # the program's own streams and exit status
         if emulated:
             print(f"note: {result['emulation']['claim']}", file=sys.stderr, flush=True)
-        code = subprocess.run(started, timeout=a.timeout, check=False, **run).returncode
+        try:
+            code = subprocess.run(started, timeout=a.timeout, check=False, **run).returncode
+        except subprocess.TimeoutExpired:
+            print(f"error: {project.name} was stopped after --timeout {a.timeout} s", file=sys.stderr)
+            return 124  # what timeout(1) exits with
         if code:
-            print(f"error: {project.name} {terminal.ended(code)}", file=sys.stderr)
-        return 0 if code == 0 else 1
+            print(f"error: {project.name} {terminal.ended(code)}{limit(code, a, capped)}", file=sys.stderr)
+        return code if code >= 0 else 128 - code  # a signal as a shell reports it: SIGABRT is 134
     # A program may print bytes that are not UTF-8 (an image, a zlib stream); the record escapes them.
     cp = subprocess.run(started, capture_output=True, text=True, errors="backslashreplace", timeout=a.timeout, **run)
     report({"status": "program-exited", "exit_code": cp.returncode, "stdout": cp.stdout, "stderr": cp.stderr,
@@ -605,6 +637,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.arguments and a.command != "run":
         p.error("only `cairn run PATH -- ARGS` passes arguments on to a program")
     FORMAT = getattr(a, "format", None)
+    if a.command == "run":  # its answer is what the program printed; the record only when asked for
+        FORMAT = FORMAT or os.environ.get("CAIRN_FORMAT") or "human"
     project = None
     try:
         if a.command in ALONE:

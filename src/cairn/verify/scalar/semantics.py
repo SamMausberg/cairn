@@ -17,7 +17,7 @@ inputs are exactly what the emitted entry guards admit: an enum or sum passed by
 value carries a declared tag, because the guard reads that one tag and nothing
 else. A tag anywhere else, nested in a record, an array or a payload, reached
 through a borrow, or behind a view, is any u32, and a `match` over one outside
-the declared variants aborts, as the emitted `default: cr::trap()` does. A `try`
+the declared variants aborts, as the emitted switch's default arm does. A `try`
 over one is not replayed, so a difference found there is reported unknown.
 
 Storage behind a view is one SMT array per component of its element, read and
@@ -46,11 +46,14 @@ exceeding the budget is unknown, never success. An extent is symbolic, so a pass
 over `0..n` needs a precondition that bounds `n` within that budget.
 
 This translator and Z3 are trusted. No result is a Lean-kernel proof or a
-verification of the C++ backend. Unsupported syntax returns unknown.
+verification of the C++ backend. Unsupported syntax returns unknown. Before an
+`smt-equivalent` answer is given, both versions run natively on validation's
+boundary inputs (native.py), and a difference there makes the answer
+`translator-fault`, never an equivalence.
 
-The value model is values.py, the translator symbolic.py and the
-concrete replay concrete.py; this module runs the query and writes the
-receipt, pinned to every file it depends on by `implementation_hash`.
+The value model is values.py, the translator symbolic.py, the concrete replay
+concrete.py and the native run native.py; this module runs the query and writes
+the receipt, pinned to every file it depends on by `implementation_hash`.
 """
 
 from __future__ import annotations
@@ -62,6 +65,7 @@ from typing import Any
 from ...compiler.cairnc import Diagnostic, Parser
 from ...compiler.syntax.tree import BOOL, SIGNED, USIZE, VOID, WIDTH, is_view
 from .concrete import Concrete
+from .native import replay
 from .smt import Solver, SolverUnavailable
 from .symbolic import Formula, Symbolic
 from .values import (
@@ -88,6 +92,10 @@ from .values import (
     wellformed,
 )
 
+FAULT = (
+    "Z3 found no admitted input on which the two versions differ, but run natively on a boundary input they do: the "
+    "value translation lost a difference, so this is a fault of the verifier and establishes nothing about equivalence."
+)
 # A witness is asked for again with every integer input within each bound of zero in turn, under a short timeout,
 # so it reads as small numbers; the first bound that holds one wins, and the solver's own witness stands otherwise.
 WITNESS_BOUNDS = (16, 256, 65536)
@@ -104,7 +112,8 @@ def outcome_key(outcome):
 
 
 SEMANTIC = ("verify/scalar/semantics.py", "verify/scalar/values.py", "verify/scalar/symbolic.py",
-            "verify/scalar/concrete.py", "verify/scalar/smt.py", "verify/elision.py", "version.py")  # fmt: skip
+            "verify/scalar/concrete.py", "verify/scalar/native.py", "verify/scalar/smt.py", "verify/elision.py",
+            "version.py")  # fmt: skip
 
 
 def implementation_files() -> list[Path]:
@@ -205,6 +214,26 @@ def equivalent(reference: str, candidate: str, symbol: str, *, assume: str = "tr
             domain = Symbolic(q, domains).invoke(dn, list(q.inputs.values()))[0]
         admitted = conj(formed, domain.value)
 
+        def admits(args: dict[str, Any]) -> bool:
+            """Whether the precondition holds of these inputs, as the concrete evaluator reads it."""
+            if assume == "true":
+                return True
+            try:
+                held = Concrete(domains).outcome(dn, args)
+            except (ValueError, Unsupported):
+                return False
+            return held["defined"] and held["return"] is True
+
+        def told_apart(args: dict[str, Any]) -> dict[str, Any]:
+            """What the concrete evaluator says each version does on `args`, beside the native disagreement."""
+            try:
+                return {
+                    "reference": Concrete(refs).outcome(symbol, args),
+                    "candidate": Concrete(cands).outcome(symbol, args),
+                }
+            except (ValueError, Unsupported) as e:
+                return {"not_run": str(e)}
+
         def seen(held: Term, a: Term, b: Term) -> str:
             """Does what two runs left in one rw parameter look the same? A view is read at the probe."""
             if held.window is None:
@@ -289,13 +318,30 @@ def equivalent(reference: str, candidate: str, symbol: str, *, assume: str = "tr
                             terms.append(f"(bvule {n} {top})")
                 return conj(*terms)
 
+            def fits(result) -> bool:
+                """Whether the solver's own witness lends every view and owner MAX_REPLAY elements or fewer, all that
+                `small` asks of the inputs. A returned owner's length is not an input, so a function that returns one
+                always asks again."""
+                if owned(rf.ret):
+                    return False
+                try:
+                    inputs(result)
+                except Unsupported:
+                    return False
+                return True
+
             def shown(stage, assertion, result):
-                """Inputs a caller can rerun: with storage in play, ask again within the replay budget, then in the
-                smallest numbers of WITNESS_BOUNDS the solver finds quickly."""
-                if small != "true":
+                """Inputs a caller can rerun, or why there are none: with storage in play, the solver's own witness
+                when it fits the replay budget, else one asked for within it; then the smallest numbers of
+                WITNESS_BOUNDS the solver finds quickly. A narrowing query that does not answer takes away no witness
+                that fits, and is never reported as having found none."""
+                if small != "true" and not fits(result):
                     result = run(stage + "-storage", conj(assertion, small))
+                    if result["status"] == "unsat":
+                        return f"No counterexample lends {MAX_REPLAY} elements or fewer."
                     if result["status"] != "sat":
-                        return None
+                        why = result["reason"]
+                        return f"Z3 did not decide whether a counterexample lends {MAX_REPLAY} elements or fewer: {why}"
                 if modest(1) != "true":
                     with Solver(min(timeout_ms, WITNESS_MS)) as quick:
                         for bound in WITNESS_BOUNDS:
@@ -307,7 +353,7 @@ def equivalent(reference: str, candidate: str, symbol: str, *, assume: str = "tr
             def witnessed(stage, assertion, result) -> dict:
                 """The counterexample field of a receipt, when inputs a caller can rerun were found."""
                 witness = shown(stage, assertion, result) if result["status"] == "sat" else None
-                return {"counterexample": witness} if witness is not None else {}
+                return {"counterexample": witness} if isinstance(witness, dict) else {}
 
             if domain.defined != "true":
                 trapping = conj(formed, neg(domain.defined))
@@ -358,10 +404,15 @@ def equivalent(reference: str, candidate: str, symbol: str, *, assume: str = "tr
                     if n["status"] != "unsat":
                         reason = "An observed float may be NaN, whose payload bits this model does not track."
                         return finish("unknown", reason=reason, **witnessed("nan-observation", unspoken, n))
+                natively = replay(reference, candidate, symbol, admits)
+                if natively["status"] == "disagrees":
+                    return finish("translator-fault", reason=FAULT, counterexample=natively["case"],
+                                  concrete=told_apart(natively["case"]), native_replay=natively)  # fmt: skip
                 watched = [*(["the result"] if rf.ret != VOID else []), *(n for n, t in rf.params if t.mode == "rw")]
                 visible = ", ".join(watched) or "no value"
                 return finish(
                     "smt-equivalent",
+                    native_replay=natively,
                     quantification="All values of the declared parameter types satisfying the host precondition; "
                     "the top-level tag of an enum or sum passed by value names a declared variant, as the entry "
                     "guard checks, while a tag nested in a record, an array or a payload, reached through a borrow "
@@ -374,8 +425,8 @@ def equivalent(reference: str, candidate: str, symbol: str, *, assume: str = "tr
             if r["status"] != "sat":
                 return finish("unknown", reason="Equivalence solver did not decide the obligation.")
             args = shown("equivalence", conj(admitted, mismatch), r)
-            if args is None:
-                return finish("unknown", reason=f"No counterexample lends {MAX_REPLAY} elements or fewer.")
+            if isinstance(args, str):
+                return finish("unknown", reason=args)
             expected = Concrete(refs).outcome(symbol, args)
             actual = Concrete(cands).outcome(symbol, args)
             if assume != "true":

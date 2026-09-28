@@ -1,0 +1,267 @@
+{
+ "what": "verify/validation/device.py sanitized() over the generated device tests of tests/verification/test_device_validation.py, each test under each tool, on the GH200 at 449189b",
+ "compute_sanitizer": "2025.3.1.0 (CUDA 13.0)",
+ "status": "run",
+ "tools": {
+  "memcheck": {
+   "status": "clean",
+   "runs": [
+    {
+     "test": "device_scale_twice_0",
+     "exit_code": 255,
+     "said": [
+      "Error: Target application terminated before first instrumented API call"
+     ],
+     "device_work": false,
+     "program_exit_code": 0
+    },
+    {
+     "test": "device_scale_twice_1",
+     "exit_code": 255,
+     "said": [
+      "Error: Target application terminated before first instrumented API call"
+     ],
+     "device_work": false,
+     "program_exit_code": 0
+    },
+    {
+     "test": "device_scale_twice_2",
+     "exit_code": 0,
+     "said": [
+      "ERROR SUMMARY: 0 errors"
+     ]
+    },
+    {
+     "test": "device_scale_twice_3",
+     "exit_code": 0,
+     "said": [
+      "ERROR SUMMARY: 0 errors"
+     ]
+    },
+    {
+     "test": "device_scale_twice_4",
+     "exit_code": 0,
+     "said": [
+      "ERROR SUMMARY: 0 errors"
+     ]
+    },
+    {
+     "test": "device_scale_twice_5",
+     "exit_code": 0,
+     "said": [
+      "ERROR SUMMARY: 0 errors"
+     ]
+    },
+    {
+     "test": "device_scale_twice_6",
+     "exit_code": 0,
+     "said": [
+      "ERROR SUMMARY: 0 errors"
+     ]
+    },
+    {
+     "test": "device_scale_twice_7",
+     "exit_code": 0,
+     "said": [
+      "ERROR SUMMARY: 0 errors"
+     ]
+    }
+   ]
+  },
+  "racecheck": {
+   "status": "clean",
+   "runs": [
+    {
+     "test": "device_scale_twice_0",
+     "exit_code": 255,
+     "said": [
+      "Error: Target application terminated before first instrumented API call"
+     ],
+     "device_work": false,
+     "program_exit_code": 0
+    },
+    {
+     "test": "device_scale_twice_1",
+     "exit_code": 255,
+     "said": [
+      "Error: Target application terminated before first instrumented API call"
+     ],
+     "device_work": false,
+     "program_exit_code": 0
+    },
+    {
+     "test": "device_scale_twice_2",
+     "exit_code": 0,
+     "said": [
+      "RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)"
+     ]
+    },
+    {
+     "test": "device_scale_twice_3",
+     "exit_code": 0,
+     "said": [
+      "RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)"
+     ]
+    },
+    {
+     "test": "device_scale_twice_4",
+     "exit_code": 0,
+     "said": [
+      "RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)"
+     ]
+    },
+    {
+     "test": "device_scale_twice_5",
+     "exit_code": 0,
+     "said": [
+      "RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)"
+     ]
+    },
+    {
+     "test": "device_scale_twice_6",
+     "exit_code": 0,
+     "said": [
+      "RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)"
+     ]
+    },
+    {
+     "test": "device_scale_twice_7",
+     "exit_code": 0,
+     "said": [
+      "RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)"
+     ]
+    }
+   ]
+  },
+  "initcheck": {
+   "status": "clean",
+   "runs": [
+    {
+     "test": "device_scale_twice_0",
+     "exit_code": 255,
+     "said": [
+      "Error: Target application terminated before first instrumented API call"
+     ],
+     "device_work": false,
+     "program_exit_code": 0
+    },
+    {
+     "test": "device_scale_twice_1",
+     "exit_code": 255,
+     "said": [
+      "Error: Target application terminated before first instrumented API call"
+     ],
+     "device_work": false,
+     "program_exit_code": 0
+    },
+    {
+     "test": "device_scale_twice_2",
+     "exit_code": 0,
+     "said": [
+      "ERROR SUMMARY: 0 errors"
+     ]
+    },
+    {
+     "test": "device_scale_twice_3",
+     "exit_code": 0,
+     "said": [
+      "ERROR SUMMARY: 0 errors"
+     ]
+    },
+    {
+     "test": "device_scale_twice_4",
+     "exit_code": 0,
+     "said": [
+      "ERROR SUMMARY: 0 errors"
+     ]
+    },
+    {
+     "test": "device_scale_twice_5",
+     "exit_code": 0,
+     "said": [
+      "ERROR SUMMARY: 0 errors"
+     ]
+    },
+    {
+     "test": "device_scale_twice_6",
+     "exit_code": 0,
+     "said": [
+      "ERROR SUMMARY: 0 errors"
+     ]
+    },
+    {
+     "test": "device_scale_twice_7",
+     "exit_code": 0,
+     "said": [
+      "ERROR SUMMARY: 0 errors"
+     ]
+    }
+   ]
+  },
+  "synccheck": {
+   "status": "clean",
+   "runs": [
+    {
+     "test": "device_scale_twice_0",
+     "exit_code": 255,
+     "said": [
+      "Error: Target application terminated before first instrumented API call"
+     ],
+     "device_work": false,
+     "program_exit_code": 0
+    },
+    {
+     "test": "device_scale_twice_1",
+     "exit_code": 255,
+     "said": [
+      "Error: Target application terminated before first instrumented API call"
+     ],
+     "device_work": false,
+     "program_exit_code": 0
+    },
+    {
+     "test": "device_scale_twice_2",
+     "exit_code": 0,
+     "said": [
+      "ERROR SUMMARY: 0 errors"
+     ]
+    },
+    {
+     "test": "device_scale_twice_3",
+     "exit_code": 0,
+     "said": [
+      "ERROR SUMMARY: 0 errors"
+     ]
+    },
+    {
+     "test": "device_scale_twice_4",
+     "exit_code": 0,
+     "said": [
+      "ERROR SUMMARY: 0 errors"
+     ]
+    },
+    {
+     "test": "device_scale_twice_5",
+     "exit_code": 0,
+     "said": [
+      "ERROR SUMMARY: 0 errors"
+     ]
+    },
+    {
+     "test": "device_scale_twice_6",
+     "exit_code": 0,
+     "said": [
+      "ERROR SUMMARY: 0 errors"
+     ]
+    },
+    {
+     "test": "device_scale_twice_7",
+     "exit_code": 0,
+     "said": [
+      "ERROR SUMMARY: 0 errors"
+     ]
+    }
+   ]
+  }
+ }
+}

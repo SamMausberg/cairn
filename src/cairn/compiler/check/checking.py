@@ -66,6 +66,7 @@ class Checker:
     counts: dict[str, int]
     moved: set[str]
     deferred: set[str]
+    holds: dict[str, int]
     loop_depth: int
     unsafe_depth: int
     device_depth: int
@@ -629,6 +630,7 @@ class Checker:
 
     def block(self, ss: list[Stmt]) -> Any:
         saved, deferred, returned, known = dict(self.env), set(self.deferred), False, len(self.facts)
+        holds = dict(self.holds)  # A defer this block schedules has run once it ends, and holds nothing after.
         for s in ss:
             if returned:
                 fail("E-UNREACHABLE", "Statement after unconditional return.", s)
@@ -638,16 +640,27 @@ class Checker:
         self.released(set(self.env) - set(saved))
         self.moved |= (self.deferred - deferred) & set(saved)  # Its cleanup has now run: gone for good.
         self.leases = {t: held for t, held in self.leases.items() if t in saved}
-        self.env, self.deferred = saved, deferred
+        self.env, self.deferred, self.holds = saved, deferred, holds
         del self.facts[known:]  # What this block learned named what it bound or what it tested.
         return returned
 
     def stmt(self, s: Stmt) -> Any:
-        """False when control falls through, True after a return, "jump" after break or continue."""
+        """False when control falls through, True after a return, "jump" after break or continue. A fault met while
+        checking `s` is E-INTERNAL at its line: the compiler's, never the program's, and it ends the check."""
         handler = getattr(self, "s_" + s.tag, None)
         if handler is None:
             fail("E-INTERNAL", f"Unknown statement {s.tag}.", s)
-        return handler(s) or False
+        try:
+            return handler(s) or False
+        except (Diagnostic, refusals.Stopped, RecursionError, MemoryError):  # a limit its caller reports as one
+            raise
+        except Exception as fault:
+            said = f"{type(fault).__name__}: {fault}"
+            error = Diagnostic("E-INTERNAL", f"The compiler failed while checking this statement ({said[:160]}): a "
+                               "fault of the compiler, not of the program. Report it with the program.", s.line,
+                               s.col, fault=type(fault).__name__)  # fmt: skip
+            error.abandoned = fault  # a check a fault ended is not an answer (compiler/compilations.py)
+            raise error from fault
 
     def expr(self, e: Expr, expected: Type | None = None, consume: bool = True) -> Type:
         if id(e) in self.early:

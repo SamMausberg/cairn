@@ -107,4 +107,6 @@ def test_run_memory_limit_rejected_before_build(capsys):
     from cairn.cli import main
 
     assert main(["run", "examples/hello", "--memory-mib", "0"]) == 2
+    assert "64..65536" in capsys.readouterr().err  # standard output is the program's
+    assert main(["run", "examples/hello", "--memory-mib", "0", "--format", "json"]) == 2
     assert "64..65536" in capsys.readouterr().out

@@ -17,20 +17,49 @@ extern "C" [[noreturn]] void cr_exit(int status) noexcept;
 #include <utility>
 // CR_HD marks a guard that must also hold inside a device lane; CR_DEVICE marks a lambda the
 // emitter hands to cr::gpu::launch. Both are empty without nvcc, so host code is unchanged.
+// CR_EITHER goes before a CR_HD template that takes the host's block context or the device's: nvcc's
+// device pass parses a host region too, and instantiates it there for the host's context, which it
+// must not refuse for its host calls, since nothing runs that instantiation on the device.
 #if defined(__CUDACC__)
 #define CR_HD __host__ __device__
 #define CR_DEVICE __device__
+#define CR_EITHER _Pragma("nv_exec_check_disable")
 #else
 #define CR_HD
 #define CR_DEVICE
+#define CR_EITHER
+#endif
+// CR_PROGRESS() opens the body of every `while` loop and of every function that can call itself, the two things CAIRN
+// lets run forever. C++ lets a compiler assume that a loop with no I/O, volatile or atomic access ends, and nvcc's
+// device pass deleted such a loop for sm_90 and sm_120. An empty volatile asm is a side effect it must keep, and it
+// emits no instruction. The host compilers are given -fno-finite-loops instead (projects/toolchain.py), so on the
+// host, emulated device work included, it is nothing.
+#if defined(__CUDA_ARCH__)
+#define CR_PROGRESS() asm volatile("")
+#else
+#define CR_PROGRESS()
 #endif
 namespace cr {
-// A failed guard aborts the process. In a device lane __trap() ends the kernel and poisons the
+// A failed guard aborts the process. In a device lane PTX's trap ends the kernel and poisons the
 // context, so the next cr::gpu wait reports the failure and aborts the host process. assert()
 // (deleted by NDEBUG) and __builtin_trap() (silently ignored by nvcc) were measured to break
-// that promise; see the mechanism note at the top of cairn_gpu.hpp.
-[[noreturn]] CR_HD inline void trap() noexcept {
-#if defined(__CUDA_ARCH__)
+// that promise; see the mechanism note at the top of cairn_kernels.hpp.
+//
+// Below sm_100, CUDA 12.8 and 13.0 compile device code with NVVM 7.0.1, which was measured to delete
+// the normal exit of a counted loop whose checked arithmetic can leave through a call that does not
+// return: the loop ran on past its bound until a guard trapped where every guard of the source held
+// (tests/runtime/test_device_arithmetic.py). There the compiler is not told that trap() ends the
+// thread. It sees an instruction that may write any memory and then returns, so nothing after a
+// failed guard can move ahead of the trap, and the trap still ends the thread when it runs.
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 1000
+#define CR_TRAP_ENDS
+#else
+#define CR_TRAP_ENDS [[noreturn]]
+#endif
+CR_TRAP_ENDS CR_HD inline void trap() noexcept {
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 1000
+  asm volatile("trap;" ::: "memory");
+#elif defined(__CUDA_ARCH__)
   __trap();
   __builtin_unreachable();
 #elif defined(CAIRN_FREESTANDING)

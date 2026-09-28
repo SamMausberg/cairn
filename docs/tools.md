@@ -9,10 +9,10 @@ Every tool here ships with the compiler and needs no Python package outside the 
 | `cairn doctor` | reports the local compilers and tools; downloads nothing | [guide.md](guide.md#install) |
 | `cairn new DIR --template T` | writes a project from a template: `default`, `cli`, `lib`, `service` or `parallel`; or, with `--from-sol-execbench`, from a benchmark problem | [guide.md](guide.md#a-project), [--from-sol-execbench](devices.md#benchmark-submissions) |
 | `cairn check` | accepts or refuses a program, with every refusal it can judge | [guide.md](guide.md#check-run-test), [every refusal](#every-refusal-in-one-check), [a watched check](#a-watched-check-and-shell-completions), [--generics](#cairn-check---generics) |
-| `cairn build`, `cairn run` | builds a native artifact in a fresh directory, with a record; builds and runs it under process limits | [building and running](#building-and-running), [--sanitize](#cairn-run---sanitize), [--incremental](#cairn-build---incremental), [--header](#cairn-build---header), [targets](#the-device-target) |
+| `cairn build`, `cairn run` | builds a native artifact in a fresh directory, with a record; builds and runs it under process limits | [building and running](#building-and-running), [--sanitize](#cairn-run---sanitize), [--incremental](#cairn-build---incremental), [--header](#cairn-build---header), [targets](devices.md#the-device-target) |
 | `cairn test` | runs test blocks, each in its own process, and task contracts | [cairn test](#cairn-test) |
 | `cairn fmt`, `cairn lsp`, `cairn mcp`, `cairn completions` | the formatter; the language server for editors; the Model Context Protocol server for agents; shell completions | [fmt](#cairn-fmt), [lsp](#cairn-lsp), [mcp](#cairn-mcp), [completions](#a-watched-check-and-shell-completions) |
-| `cairn rules` | the rule card of a diagnostic code, a card by name, or the cards a program selects | [rules](#cairn-rules) |
+| `cairn rules`, `cairn find` | the rule card of a diagnostic code, a card by name, or the cards a program selects; the functions to call, by the types of the values you have or by words | [rules](#cairn-rules), [find](agents.md#finding-a-function) |
 | `cairn emit`, `cairn expand`, `cairn doc`, `cairn graph` | prints the C++ the program lowers to; prints the source every `derive` generated; the API reference; the module graph | [--ctypes](#cairn-build---header), [expand and doc](#cairn-doc-and-cairn-expand), [graph](#large-projects-and-bazel) |
 | `cairn shot` | runs a program headless and returns every frame `std.draw` captured | [examples.md](examples.md#examplesappspanel), [agents.md](agents.md#requests-beyond-an-edit) |
 | `cairn inspect`, `cairn state`, `cairn migrate` | an agent's packet for one symbol; every signature and effect row under a digest, or with `--symbol` one function's investigation; an interface change through every caller | [agents.md](agents.md#packets), [state](agents.md#the-programs-state), [--symbol](agents.md#resuming-an-investigation), [migrate](agents.md#interface-migrations) |
@@ -23,7 +23,7 @@ Every tool here ships with the compiler and needs no Python package outside the 
 
 ## Output for people and for programs
 
-At a terminal, `cairn` prints for a person, as below, and `cairn run` hands the terminal to the program. Piped, every command prints the JSON record that scripts and agents read as one compact line, since an agent pays for every token it reads. `--format human|json` or the `CAIRN_FORMAT` variable chooses between them, a terminal that asks for the record gets it indented, and `NO_COLOR` turns colour off. The exit status and the record are the same either way.
+At a terminal, `cairn` prints for a person, as below. Piped, every command prints the JSON record that scripts and agents read as one compact line, since an agent pays for every token it reads. `--format human|json` or the `CAIRN_FORMAT` variable chooses between them, a terminal that asks for the record gets it indented, and `NO_COLOR` turns colour off. The exit status and the record are the same either way. `cairn run` is the exception: at a terminal or piped, the program gets the streams and `cairn` exits with its status, as [building and running](#building-and-running) says.
 
 ```text
 error[E-LEASED]: data is lent to left until wait(left).
@@ -39,6 +39,8 @@ Every refusal names the rule card that owns its code, and [`cairn rules`](#cairn
 
 A guard is a check the compiler writes wherever it cannot prove an operation safe, such as a bounds or an overflow check. A program stopped by a failed guard is reported as stopped by `SIGABRT`.
 
+A fault of the compiler itself, met while it checks a statement, is refused as `E-INTERNAL` at that statement's line, and the message names the fault's class. It says nothing about the program: the check did not finish, so nothing is accepted, and the refusal is a compiler bug to report with the program.
+
 ## Every refusal in one check
 
 `cairn check` reports every refusal it can judge on its own, so three mistakes in three functions cost one check. The record is the first refusal exactly as a check that stopped there would report it, with the others beside it:
@@ -50,7 +52,7 @@ A guard is a check the compiler writes wherever it cannot prove an operation saf
              {"code": "E-TYPE-MISMATCH", "message": "Expected bool, got u64.", "line": 11, "column": 10, ...}]}
 ```
 
-Each entry of `further` is a whole diagnostic at its own file, line and column, in source order. A record lists at most twenty, and `further_omitted` counts the rest. `not_judged` counts the functions that got no verdict because of a refusal, and none of them is accepted. `further_stopped` says that the check stopped after the first refusal and what stopped it: a limit's code, such as `E-EFFECT-LIMIT`, or the class of an internal fault, which is a compiler bug to report. Nothing after that point was judged.
+Each entry of `further` is a whole diagnostic at its own file, line and column, in source order. A record lists at most twenty, and `further_omitted` counts the rest. `not_judged` counts the functions that got no verdict because of a refusal, and none of them is accepted. `further_stopped` says that the check stopped after the first refusal and what stopped it: a limit's code, such as `E-EFFECT-LIMIT`, `E-INTERNAL` for a fault met while checking a statement, or the class of another internal fault; each fault is a compiler bug to report. Nothing after that point was judged.
 
 The check never reports a refusal that may follow from another. Every function has an effect row, the list of what it may do that a caller can observe (`alloc`, `io`, `trap`, `write:out`, ...), and a signature may cap it with a ceiling. Once a function's body is refused, its row is unknown. A function that reaches it is then not held to its ceiling or to the rule on operand order (`E-EFFECT-ORDER`), and is counted in `not_judged`. So is a function that reaches a reference with [implementations](abstractions.md#implementations), because the reference's row joins theirs only after the rules about implementations run.
 
@@ -147,15 +149,32 @@ tests-not-passed: 1 of 3 tests failed, 1 contract, 81 cases
   test wrong: assertion failed at src/main.cairn:13: four is not five
 ```
 
-Test blocks run only as host processes, so a freestanding project's test blocks are refused with `E-TEST`. `cairn test --contract FILE` still runs a task contract on the host. A device project's tests are built by nvcc for its [device target](#the-device-target) and run on its GPU. `cairn test --emulate --device-target sm_120` runs them on host threads instead, judged against that target ([devices.md](devices.md#emulating-device-code-on-the-host)), and the record's `blocks.emulation` says so.
+Test blocks run only as host processes, so a freestanding project's test blocks are refused with `E-TEST`. `cairn test --contract FILE` still runs a task contract on the host. A device project's tests are built by nvcc for its [device target](devices.md#the-device-target) and run on its GPU. `cairn test --emulate --device-target sm_120` runs them on host threads instead, judged against that target ([devices.md](devices.md#emulating-device-code-on-the-host)), and the record's `blocks.emulation` says so.
 
 ## Building and running
 
 `cairn build` compiles a program into a fresh directory and prints a record of the build: its status, the command, the artifact and its directory, and the compiler's exit status and output when the build failed. The file `receipt.json` in the build directory keeps the whole record, with the checker's receipt of every function, the project's hashes, the compiler's version and the artifact's hash, and the record's `receipt` field names the file. `cairn run` builds the same way, then runs the program under process limits (`--timeout`, and `--memory-mib` for heap and thread stacks), or under the target's emulator for a [freestanding image](#the-freestanding-target). Arguments after `--` go to the program. `--keep-guards` writes every guard, including those the checker showed cannot fail, and `--debug` adds debug symbols that point at the CAIRN source.
 
+A program that checks should always build. When the C++ compiler or nvcc refuses the code CAIRN generated, that is a fault of the CAIRN compiler, never of the program, and the record of the failed build says so: `compiler_defect` is true, `refused_at` names the `.cairn` line the refused C++ was lowered from, and `message` says both and quotes the compiler's first error. Report it with the program. A refusal in a vendored source or at the link is no such fault, and neither is a standard header the compiler cannot find, which its installation lacks: their records have none of these fields.
+
+`cairn run` hands the program its standard input, output and error, piped or not, so what it prints can be compared with an expected output as it is. `cairn` exits with the program's status, and a program stopped by a signal exits as a shell reports it, 128 plus the signal's number: 134 for a failed guard. Anything `cairn` adds goes to standard error: the note that an `--emulate` run is a host run, and, when something went wrong, a refusal, a build that failed, or one line saying how the program ended and which limit it may have met.
+
+```sh
+printf '3 -1 4' | cairn run first.cairn > got.txt && diff got.txt expected.txt
+```
+
+The `histogram` task of the AI benchmark, given `6 4` and one value where it reads six, prints its own assert and then that line:
+
+```text
+assertion failed at src/main.cairn:47: input ended early
+error: solution was stopped by SIGABRT: a guard failed, or an allocation passed the 1024 MiB cap
+```
+
+A refusal exits 1, a build that failed or an environment that cannot run the program exits 2, and a run stopped after `--timeout` seconds exits 124, as `timeout(1)` does. A script that must tell those apart from the program's own status asks for the record with `--format json`, which holds the program's output as `stdout` and `stderr`, its status as `exit_code`, the build directory and the limits it ran under, and exits 0 only when the program did.
+
 ### cairn run --sanitize
 
-`cairn run . --sanitize address < input.txt` builds the program for the host at `-O1` with frame pointers, checked by AddressSanitizer with leak detection and by UndefinedBehaviorSanitizer, and runs it. `--sanitize thread` checks it with ThreadSanitizer instead. The first report ends the run, and the record names the sanitizer that ran. A sanitizer maps shadow memory many times the program's size, so the run has no memory cap. `cairn build --sanitize` builds the same executable without running it. A device program is checked on host threads with `--emulate`, never on a GPU.
+`cairn run . --sanitize address < input.txt` builds the program for the host at `-O1` with frame pointers, checked by AddressSanitizer with leak detection and by UndefinedBehaviorSanitizer, and runs it. `--sanitize thread` checks it with ThreadSanitizer instead. The first report ends the run on standard error, and the record `--format json` asks for names the sanitizer that ran. A sanitizer maps shadow memory many times the program's size, so the run has no memory cap. `cairn build --sanitize` builds the same executable without running it. A device program is checked on host threads with `--emulate`, never on a GPU.
 
 ### cairn build --incremental
 
@@ -332,7 +351,7 @@ GitHub has no CAIRN grammar, so `.gitattributes` has it highlight `.cairn` files
 
 ## cairn mcp
 
-`cairn mcp` serves the compiler's hosts to an agent that speaks the Model Context Protocol, whether or not it has a shell, as one JSON-RPC 2.0 message per line on standard input and output. A host holds a program, shows an agent part of it and decides whether each change the agent sends is kept ([agents.md](agents.md)). The Claude Code plugin starts the server. Another client runs `bin/cairn` of a checkout with the argument `mcp`. The server has eight tools, each a thin call into a host that this page or [agents.md](agents.md) describes:
+`cairn mcp` serves the compiler's hosts to an agent that speaks the Model Context Protocol, whether or not it has a shell, as one JSON-RPC 2.0 message per line on standard input and output. A host holds a program, shows an agent part of it and decides whether each change the agent sends is kept ([agents.md](agents.md)). The Claude Code plugin starts the server. Another client runs `bin/cairn` of a checkout with the argument `mcp`. The server has nine tools, each a thin call into a host that this page or [agents.md](agents.md) describes:
 
 | Tool | What it calls |
 |---|---|
@@ -341,6 +360,7 @@ GitHub has no CAIRN grammar, so `.gitattributes` has it highlight `.cairn` files
 | `plan_open`, `plan_reply` | a [plan session](agents.md#plan-edits) and its `cairn.plan/1` replies |
 | `implementation_open`, `implementation_submit` | an [implementation session](agents.md#implementation-sessions) and its submissions |
 | `state` | `cairn state`: every signature and row under a digest, then only what changed since the last one this server sent of that path unless `whole` is true, what changed since any digest it sent (`since`), or with `symbol` one function's investigation |
+| `find` | [`cairn find`](agents.md#finding-a-function): the functions to call, by `takes`, `returns` and `effects` or by `words`, over `path` or `source` when one is given |
 
 A tool takes `path` or `source`. `path` is a `.cairn` file, a project directory or a manifest, as the command line takes it, relative to the directory the server started in and inside it. `source` is the text of a program, and a session opened on `source` writes nothing.
 
@@ -509,7 +529,7 @@ A cooperative region's block shape and a pipeline's depth are such parameters. `
 
 `--card CARD` prices the candidates on a [packaged card](#other-gpus) and takes the device target from it when nothing names one, so a search for a GPU this machine lacks compiles for that GPU and prices on its specification. `cairn tune examples/cooperative/tuned.toml --symbol row_totals --at rows=64,cols=1e5 --device-target sm_90a --card h100 --compare "use row_totals_tiled[128, 2]" --compare "use row_totals_tiled[256, 3]"` reads each instance's registers from ptxas for sm_90a and prices both on the H100 card; nothing runs.
 
-Device candidates are then compiled for the [device target](#the-device-target) in predicted order. Among candidates priced alike, one whose kernel items (`unroll`, `vector`, `stage`, `fuse`) no earlier compile covered goes first. Nothing runs: ptxas and cuobjdump report registers, spilled bytes, stack, static shared memory and instructions, and a staged tile's shared memory is computed from the plan. Registers and shared memory enter the price through occupancy, and `chosen` is the candidate ranked best among those a compile read. Spilled bytes do not enter the price. ptxas reports the bytes its spill stores and loads move, as they appear in the code, not how often they run or whether their traffic reaches device memory, so a candidate whose kernel spills says `"spills": "not priced"` beside its spilled bytes. `cairn predict --inspect` takes ptxas's report only for the kernels of cooperative regions, and names their spills as not priced too ([cairn predict](#cairn-predict)). Without a device target nothing is compiled, and the answer says so.
+Device candidates are then compiled for the [device target](devices.md#the-device-target) in predicted order. Among candidates priced alike, one whose kernel items (`unroll`, `vector`, `stage`, `fuse`) no earlier compile covered goes first. Nothing runs: ptxas and cuobjdump report registers, spilled bytes, stack, static shared memory and instructions, and a staged tile's shared memory is computed from the plan. Registers and shared memory enter the price through occupancy, and `chosen` is the candidate ranked best among those a compile read. Spilled bytes do not enter the price. ptxas reports the bytes its spill stores and loads move, as they appear in the code, not how often they run or whether their traffic reaches device memory, so a candidate whose kernel spills says `"spills": "not priced"` beside its spilled bytes. `cairn predict --inspect` takes ptxas's report only for the kernels of cooperative regions, and names their spills as not priced too ([cairn predict](#cairn-predict)). Without nvcc and cuobjdump nothing is compiled, and the answer says so.
 
 Each compile is kept by the digest of what it read: the emitted program, the runtime headers, the target, the toolkit and the inspector. A program already compiled costs nothing, and a kept reading for another target is refused (`E-TARGET-MISMATCH`). `resources.sass` digests the SASS. `block` and `per_lane` are arguments the host passes to the launch, so a candidate that differs from one already read only in them, or in the host items, compiles to the same kernels. It takes that reading with its own staged tile, and `resources.same_kernels_as` names where the reading came from.
 
@@ -535,7 +555,7 @@ The budgets are `--budget-compiles` (4 by default), `--budget-seconds` for the w
 
 ### Measuring, comparing and the history
 
-`--measure K` then times the `K` plans ranked best and the current one on this host, halving the field each round and giving the survivors more blocks. It reports how many pairs ran in the predicted order. On a busy machine two close plans are within noise. Device plans are timed only by the make targets the repository's owner runs. `make tune-device FILE=f.cairn SYMBOL=f AT=n=1e8` adds `--device`, holds the device lock, rests after each run and stops after 64 runs. `make calibrate-device` replaces the device profile's assumed figures with measured ones.
+`--measure K` then times the `K` plans ranked best and the current one on this host, halving the field each round and giving the survivors more blocks. It reports how many pairs ran in the predicted order. On a busy machine two close plans are within noise. Device plans are timed only by the make targets the repository's owner runs. `make tune-device FILE=f.cairn SYMBOL=f AT=n=1e8` adds `--device`, holds the device lock, rests after each run and stops after 64 runs, and `CARD=h100` adds `--card h100`. A timing measures the GPU here, so a [device target](devices.md#the-device-target) whose code does not run on it is refused with `E-TARGET-MISMATCH` before anything is built. `make calibrate-device` replaces the device profile's assumed figures with measured ones, and a card so measured gives the target it was measured for.
 
 `--compare A --compare B` reports how plan `B` differs from plan `A` instead of searching. A plan is written as its items, `grain 1; lanes 8`, or as `none`, and `use g` adds the selection of the implementation `g`, which is then priced and compiled as `g`. A side without `use` is the reference. Each line is labelled as a compiler observation (ptxas, cuobjdump or the model, nothing run), a runtime measurement, a profiler observation, a hypothesis or a suggested experiment.
 
@@ -587,9 +607,9 @@ Z3 compares exactly, so its counterexample is replayed natively as one more case
 
 The policy sets `tolerance` (`absolute` and `relative`, 0 by default), `domain` (`largest_extent`, and `extents` or `values` ranges by parameter), `budget` cases, `seed`, shrinking `probes` and `seconds` per call. Without `--policy`, the one the regressions file pinned applies. The record names what it rests on: the implementation's `identity`, the digests of each library's C++ and build under `artifacts`, the `target`, the native `compiler` and its version, the numerical policy under `agreement` with its version and digest, and `coverage`, the cases generated, kept, run and left out with the reason. `--history DIR` keeps the result in that [candidate history](agents.md#candidate-history), as a `validation` record or a `failure` record with the shrunk input, under the implementation's identity, the policy's digests and the native compiler, where [`cairn tune`](#implementations) finds it.
 
-A signature the validator cannot feed (records, owners, views of records) is `unknown`. So is device code without `--emulate`. Only `make gpu` runs device code on a device, under each Compute Sanitizer tool (`memcheck`, `racecheck`, `initcheck`, `synccheck`) as a result of its own. A tool that ran no test is `unknown`, and one that says it cannot instrument the device, as under WSL2 without the WDDM debugger interface, is `unavailable`, never clean. The device tests compare under the same policy and write every input exactly: a NaN, an infinity or `-0.0` by its bits, a view longer than 16 elements from a table of bit patterns, and a view one element off as a part one element into its buffer. A case they cannot write is counted in their coverage with the reason.
+A signature the validator cannot feed (records, owners, views of records) is `unknown`. So is device code without `--emulate`. Only `make gpu` runs device code on a device, under each Compute Sanitizer tool (`memcheck`, `racecheck`, `initcheck`, `synccheck`) as a result of its own. A tool that ran no test is `unknown`, and one that says it cannot instrument the device, as under WSL2 without the WDDM debugger interface, is `unavailable`, never clean. A test that ends before its first CUDA call, such as one whose views are empty, gives a tool nothing to instrument, so it runs once more without the tool and counts by how it ends there. A tool that instrumented no test is `unknown` too. The device tests compare under the same policy and write every input exactly: a NaN, an infinity or `-0.0` by its bits, a view longer than 16 elements from a table of bit patterns, and a view one element off as a part one element into its buffer. A case they cannot write is counted in their coverage with the reason.
 
-`--emulate` runs device code on host threads, judged against the [device target](#the-device-target) (`--device-target`, the manifest, or the GPU nvidia-smi reports), as [devices.md](devices.md#emulating-device-code-on-the-host) describes. A cooperative kernel that forgets its partial last tile fails at its shrunk input, which is kept like any other and which `cairn test --emulate` replays:
+`--emulate` runs device code on host threads, judged against the [device target](devices.md#the-device-target) (`--device-target`, the manifest, or the GPU nvidia-smi reports), as [devices.md](devices.md#emulating-device-code-on-the-host) describes. A cooperative kernel that forgets its partial last tile fails at its shrunk input, which is kept like any other and which `cairn test --emulate` replays:
 
 ```text
 failed: scale_tiles against scale, 3 cases (3 ran it), finite-tested on a host emulation of sm_120, not on a device
@@ -696,33 +716,6 @@ cairn_test(name = "pricing_test", size = "small", srcs = ["pricing/pricing_test.
 
 `examples/bazel` is that workspace, where `bazel build //...`, `bazel run //:shop` and `bazel test //...` work with nothing fetched. Its `MODULE.bazel` names this checkout with `cairn.local(path = "../..")`; without it the rules run the `cairn` on `PATH`. The rules use the host's Python and C++ compiler and bring no hermetic toolchain. A checkout's `bin/cairn` runs under the `python3` on the `PATH` Bazel was started with, which must be 3.11 or later, because the `PATH` Bazel gives each action may name an older one, as Ubuntu 22.04's does. Each action copies its sources into a fresh directory with a manifest, because a project refuses a source that is a symbolic link, which is how Bazel lays out inputs.
 
-## The device target
-
-A program that indexes `@device` views is built for one device target. The target is spelled as nvcc spells it, and is separate from the CPU architecture that `--arch` names. `sm_120` runs on compute capability 12.0 and every later 12.x device. `sm_120f` adds the features the family shares and runs on its devices from 12.0. `sm_120a` adds every feature of exactly 12.0 and runs only there.
-
-`--device-target` on `build`, `run`, `predict` and `tune` names the target. Without it the target is `[build] device_target` of the manifest; else, for `predict` and `tune`, the target of the [card](#other-gpus) `--card` names; else the one GPU `nvidia-smi` reports, which asks the driver and launches nothing. With none of these a device build is refused with `E-TARGET`. Nothing defaults to `-arch=native`.
-
-```toml
-[build]
-kind = "exe"
-device_target = "sm_120a"
-```
-
-The target is resolved once, and every stage receives the same one: nvcc's `-arch`, the kernel reader behind `cairn tune`, the device card `cairn predict` prices on, a device timing and a measured device profile. The build receipt records it under `device_target`: its name, how it was resolved, the features it provides and those the program needs, its resource limits and the nvcc release.
-
-nvcc runs the host half of a device build with the `--cxx` compiler, clang++ by default, and each CUDA release accepts a range of host compilers. CUDA 12.9 takes GCC up to 14 and Clang up to 19, and CUDA 13.2 takes GCC up to 15 and Clang up to 21. Where the default clang++ is newer than the toolkit accepts, name another with `--cxx`. CI builds every device test and every device example with g++ and with clang++ as nvcc's host compiler, under CUDA 13.2 on every pull request and under CUDA 12.9 as well on `main` and weekly ([internals.md](internals.md#continuous-integration)).
-
-| Refused | Code |
-|---|---|
-| a spelling other than `sm_` and a compute capability with an optional `f` or `a`, `a` below sm_90 or `f` below sm_100, and GPUs of two capabilities with no target named | `E-TARGET` |
-| a target the installed nvcc does not compile | `E-TARGET-TOOLKIT` |
-| a program needing a feature the target lacks: `bf16` on sm_75, `mma_f8f6f4` on plain sm_120, `tcgen05` on any sm_120 | `E-TARGET-FEATURE` |
-| a result recorded for another target: a ptxas report, a timing, a measured device card, or a card for a device the target's code does not run on | `E-TARGET-MISMATCH` |
-
-The features are `FEATURES` in `src/cairn/projects/target.py`. `tests/tooling/test_target.py` assembles one probe instruction per feature for each of sixteen targets the installed nvcc compiles, and holds the table to what ptxas accepts. The limits (registers per thread, shared memory per block and per SM, threads per block, warps per SM) are the CUDA Programming Guide's for 7.5, 8.0, 8.6, 8.7, 8.9, 9.0, 10.0, 10.3, 10.7, 11.0, 12.0 and 12.1. They are a specification that nothing here measured, and every packaged card is held to its row. A target without a row has unknown limits, and its record says so.
-
-`--emulate` on `build`, `run` and `test` judges the program against the target and then builds it for the host, with its device work on host threads ([devices.md](devices.md#emulating-device-code-on-the-host)). nvcc does not run, and what the host cannot run as the device would is refused with `E-EMULATE`.
-
 ## The freestanding target
 
 A freestanding build produces one ELF image that runs on bare hardware, with no operating system, C library, C++ runtime, loader or unwinder. `[build] target` selects it, and `--target` on `build` and `run` overrides it.
@@ -742,13 +735,11 @@ cairn build examples/embedded   # the ELF image plus a receipt, in a fresh direc
 cairn run   examples/embedded   # the same image, under the target's emulator
 ```
 
-`cairn run` reports the UART output as `stdout` and the emulator's exit status as `exit_code`. `examples/embedded/trap/` reads one element past an array of four:
+`cairn run` passes the UART output on as the program's standard output and exits with the emulator's exit status; `--format json` records them as `stdout` and `exit_code` beside the emulator's command line. `examples/embedded/trap/` reads one element past an array of four:
 
-```json
-{"status": "program-exited", "exit_code": 134,
- "stdout": "trap demo: reading window[4] of 4\n",
- "emulator": ["/usr/bin/qemu-system-aarch64", "-M", "virt", "-cpu", "cortex-a72",
-              "-nographic", "-semihosting", "-kernel", ".../trapdemo.elf"]}
+```text
+trap demo: reading window[4] of 4
+error: trapdemo exited with status 134
 ```
 
 The language works as it does hosted, including guards, `stack` storage, records, sums, generics, traits, closures, `compact`, `reduce`, `derive wire`, `f32` and `f64`. The build refuses, by name and before a compiler runs, any function whose effect row needs a hosted runtime: `alloc`, `free`, `io`, `gpu_*`, `transfer:*`, `par:*` or `ffi:*`. `mmio_read`, `mmio_write` and `asm` stay available inside `unsafe`.

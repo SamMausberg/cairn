@@ -171,7 +171,7 @@ fn block_sums(n:usize, x:ro<u64>[n], g:usize, out:rw<u64>[g]) {
 
 ### Shape, barriers and warp operations
 
-Each side names up to three binders, fastest first. In `blocks bx, by in gx, gy threads tx, ty in 32, 8`, thread `(tx, ty)` is thread `tx + 32 * ty` of its block. The grid's extents are any `usize` values. The thread extents are literals or constants whose product is a whole number of warps, from 32 to 1024 threads (`E-COOP-SHAPE`).
+Each side names up to three binders, fastest first. In `blocks bx, by in gx, gy threads tx, ty in 32, 8`, thread `(tx, ty)` is thread `tx + 32 * ty` of its block. The grid's extents are any `usize` values, and block `(bx, by)` is block `bx + gx * by` of the launch: each block finds its names with a multiply-high and two shifts by a divider the launch makes once per extent, not with a 64-bit division. The thread extents are literals or constants whose product is a whole number of warps, from 32 to 1024 threads (`E-COOP-SHAPE`).
 
 A `shared` array is declared directly in the body, with a constant length. Each one starts on a 128-byte boundary, so a tensor core fragment may load from it ([numerics.md](numerics.md#tensor-core-fragments)). A block's shared arrays hold at most 48 KiB together (`E-COOP-SHARED`).
 
@@ -437,6 +437,37 @@ load_wide moves a power of two of elements in one access of at most 16 bytes: f6
 
 Every other rule sees an access as the part `x[i..i + K]` it reaches. A lane that stores `out[4 * i..4 * i + 4]` owns that block of `out` (`E-PARALLEL-RACE` otherwise), and the phase rule and the rule that each outside element has one writer count all `K` elements. The effect row gains `read:x` or `write:x`, and `trap`. [`cairn explain`](tools.md#cairn-explain) lists each access with the bytes it moves and its cache operator. The example above compiles for sm_120 to `LDG.E.EF.128` and `STG.E.EF.128` with no local memory. The suite's wide loads and stores ran on an RTX 5070 Ti, checked against plain loops ([evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)).
 
+## The device target
+
+A program that indexes `@device` views is built for one device target. The target is spelled as nvcc spells it, and is separate from the CPU architecture that `--arch` names. `sm_120` runs on compute capability 12.0 and every later 12.x device. `sm_120f` adds the features the family shares and runs on its devices from 12.0. `sm_120a` adds every feature of exactly 12.0 and runs only there.
+
+`--device-target` on `build`, `run`, `predict` and `tune` names the target. Without it the target is `[build] device_target` of the manifest. Else a command that builds device code takes the one GPU `nvidia-smi` reports, which asks the driver and launches nothing, and with no GPU the build is refused with `E-TARGET`. Nothing defaults to `-arch=native`.
+
+`predict` and `tune` never take the GPU on the machine, so they give the same answer everywhere. Without a named target they take the target of the [card](tools.md#other-gpus) that prices their device work: the one `--card` names, else the device of the profile `--profile` names, else the RTX 5070 Ti, for `sm_120a`. A card that `make calibrate-device` measured gives the target it was measured for. On a GH200, `--card h100` prices on the H100 and compiles for `sm_90a`.
+
+A device timing is the one place the GPU here matters, since a timing measures it. When the target's code does not run on that GPU, `tune --device --measure` and `make tune-device` are refused with `E-TARGET-MISMATCH` before anything is built, and the refusal names `--card` and `--device-target`. On a GH200, `make tune-device CARD=h100` passes `--card h100` and times code for `sm_90a` ([tools.md](tools.md#measuring-comparing-and-the-history)).
+
+```toml
+[build]
+kind = "exe"
+device_target = "sm_120a"
+```
+
+The target is resolved once, and every stage receives the same one: nvcc's `-arch`, the kernel reader behind `cairn tune`, the device card `cairn predict` prices on, a device timing and a measured device profile. The build receipt records it under `device_target`: its name, how it was resolved, the features it provides and those the program needs, its resource limits and the nvcc release.
+
+nvcc runs the host half of a device build with the `--cxx` compiler, clang++ by default, and each CUDA release accepts a range of host compilers. CUDA 12.9 takes GCC up to 14 and Clang up to 19, and CUDA 13.2 takes GCC up to 15 and Clang up to 21. Where the default clang++ is newer than the toolkit accepts, name another with `--cxx`. CI builds every device test and every device example with g++ and with clang++ as nvcc's host compiler, under CUDA 13.2 on every pull request and under CUDA 12.9 as well on `main` and weekly ([internals.md](internals.md#continuous-integration)).
+
+| Refused | Code |
+|---|---|
+| a spelling other than `sm_` and a compute capability with an optional `f` or `a`, `a` below sm_90 or `f` below sm_100, and GPUs of two capabilities with no target named | `E-TARGET` |
+| a target the installed nvcc does not compile | `E-TARGET-TOOLKIT` |
+| a program needing a feature the target lacks: `bf16` on sm_75, `mma_f8f6f4` on plain sm_120, `tcgen05` on any sm_120 | `E-TARGET-FEATURE` |
+| a result recorded for another target: a ptxas report, a timing, a measured device card, or a card for a device the target's code does not run on; a device timing on a GPU the target's code does not run on | `E-TARGET-MISMATCH` |
+
+The features are `FEATURES` in `src/cairn/projects/target.py`. `tests/tooling/test_target.py` assembles one probe instruction per feature for each of sixteen targets the installed nvcc compiles, and holds the table to what ptxas accepts. The limits (registers per thread, shared memory per block and per SM, threads per block, warps per SM) are the CUDA Programming Guide's for 7.5, 8.0, 8.6, 8.7, 8.9, 9.0, 10.0, 10.3, 10.7, 11.0, 12.0 and 12.1. They are a specification that nothing here measured, and every packaged card is held to its row. A target without a row has unknown limits, and its record says so.
+
+`--emulate` on `build`, `run` and `test` judges the program against the target and then builds it for the host, with its device work on host threads ([devices.md](#emulating-device-code-on-the-host)). nvcc does not run, and what the host cannot run as the device would is refused with `E-EMULATE`.
+
 ## Emulating device code on the host
 
 `--emulate` builds, runs and tests a device program on a machine without a GPU. Every device region, collector, cooperative region, `kernel fn`, transfer and queued ticket then runs on host threads, so you can check a kernel's logic where there is no device.
@@ -447,7 +478,7 @@ cairn test my_kernels --emulate --device-target sm_90a
 cairn validate my_kernels --symbol scale_tiles --emulate --device-target sm_120
 ```
 
-The program is still judged against a device target, resolved as a device build resolves it ([tools.md](tools.md#the-device-target)), so a program that emulates is one that would build for that target. What the target refuses, emulation refuses with the same code: `E-TARGET-FEATURE` for a feature the target lacks, `E-IMPL-TARGET` for a selected implementation that needs one, and `E-ASM-TARGET` for PTX of a later architecture. nvcc does not run, so nothing that only nvcc or ptxas would refuse is checked, and the record says so.
+The program is still judged against a device target, resolved as a device build resolves it ([tools.md](#the-device-target)), so a program that emulates is one that would build for that target. What the target refuses, emulation refuses with the same code: `E-TARGET-FEATURE` for a feature the target lacks, `E-IMPL-TARGET` for a selected implementation that needs one, and `E-ASM-TARGET` for PTX of a later architecture. nvcc does not run, so nothing that only nvcc or ptxas would refuse is checked, and the record says so.
 
 The C++ is the program nvcc would compile, byte for byte. The host compiler builds it with `CAIRN_EMULATE` defined, and `runtime/cairn_emulate.hpp` becomes the machine under the execution context. Device memory is host memory of exactly the size asked for, and a region's lanes run on the host lane pool. A staged block loads its whole tile before any lane reads it. A reduction, a scan and a compaction fold in index order.
 
@@ -468,7 +499,7 @@ Queued work runs to completion at its `spawn`, in program order. That is one of 
 
 [`cairn validate --emulate`](tools.md#cairn-validate) tests a device implementation against its reference this way, and its evidence is `finite-tested-emulated`: finite testing of the host emulation, and never of the device. [`cairn tune`](tools.md#cairn-tune) chooses an implementation on that evidence only with `--accept-emulated`.
 
-Every record says the device work was emulated. The build receipt and the records of `cairn run`, `cairn test` and `cairn validate` carry `emulation`, with the target the program was judged against, and `cairn run` at a terminal prints the same note on standard error. An emulated result is evidence about the host, and never about a device. It does not time device code either: the lanes run on a few host threads, and each block's threads meet at operating system barriers, so a time the program prints measures those. [numerics.md](numerics.md#emulated-device-runs) says where an emulated result can differ from a device run.
+Every record says the device work was emulated. The build receipt and the records of `cairn run`, `cairn test` and `cairn validate` carry `emulation`, with the target the program was judged against, and `cairn run` prints the same note on standard error before the program starts. An emulated result is evidence about the host, and never about a device. It does not time device code either: the lanes run on a few host threads, and each block's threads meet at operating system barriers, so a time the program prints measures those. [numerics.md](numerics.md#emulated-device-runs) says where an emulated result can differ from a device run.
 
 ## What fast kernels use
 
@@ -549,7 +580,7 @@ A dtype is spelled as the benchmark or as CAIRN spells it, `bfloat16` or `bf16`,
 | a result for SOL-ExecBench, a destination for KernelBench, a returned value, a solution naming no definition | `E-HARNESS-FORMAT` |
 | a device target whose code does not load on the GPU the mapping names | `E-TARGET-MISMATCH` |
 
-The flags keep CAIRN's numerics. SOL-ExecBench compiles with `nvcc -O3 --use_fast_math` unless a solution says otherwise, so `compile_options` gives `nvcc -std=c++20 -O3 --fmad=false -arch=sm_100a --extended-lambda --expt-relaxed-constexpr -Xcompiler -ffp-contract=off,-fno-fast-math` for the device target, and `c++ -std=c++20 -O3 -ffp-contract=off -fno-fast-math` for the binding. GPU MODE and KernelBench pass the same flags to `load_inline`. Their Python files embed the export's sources one line per line and check each one's sha256 before the build.
+The flags keep CAIRN's numerics, and a loop the program may never leave. SOL-ExecBench compiles with `nvcc -O3 --use_fast_math` unless a solution says otherwise, so `compile_options` gives `nvcc -std=c++20 -O3 --fmad=false -arch=sm_100a --extended-lambda --expt-relaxed-constexpr -Xcompiler -ffp-contract=off,-fno-fast-math,-fno-finite-loops` for the device target, and `c++ -std=c++20 -O3 -ffp-contract=off -fno-fast-math -fno-finite-loops` for the binding. GPU MODE and KernelBench pass the same flags to `load_inline`. Their Python files embed the export's sources one line per line and check each one's sha256 before the build.
 
 Nothing here runs an evaluator, submits or opens a connection. The record lists the commands that would, for you to run: `sol-execbench PROBLEM --solution solution.json`, KernelBench's `scripts/run_and_check.py`, and `popcorn submit --mode test`, `benchmark`, `profile` or `leaderboard`. `popcorn submit --mode leaderboard` is a public ranked submission under your name on gpumode.com.
 

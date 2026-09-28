@@ -275,8 +275,8 @@ TOTAL = CMD + "fn f(c:PARAM)->u64{if c.op==Op.Read{return c.n;}return 0;}"
 
 @pytest.mark.parametrize("param", ["Cmd", "ro<Cmd>"])
 def test_a_tag_nested_in_a_parameter_is_admitted_as_storage_is(param):
-    """No entry guard reads a tag inside a record, or behind a borrow, so `default: cr::trap()` separates
-    a match from a comparison there, exactly as it does for an element of storage."""
+    """No entry guard reads a tag inside a record, or behind a borrow, so the trap in the switch's default arm
+    separates a match from a comparison there, exactly as it does for an element of storage."""
     matched, total = MATCHED.replace("PARAM", param), TOTAL.replace("PARAM", param)
     r = refute(total, matched)
     nested = r["counterexample"]["c"]["op"]

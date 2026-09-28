@@ -185,7 +185,7 @@ fn first(a:ro<f16>[256]@device) { let x = mma_load[WmmaA[f16, 16, 16, 16]](a, SW
 
 An accumulator's elements are reached one at a time where the family says which lane holds which. `mma_get(acc, v)` is the value `v` that this thread's lane holds of an `mma.sync` accumulator, and `acc = mma_set(acc, v, x)` replaces it. Lane `l`'s value `v` is element `(l / 4 + 8 * (v / 2), 2 * (l % 4) + v % 2)`, the share the PTX ISA states. A program names that share as the layout `spread(rows(16, 8), 8, 4, 1, 2)`: in a region of `threads t in 32`, `SHARE.col(t, v)` is the column of `mma_get(acc, v)`. `proofs/Cairn/Layout.lean` checks that this spread is the ISA's formula and gives each element one lane. WMMA leaves the share unspecified, so there reaching an element is `E-FRAGMENT`.
 
-The family is a capability the build's device target must provide ([tools.md](tools.md#the-device-target)). `TmemAcc` needs tcgen05 and tensor memory, which sm_120 does not have. Nothing here lowers `TmemAcc`, so it is refused, and it is never emulated.
+The family is a capability the build's device target must provide ([tools.md](devices.md#the-device-target)). `TmemAcc` needs tcgen05 and tensor memory, which sm_120 does not have. Nothing here lowers `TmemAcc`, so it is refused, and it is never emulated.
 
 ```cairn rejects E-TARGET-FEATURE
 fn tensor_memory() { let acc = TmemAcc[f32, 128, 256, 16](0.0); }

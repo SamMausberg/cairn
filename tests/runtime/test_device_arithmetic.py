@@ -3,7 +3,8 @@
 cairn_runtime.hpp checks a multiply in a lane by the product's high half. Its device branches are compiled for the
 host here, with the CUDA intrinsics they call defined as their documented results, and held to the host compiler's
 __builtin_*_overflow on boundary and random operands of every integer type; tests/runtime/gpu_arithmetic.cu makes the
-same comparison on a device, only under `make gpu`. A lane with checked multiplies compiles for sm_120 to no call.
+same comparison on a device, only under `make gpu`. A lane with checked multiplies compiles for sm_120 to no call, and
+a loop of checked arithmetic keeps its exit on each target, which NVVM 7.0.1 deleted while cr::trap() was noreturn.
 """
 
 import shutil
@@ -58,6 +59,33 @@ def test_a_checked_multiply_in_a_lane_calls_no_division(tmp_path):
 def nvcc(out: Path, device) -> list[str]:
     return ["nvcc", "-std=c++20", "-O3", "--fmad=false", *device.flags(), "--expt-relaxed-constexpr", "-Werror",
             "all-warnings", f"-I{RUNTIME}", str(NATIVE / "gpu_arithmetic.cu"), "-o", str(out)]  # fmt: skip
+
+
+ROWS = """#include "cairn_runtime.hpp"
+__global__ void rows(std::size_t m, float* out) {
+  const std::size_t ty = threadIdx.x / 32;
+  for(std::size_t i = 0; i < 16; ++i)
+    for(std::size_t j = 0; j < 2; ++j)
+      if(cr::add<std::size_t>(ty, cr::mul<std::size_t>(4, i)) < m) out[(ty + 4 * i) * 2 + j] = 1.0f;
+  asm volatile("// after the loop");
+}
+"""
+
+
+@pytest.mark.skipif(not shutil.which("nvcc"), reason="nvcc is not installed")
+@pytest.mark.parametrize("target", ["sm_80", "sm_90", "sm_120"])
+def test_a_loop_of_checked_arithmetic_keeps_its_exit(tmp_path, target):
+    """The loop that tile64 starts with, reduced: the multiply and the add may trap, and a row past `m` is skipped.
+    CUDA 12.8 and 13.0 compile sm_80 and sm_90 with NVVM 7.0.1, which, while cr::trap() was noreturn there, deleted
+    the loop's exit, so the code after it vanished and a kernel ran on until a guard trapped where every guard of the
+    source held. Compiled to PTX and read; nothing runs."""
+    source = tmp_path / "rows.cu"
+    source.write_text(ROWS)
+    ptx = tmp_path / "rows.ptx"
+    subprocess.run(["nvcc", "-std=c++20", "-O3", "--fmad=false", *parse(target).flags(), "--expt-relaxed-constexpr",
+                    "-Werror", "all-warnings", f"-I{RUNTIME}", "-ptx", str(source), "-o", str(ptx)], check=True,
+                   timeout=600)  # fmt: skip
+    assert "after the loop" in ptx.read_text()
 
 
 @pytest.mark.skipif(not shutil.which("nvcc"), reason="nvcc is not installed")

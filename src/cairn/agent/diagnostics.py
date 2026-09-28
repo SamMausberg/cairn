@@ -87,6 +87,10 @@ def fix(d: dict[str, Any], known: tuple[str, ...] = (), host: bool = True) -> st
     code = d.get("code")
     if not host and card_of(code) in TOOL_CARDS:
         return None
+    if code == "E-LEASED" and "deferred_at" in d:  # a pending defer's hold: the message names it and the fix
+        return None
+    if code == "E-ALIAS" and "inside" in d:  # a place stored inside itself: the message names it and the fix
+        return None
     if code == "E-UNBOUND" and (near := close(d["message"].removeprefix("Unbound name ").rstrip("."),
                                               d.get("available_names", ()))):  # fmt: skip
         return f"Did you mean {' or '.join(near)}?"
