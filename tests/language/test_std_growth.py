@@ -4,7 +4,9 @@ leak and undefined-behaviour sanitizers.
 Growth moves every element through two views of one extent, so owners are exchanged and never copied, and a
 copyable element costs one unguarded pass; `extend_from` copies into one part, which the emitted C++ shows.
 `read_to_end` fills the room its Vec has spare and doubles a full one, and after its first read sizes the rest of a
-file, so a directory is refused by that read before its size is asked.
+file, so a directory is refused by that read before its size is asked. A `Buf` of plain values takes its zeros from
+`calloc` and goes back with `free`, every other `Buf` from `new T[n]()`, and the pages of a large one that nothing
+writes never become resident.
 """
 
 import pytest
@@ -146,12 +148,14 @@ fn main() -> i32 {
 """
 
 
-# Zeroed storage of every kind a Buf holds: bytes, floats, a record, a record aligned past what calloc promises, and
-# owners, each read back as zero and then released by an assignment over it, which the address sanitizer watches.
+# Zeroed storage of every kind a Buf holds: bytes, floats, a record, a sum, a fixed array, a record aligned past what
+# calloc promises, and owners, each read back as zero and then released by an assignment over it, which the address
+# sanitizer watches.
 ZEROED = """
 struct Wide { a:u64; b:f64; on:bool; }
 struct Slot align(64) { hits:u64; }
 struct Held { bytes:Buf[u8]; used:usize; }
+enum Shape { Dot; Box(u64); }
 
 fn main() -> i32 {
   let mut bytes = Buf[u8](1048576);
@@ -160,9 +164,15 @@ fn main() -> i32 {
   let mut wides = Buf[Wide](1000);
   let mut slots = Buf[Slot](100);
   let mut helds = Buf[Held](8);
+  let mut shapes = Buf[Shape](100);
+  let mut rows = Buf[Array[u32, 4]](100);
   for i in 0..1000 { if floats[i] != 0.0 || wides[i].a != 0 || wides[i].b != 0.0 || wides[i].on { return 2; } }
   for i in 0..100 { if slots[i].hits != 0 { return 3; } }
   for i in 0..8 { if len(helds[i].bytes) != 0 || helds[i].used != 0 { return 4; } }
+  for i in 0..100 {
+    match shapes[i] { Dot => {} Box(_) => return 6; }                   // the first variant, as new T[n]() gives
+    for k in 0..4 { if rows[i][k] != 0 { return 7; } }
+  }
   helds[3] = Held(Buf[u8](5), 5);
   bytes[1048575] = 9;
   bytes = Buf[u8](16);
@@ -170,7 +180,9 @@ fn main() -> i32 {
   wides = Buf[Wide](2);
   slots = Buf[Slot](2);
   helds = Buf[Held](2);
-  if len(bytes) + len(floats) + len(wides) + len(slots) + len(helds) != 24 { return 5; }
+  shapes = Buf[Shape](2);
+  rows = Buf[Array[u32, 4]](2);
+  if len(bytes) + len(floats) + len(wides) + len(slots) + len(helds) + len(shapes) + len(rows) != 28 { return 5; }
   return 0;
 }
 """
