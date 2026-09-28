@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
+from .agent.find import LIMIT
 from .projects.new import templates
 from .projects.toolchain import ARCHS, TARGETS
 
@@ -88,8 +89,9 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
     ({"predict", "tune"}, "--profile", {"type": Path, "help": "A cairn.machine/1 profile; default: the packaged one."}),
     ({"predict", "tune"}, "--card", {"metavar": "CARD", "help": "Price device work on this packaged device card, "
                                      "published figures that no run here measured (cairn cards lists them; h100 "
-                                     "names h100-sxm5). Without --device-target or a manifest target, the target is "
-                                     "the card's own. predict also takes all: a row per card."}),
+                                     "names h100-sxm5); default: the profile's device, else rtx-5070-ti. Without "
+                                     "--device-target or a manifest target, the target is the card's own, never the "
+                                     "GPU here. predict also takes all: a row per card."}),
     ({"predict"}, "--inspect", {"action": "store_true", "help": "Compile the device code for the device target and "
                                 "read each cooperative region's registers from ptxas; nothing runs."}),
     ({"build", "run", "export"}, "--out", {"type": Path}),
@@ -99,8 +101,9 @@ OPTIONS: list[tuple[set[str], str, dict[str, Any]]] = [  # (the commands that ta
                                        "body calls what a [foreign] source of the manifest defines."}),
     ({"build", "run", "test", "validate", "predict", "tune", "state", "export", "foreign"}, "--device-target", {"metavar": "SM", "help": "The GPU's compilation "
                                                                "target, as sm_120, sm_120f or sm_120a; default: "
-                                                               "[build] device_target, else the GPU nvidia-smi "
-                                                               "reports."}),
+                                                               "[build] device_target, else for predict and tune "
+                                                               "the target of the card that prices them, and for "
+                                                               "the rest the GPU nvidia-smi reports."}),
     ({"build", "run", "test", "validate"}, "--emulate", {"action": "store_true", "help": "Run device work on host "
                                                         "threads, judged against the device target: a host run for "
                                                         "correctness, never a device run or a timing."}),
@@ -227,6 +230,18 @@ def parser() -> argparse.ArgumentParser:
     r.add_argument("asked", nargs="?", default="", metavar="CODE|CARD|PATH", help="E-LEASED, tasks, or a .cairn "
                    "file or project; default: every card with its codes.")  # fmt: skip
     r.add_argument("--list", action="store_true", help="Every card with its codes and the words that select it.")
+    q = sub.add_parser("find", help="The functions to call, best first, among the builtins, std and the program's "
+                       "own: those that take the values you have, or whose names and comments hold your words.",
+                       parents=[shared])  # fmt: skip
+    q.add_argument("words", nargs="*", help="parse integer, read stdin, map insert.")
+    q.add_argument("--takes", action="append", default=[], metavar="TYPE", help="The type of a value you have "
+                   "(repeatable, any order): ro<u8>[n], Vec[i64], u64.")  # fmt: skip
+    q.add_argument("--returns", metavar="TYPE", help="The type you want back; a Result or Option of it fits next.")
+    q.add_argument("--effects", metavar="CEILING", help="Only functions whose rows fit this ceiling: pure, or "
+                   "effects such as 'trap, alloc'.")  # fmt: skip
+    q.add_argument("--limit", type=int, default=LIMIT, help="Hits to list; the answer counts the rest.")
+    q.add_argument("--in", dest="within", metavar="PATH", help="The program whose own functions are searched too; "
+                   "default: the project here, when there is one.")  # fmt: skip
     f = sub.add_parser("fmt", help="Format CAIRN sources in place; refuses any change to the token stream.")
     f.add_argument("paths", nargs="+", type=Path, help="Files, or directories searched for *.cairn.")
     f.add_argument("--check", action="store_true", help="Write nothing; exit 1 if any file would change.")

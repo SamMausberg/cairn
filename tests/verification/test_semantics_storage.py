@@ -3,6 +3,8 @@
 import pytest
 from test_semantics import OP, check, refute
 
+from cairn.verify.scalar.smt import Solver
+
 # Array views ---------------------------------------------------------------------------------
 
 SUM = "fn f(n:usize, xs:ro<u8>[n]) -> u8 { let mut t:u8=0; for i in 0..n { t=add_wrap(t,xs[i]); } return t; }"
@@ -22,6 +24,27 @@ def test_view_near_miss_separates_at_one_element():
     assert len(r["counterexample"]["xs"]) == r["counterexample"]["n"] >= 1
     r = refute("fn f(n:usize, xs:ro<u64>[n]) -> usize = len(xs);", "fn f(n:usize, xs:ro<u64>[n]) -> usize = n+1;")
     assert r["expected"]["return"] == r["counterexample"]["n"] == len(r["counterexample"]["xs"])
+
+
+def test_a_witness_that_fits_the_replay_stands_when_no_query_narrowing_it_answers(monkeypatch):
+    """Z3's own witness for the door lends xs one element, so a query that only narrows it takes nothing away when it
+    runs out of time, as the query within the replay budget did under libz3 4.8.12 on an AArch64 host. A witness past
+    the budget with no answer within it is unknown for that reason, never a finding that none exists."""
+    past = ("fn f(n:usize, xs:ro<u8>[n]) -> usize = n;", "fn f(n:usize, xs:ro<u8>[n]) -> usize { if n==40 { return 0; } return n; }")  # fmt: skip
+    assert check(*past, "unknown")["reason"] == "No counterexample lends 16 elements or fewer."
+    log, answer = [], Solver.check
+
+    def late(self, text, variables, logic=None):  # every query after the equivalence stage runs out of time
+        if any(q["stage"] == "equivalence" for q in log):
+            return {"status": "unknown", "reason": "timeout"}
+        return answer(self, text, variables, logic)
+
+    monkeypatch.setattr(Solver, "check", late)
+    door = SUM.replace("let mut t:u8=0;", "if n==1 && xs[0]==123 { return 0; } let mut t:u8=0;")
+    assert refute(SUM, door, assume="n<=4", query_log=log)["counterexample"] == {"n": 1, "xs": [123]}
+    log.clear()
+    r = check(*past, "unknown", query_log=log)
+    assert r["reason"] == "Z3 did not decide whether a counterexample lends 16 elements or fewer: timeout", r
 
 
 def test_an_index_outside_the_extent_traps():
@@ -115,7 +138,7 @@ def test_a_payload_sum_in_a_view_is_read_through_its_tag():
 
 
 def test_a_tag_no_variant_names_traps_where_the_emitted_switch_does():
-    """No entry guard reads a tag in storage, so `default: cr::trap()` is what separates these two."""
+    """No entry guard reads a tag in storage, so the trap in the switch's default arm separates these two."""
     total = OP + "fn f(o:ro<Op>[1]) -> u64 { if o[0]==Op.Read { return 0; } return 1; }"
     matched = OP + "fn f(o:ro<Op>[1]) -> u64 { match o[0] { Op.Read => { return 0; } Op.Write => { return 1; } } }"
     r = refute(total, matched)

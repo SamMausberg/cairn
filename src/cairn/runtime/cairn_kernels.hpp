@@ -34,14 +34,17 @@
 //   __trap()          chosen. The kernel dies, the context is poisoned, and every later call on
 //                     it - the next sync, wait or copy - returns cudaErrorLaunchFailure, which
 //                     cr::gpu::check turns into std::abort. No hang, no wrong answer, one PTX
-//                     instruction on the failure path only, and NDEBUG cannot remove it.
+//                     instruction on the failure path only, and NDEBUG cannot remove it. Below
+//                     sm_100 it is the same PTX trap written as an asm that the compiler must
+//                     assume returns, since NVVM 7.0.1 miscompiles loops around a noreturn one
+//                     (cr::trap in cairn_runtime.hpp).
 //   assert(false)     works (cudaErrorAssert) but -DNDEBUG deletes it: measured, the kernel ran
 //                     on and reported success. It also prints one line per failing lane.
 //   __builtin_trap()  unusable: nvcc's device pass treats it as a host call (#20011-D) and drops
 //                     it. Measured: the out of bounds kernel completed and sync said "no error".
-//   fault word in unified memory: cannot stop the faulting lane, since cr::trap() is [[noreturn]]
-//                     and cr::at() must still return a reference, so the bad access happens
-//                     anyway. Rejected: it turns a guard into a race with a corrupted write.
+//   fault word in unified memory: cannot stop the faulting lane, since cr::at() must still
+//                     return a reference, so the bad access happens anyway. Rejected: it turns a
+//                     guard into a race with a corrupted write.
 #pragma once
 #include <cstddef>
 #include <cstdio>

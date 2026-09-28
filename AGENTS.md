@@ -83,6 +83,7 @@ Read README.md, then [docs/language.md](docs/language.md) and the architecture s
 | `agent/skill.py` | the agent skill under `skills/cairn/`, written from the cards, the fixes and the command line |
 | `agent/projection.py` | the canonical projection: source printed back from the tree, which reparses to itself and compiles to the same C++ |
 | `agent/state.py`, `agent/explain.py`, `agent/shot.py` | `cairn state`, `cairn explain` and `cairn shot`: a program's state for an agent, where it pays at run time, what it drew |
+| `agent/find.py` | `cairn find`: the functions to call, by the types of the values an agent has, judged by probe calls the checker checks, or by words |
 | `agent/diagnostics.py`, `agent/sketches.py` | what a model reads back when a reply is refused, with the smallest fix; named expression sketches and their bounded search |
 | `editor/grammar.py` | the editor grammars, generated from the compiler's vocabulary |
 | `editor/terminal.py` | what a person at a terminal reads, beside the JSON record |
