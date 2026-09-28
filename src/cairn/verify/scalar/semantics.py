@@ -46,11 +46,14 @@ exceeding the budget is unknown, never success. An extent is symbolic, so a pass
 over `0..n` needs a precondition that bounds `n` within that budget.
 
 This translator and Z3 are trusted. No result is a Lean-kernel proof or a
-verification of the C++ backend. Unsupported syntax returns unknown.
+verification of the C++ backend. Unsupported syntax returns unknown. Before an
+`smt-equivalent` answer is given, both versions run natively on validation's
+boundary inputs (native.py), and a difference there makes the answer
+`translator-fault`, never an equivalence.
 
-The value model is values.py, the translator symbolic.py and the
-concrete replay concrete.py; this module runs the query and writes the
-receipt, pinned to every file it depends on by `implementation_hash`.
+The value model is values.py, the translator symbolic.py, the concrete replay
+concrete.py and the native run native.py; this module runs the query and writes
+the receipt, pinned to every file it depends on by `implementation_hash`.
 """
 
 from __future__ import annotations
@@ -62,6 +65,7 @@ from typing import Any
 from ...compiler.cairnc import Diagnostic, Parser
 from ...compiler.syntax.tree import BOOL, SIGNED, USIZE, VOID, WIDTH, is_view
 from .concrete import Concrete
+from .native import replay
 from .smt import Solver, SolverUnavailable
 from .symbolic import Formula, Symbolic
 from .values import (
@@ -88,6 +92,10 @@ from .values import (
     wellformed,
 )
 
+FAULT = (
+    "Z3 found no admitted input on which the two versions differ, but run natively on a boundary input they do: the "
+    "value translation lost a difference, so this is a fault of the verifier and establishes nothing about equivalence."
+)
 # A witness is asked for again with every integer input within each bound of zero in turn, under a short timeout,
 # so it reads as small numbers; the first bound that holds one wins, and the solver's own witness stands otherwise.
 WITNESS_BOUNDS = (16, 256, 65536)
@@ -104,7 +112,8 @@ def outcome_key(outcome):
 
 
 SEMANTIC = ("verify/scalar/semantics.py", "verify/scalar/values.py", "verify/scalar/symbolic.py",
-            "verify/scalar/concrete.py", "verify/scalar/smt.py", "verify/elision.py", "version.py")  # fmt: skip
+            "verify/scalar/concrete.py", "verify/scalar/native.py", "verify/scalar/smt.py", "verify/elision.py",
+            "version.py")  # fmt: skip
 
 
 def implementation_files() -> list[Path]:
@@ -204,6 +213,26 @@ def equivalent(reference: str, candidate: str, symbol: str, *, assume: str = "tr
             domains = prepared(ds)
             domain = Symbolic(q, domains).invoke(dn, list(q.inputs.values()))[0]
         admitted = conj(formed, domain.value)
+
+        def admits(args: dict[str, Any]) -> bool:
+            """Whether the precondition holds of these inputs, as the concrete evaluator reads it."""
+            if assume == "true":
+                return True
+            try:
+                held = Concrete(domains).outcome(dn, args)
+            except (ValueError, Unsupported):
+                return False
+            return held["defined"] and held["return"] is True
+
+        def told_apart(args: dict[str, Any]) -> dict[str, Any]:
+            """What the concrete evaluator says each version does on `args`, beside the native disagreement."""
+            try:
+                return {
+                    "reference": Concrete(refs).outcome(symbol, args),
+                    "candidate": Concrete(cands).outcome(symbol, args),
+                }
+            except (ValueError, Unsupported) as e:
+                return {"not_run": str(e)}
 
         def seen(held: Term, a: Term, b: Term) -> str:
             """Does what two runs left in one rw parameter look the same? A view is read at the probe."""
@@ -375,10 +404,15 @@ def equivalent(reference: str, candidate: str, symbol: str, *, assume: str = "tr
                     if n["status"] != "unsat":
                         reason = "An observed float may be NaN, whose payload bits this model does not track."
                         return finish("unknown", reason=reason, **witnessed("nan-observation", unspoken, n))
+                natively = replay(reference, candidate, symbol, admits)
+                if natively["status"] == "disagrees":
+                    return finish("translator-fault", reason=FAULT, counterexample=natively["case"],
+                                  concrete=told_apart(natively["case"]), native_replay=natively)  # fmt: skip
                 watched = [*(["the result"] if rf.ret != VOID else []), *(n for n, t in rf.params if t.mode == "rw")]
                 visible = ", ".join(watched) or "no value"
                 return finish(
                     "smt-equivalent",
+                    native_replay=natively,
                     quantification="All values of the declared parameter types satisfying the host precondition; "
                     "the top-level tag of an enum or sum passed by value names a declared variant, as the entry "
                     "guard checks, while a tag nested in a record, an array or a payload, reached through a borrow "

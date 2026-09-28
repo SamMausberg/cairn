@@ -241,9 +241,9 @@
       "compiles": "yes: sm_120 in the suite; sm_80, sm_89, sm_90a, sm_100a and sm_120a for the suite's kernels",
       "ran_on_cpu": "yes: emulated, and on a host stand-in for the CUDA runtime",
       "ran_on_gpu": "partial: `parallel` regions, the `reduce` collector, `reduce op out[k]` over device views, a device `scan` and a device `compact` ran on an RTX 5070 Ti, each result checked against the host, CUDA or the exact sum; a checked total that overflows has not trapped on a GPU",
-      "sanitizers": "partial: the host sanitizers on emulated builds; Compute Sanitizer has not run",
+      "sanitizers": "partial: the host sanitizers on emulated builds; on a GH200, memcheck, racecheck, initcheck and synccheck each clean over the two `parallel` regions of the device validation tests",
       "measured": "partial: regions and `reduce` against hand-written CUDA on an RTX 5070 Ti; `scan` and `compact` untimed",
-      "records": ["evidence/v0_8_3/gpu/benchmark.json", "evidence/v1_1/catalog/README.md", "evidence/v1_1/emulation/README.md", "evidence/v1_0/execution/README.md", "evidence/v1_1/device_perf/README.md", "evidence/v1_1/gpu/README.md"]
+      "records": ["evidence/v0_8_3/gpu/benchmark.json", "evidence/v1_1/catalog/README.md", "evidence/v1_1/emulation/README.md", "evidence/v1_0/execution/README.md", "evidence/v1_1/device_perf/README.md", "evidence/v1_1/gpu/README.md", "evidence/v1_2/gpu_gh200/README.md"]
     },
     {
       "feature": "Guards in device lanes",
@@ -252,10 +252,10 @@
       "implemented": "yes",
       "compiles": "yes: sm_120",
       "ran_on_cpu": "yes: emulated, where a failing guard aborts with SIGABRT",
-      "ran_on_gpu": "partial: the checked multiply, add and subtract of every integer type on 1.6 million operand pairs on an RTX 5070 Ti, none trapping; a guard that fails has not run since v0.8.3",
+      "ran_on_gpu": "partial: the checked multiply, add and subtract of every integer type on 1.6 million operand pairs on an RTX 5070 Ti and a GH200, none trapping; no test that makes a guard fail has run since v0.8.3, and on a GH200 a guard failed in a kernel NVVM 7.0.1 had miscompiled, and its process aborted as designed",
       "sanitizers": "partial: address on emulated builds reports a read past a device array; Compute Sanitizer has not run",
       "measured": "partial: what checked index arithmetic adds to kernel time against unchecked CUDA",
-      "records": ["tests/projects/test_emulation.py", "evidence/v1_0/RUN_NOTES.md", "evidence/v1_1/device_perf/README.md"]
+      "records": ["tests/projects/test_emulation.py", "evidence/v1_0/RUN_NOTES.md", "evidence/v1_1/device_perf/README.md", "evidence/v1_2/gpu_gh200/README.md"]
     },
     {
       "feature": "Transfers, queued device work and the execution context",
@@ -265,9 +265,9 @@
       "compiles": "yes: sm_120",
       "ran_on_cpu": "yes: on a host stand-in that counts every stream, allocation and wait, and emulated",
       "ran_on_gpu": "yes: the execution context on a caller's stream, a held function's one wait, queued work ordered by tickets, and `cq_` entries called directly and replayed in a CUDA graph, on an RTX 5070 Ti",
-      "sanitizers": "partial: thread and undefined on the host stand-in; Compute Sanitizer has not run",
+      "sanitizers": "partial: thread and undefined on the host stand-in; on a GH200, memcheck, racecheck, initcheck and synccheck each clean over the transfers of the device validation tests",
       "measured": "partial: the host waits a call makes and what each costs on an RTX 5070 Ti under WSL2",
-      "records": ["evidence/v1_0/execution/README.md", "tests/runtime/test_execution.py", "evidence/v1_1/emulation/README.md", "evidence/v1_1/device_perf/README.md", "evidence/v1_1/gpu/README.md"]
+      "records": ["evidence/v1_0/execution/README.md", "tests/runtime/test_execution.py", "evidence/v1_1/emulation/README.md", "evidence/v1_1/device_perf/README.md", "evidence/v1_1/gpu/README.md", "evidence/v1_2/gpu_gh200/README.md"]
     },
     {
       "feature": "Device plans: `block`, `per_lane`, `unroll`, `vector` and `stage`",
@@ -420,10 +420,10 @@
       "implemented": "yes",
       "compiles": "yes: the generated device tests build for sm_120",
       "ran_on_cpu": "yes: with `--emulate`, as finite-tested-emulated",
-      "ran_on_gpu": "no: Compute Sanitizer cannot instrument the device under WSL2, so every tool is `unavailable` on the reference machine",
-      "sanitizers": "no: each Compute Sanitizer tool runs only under make gpu",
+      "ran_on_gpu": "yes: the generated device tests of `stencil_tiled` against its reference on an RTX 5070 Ti and a GH200, and of `scale_twice` on a GH200",
+      "sanitizers": "partial: memcheck, racecheck, initcheck and synccheck each clean over the device tests of `scale_twice` on a GH200; under WSL2 every tool is `unavailable`",
       "measured": "n/a",
-      "records": ["evidence/v1_0/foreign/README.md", "evidence/v1_1/emulation/README.md", "tests/verification/test_device_validation.py", "evidence/v1_1/gpu/README.md"]
+      "records": ["evidence/v1_0/foreign/README.md", "evidence/v1_1/emulation/README.md", "tests/verification/test_device_validation.py", "evidence/v1_1/gpu/README.md", "evidence/v1_2/gpu_gh200/README.md"]
     },
     {
       "feature": "`cairn tune` on device candidates",

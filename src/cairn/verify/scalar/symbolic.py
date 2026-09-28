@@ -474,9 +474,10 @@ class Symbolic:
         leaves = self.source.leaves(item) if item else self.source.leaves(f.ret)
         parts = tuple(self.q.bind(x, arrayed(t) if item else sort(t)) for x, t in zip(value, leaves, strict=True))
         held = []
-        for seed, final in zip(self.outs(env, frame), finals, strict=True):
+        for i, (seed, final) in enumerate(zip(self.outs(env, frame), finals, strict=True)):
             joined = tuple(self.q.bind(x, k) for x, k in zip(final, kinds(self.source, seed), strict=True))
-            held.append(Term(seed.ty, joined, window=seed.window))
+            window = self.window(seed.window, [(path, written[i].window) for path, _, written in frame.returns])
+            held.append(Term(seed.ty, joined, window=window))
         reached = self.q.bind(disj(*(path for path, _, _ in frame.returns)), "Bool")
         window = Window(ZERO, self.q.bind(length, sort(USIZE)), self.q.storage()) if item else None
         return self.q.make(f.ret, parts, reached, window=window), tuple(held)
@@ -600,8 +601,23 @@ class Symbolic:
                 parts = [ite(p, a, b) for a, b in zip(inside[n].parts, parts, strict=True)]
             sorts = kinds(self.source, held)
             joined = tuple(self.q.bind(x, k) for x, k in zip(parts, sorts, strict=True))
-            env[n] = Term(held.ty, joined, window=held.window)
+            window = self.window(states[-1][1][n].window, [(p, inside[n].window) for p, inside in states[:-1]])
+            env[n] = Term(held.ty, joined, window=window)
         return [(self.q.bind(disj(*(p for p, _ in states)), "Bool"), env)]
+
+    def window(self, last: Window | None, chosen: list[tuple[str, Window | None]]) -> Window | None:
+        """Where a name's elements live once paths that left it in different places join: each path's offset and
+        extent, chosen by its condition as its parts are, and `last`'s where none holds. An owner one path gave new
+        storage is no longer the storage it was on the others, so the join is storage of its own."""
+        if all(w == last for _, w in chosen):
+            return last
+        if last is None or any(w is None for _, w in chosen):
+            raise Unsupported("A name holds storage on one path and a value on another.")
+        offset, extent = last.offset, last.extent
+        for p, w in reversed(chosen):
+            offset, extent = ite(p, w.offset, offset), ite(p, w.extent, extent)
+        root = last.root if all(w.root == last.root for _, w in chosen) else self.q.storage()
+        return Window(self.q.bind(offset, sort(USIZE)), self.q.bind(extent, sort(USIZE)), root)
 
     def repeat(self, s: Stmt, path: str, env: dict[str, Term], frame: Frame) -> list:
         """Unroll a loop; a path that would iterate past the budget becomes a residual obligation."""

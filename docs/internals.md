@@ -186,7 +186,7 @@ Outside `compiler/`, each package keeps its modules at its top level, apart from
 
 | Package | Holds |
 |---|---|
-| `verify/scalar/` | value-level source equivalence: the value model, the SMT translator, the concrete replay, the query and receipt, the Z3 bridge |
+| `verify/scalar/` | value-level source equivalence: the value model, the SMT translator, the concrete replay, the query and receipt, the native run of every verdict, the Z3 bridge |
 | `verify/validation/` | an implementation validated against its reference: boundary inputs, isolated calls, agreement, counterexamples, the device side |
 | `projects/harness/` | `cairn export --harness`, its `harness.toml` mapping and sources, and `cairn new --from-sol-execbench` |
 | `editor/lsp/` | `cairn lsp`: the server, one open buffer, a project's workspace, and one module per feature |

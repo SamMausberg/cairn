@@ -256,6 +256,13 @@ fn main() -> i32 { let mut ring = Ring(Buf[u8](2), 0); let slots = ring.slots; r
 An owner cannot be moved out of a place; use take() or swap().
 ```
 
+`swap` never exchanges a place with one that may lie inside it, such as a tree and one of its children, since the tree would come to hold itself and never be released (`E-ALIAS`, as when the two places are lent to one call). Two elements of one array may be swapped, even at one index, and so may an element and a place inside another element at a different literal index. For the same reason, an assignment whose right side moves the local the assigned place lies in, `t.kids[0] = t`, is `E-ALIAS`. To make a child the whole tree, take it out first: `t = take(t.kids[0]);`. A ticket, a group, a ring, an atomic or a mutex lives where it is declared, so neither `take` nor `swap` moves one (`E-PINNED`).
+
+```cairn rejects E-ALIAS
+struct Tree { kids:Buf[Tree]; val:u64; }
+fn main() -> i32 { let mut t = Tree(Buf[Tree](2), 1); swap(t, t.kids[0]); return 0; }
+```
+
 ### Taking a record apart
 
 `let Ring(slots, used) = r;` consumes `r` and binds every field in order, which is how an owner or a linear value leaves a record whole. Anything but one name, or `_`, per field is `E-UNPACK`. Only the module that declares a `linear` record may take it apart (`E-PRIVATE`), so code outside cannot end its protocol.
