@@ -86,7 +86,7 @@ lean:
 # It and the two targets after it are the only ones that run code on a CUDA device; everything else leaves it alone.
 # GPU_TESTS is every module with a test that runs device code, and --device-runs (tests/conftest.py) keeps only those
 # tests; tests/tooling/test_workflow.py holds the list to them. A test that traps on the device on purpose skips here
-# unless the owner also sets CAIRN_GPU_TRAPS=1 by hand.
+# unless CAIRN_GPU_TRAPS=1 is also set, which AGENTS.md allows only on a GPU that drives no display.
 GPU_TESTS = tests/language/test_assembly.py tests/language/test_layouts.py \
   tests/projects/test_app_analytics.py tests/projects/test_app_matmul.py tests/projects/test_apps.py \
   tests/projects/test_cooperative_examples.py tests/projects/test_demos.py tests/projects/test_foreign.py \
@@ -103,7 +103,7 @@ gpu:
 	CAIRN_GPU_TESTS=1 $(PYTHON) -m pytest -q -p no:xdist --device-runs $(GPU_TESTS)
 	CAIRN_GPU_TESTS=1 $(PYTHON) bench/gpu/parallel_gpu.py
 
-# The two other targets that run device code. Only the owner runs them, never while anything else uses the device:
+# The two other targets that run device code. They time it, so nothing else should use the device meanwhile:
 # each device run holds /tmp/cairn-gpu.lock, rests two seconds after, and one process makes at most 64 of them.
 tune-device:
 	CAIRN_GPU_TESTS=1 $(CAIRN) tune $(FILE) --symbol $(SYMBOL) --at $(AT) --measure 3 --device --format json

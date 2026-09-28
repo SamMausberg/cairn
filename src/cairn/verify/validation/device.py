@@ -10,7 +10,7 @@ reason in the coverage it returns, never dropped unseen. `sanitized` builds thos
 every test under each Compute Sanitizer tool, `memcheck`, `racecheck`, `initcheck` and `synccheck`, as a separate
 result per tool; a tool that ran no test is `unknown`, never clean.
 
-Nothing here runs outside the owner's `make gpu` (perf/on_device.py `allowed`): without `CAIRN_GPU_TESTS=1` it says
+Nothing here runs outside `make gpu` (perf/on_device.py `allowed`): without `CAIRN_GPU_TESTS=1` it says
 why and runs nothing, and every run holds the machine-wide device lock. Generating the tests and compiling them for
 the device are host work, which the default suite does.
 """
@@ -211,7 +211,7 @@ def verdict(runs: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def sanitized(program: str, tests: list[str], timeout: int = 300) -> dict[str, Any]:
-    """Every generated test under each Compute Sanitizer tool, one result per tool; nothing runs unless the owner's
+    """Every generated test under each Compute Sanitizer tool, one result per tool; nothing runs unless
     `make gpu` allows device code here, and no test to run is `unknown`."""
     from ...perf.on_device import allowed, locked
     from ...projects.build import build
