@@ -627,7 +627,9 @@ class Emitter:
         selector = f"static_cast<std::uint32_t>({temp})" if ty.name in self.p.enums else temp + ".tag"
 
         def arm(arm, variant: str):
-            if arm.binder:
+            # `_` names nothing, so nothing is declared: its payload stays in the temporary, which is released where
+            # the switch ends, right after the arm.
+            if arm.binder and arm.binder != "_":
                 payload = f"{temp}.payload.v_{variant}"
                 const, value = ("const ", payload) if plain else ("", f"std::move({payload})")
                 self.put(f"{const}{self.type(layout[variant])} v_{arm.binder} = {value};")
