@@ -170,13 +170,13 @@ typed: 3 functions
 cairn run demo
 ```
 
-`run` builds a native executable in a fresh directory under `build/` and runs it with its data memory capped, at 1024 MiB unless `--memory-mib` says otherwise. At a terminal the program writes to the terminal, and `cairn` exits with the program's status:
+`run` builds a native executable in a fresh directory under `build/` and runs it with its data memory capped, at 1024 MiB unless `--memory-mib` says otherwise. The program writes to the terminal, or to the pipe an agent's shell reads, and `cairn` exits with the program's status:
 
 ```text
 average(10, 20) = 15
 ```
 
-Piped, the record carries what it printed:
+`cairn` itself writes only to standard error: a refusal, a failed build, or one line saying how the program ended when it did not exit 0, such as `error: demo was stopped by SIGABRT: a guard failed, or an allocation passed the 1024 MiB cap`. `--format json` prints the run's record instead, with what the program printed inside it:
 
 ```json
 {"status": "program-exited", "exit_code": 0, "stdout": "average(10, 20) = 15\n", "stderr": "",

@@ -88,6 +88,7 @@ COMMANDS = [
     ("check, three refusals, at a terminal", "check", "three", ["check", "."], ""),
     ("build", "build", "accepted", ["build", "."], ""),
     ("run", "build", "accepted", ["run", "."], EXAMPLE),
+    ("run, input ends early", "build", "accepted", ["run", "."], EXAMPLE[:5]),
     ("run --sanitize address", "build", "accepted", ["run", ".", "--sanitize", "address"], EXAMPLE),
     ("test, passing", "build", "accepted", ["test", "."], ""),
     ("test, failing", "build", "failing", ["test", "."], ""),
@@ -142,6 +143,12 @@ def called(r: dict) -> list[str]:
 
 
 status, symbol = itemgetter("status"), itemgetter("symbol")
+text = itemgetter("text")
+# A run whose input ends after one value: the starter's assert, then how the program ended.
+EARLY = [
+    "assertion failed at src/main.cairn:47: input ended early",
+    "error: solution was stopped by SIGABRT: a guard failed, or an allocation passed the 1024 MiB cap",
+]
 THREE = "E-FIELD E-UNBOUND E-TYPE-MISMATCH"  # the three mistakes, in the order a check reports them
 OWN = ["count", "main", "next_token", "next_u64", "read_input"]  # the functions the reference declares
 # What each case says besides its size, and what it must say: a case that turned into a short error, a refusal of the
@@ -154,8 +161,9 @@ SAYS: dict[str, tuple[Callable[[dict], Any], Any]] = {
     "check, three refusals": (verdict, THREE),
     "check, three refusals, at a terminal": (verdict, THREE),
     "build": (status, "native-built"),
-    "run": (lambda r: (r["exit_code"], r["stdout"]), (0, ANSWER)),
-    "run --sanitize address": (lambda r: (r["exit_code"], r["stdout"], r["sanitizer"]), (0, ANSWER, "address")),
+    "run": (text, ANSWER),  # the program's own output, and nothing else when it exits 0
+    "run, input ends early": (lambda r: r["text"].splitlines(), EARLY),
+    "run --sanitize address": (text, ANSWER),
     "test, passing": (blocks, (1, 0)),
     "test, failing": (blocks, (1, 1)),
     "test, failing, at a terminal": (lambda r: r["text"].split("\n")[0], "tests-not-passed: 1 of 2 tests failed"),
@@ -166,7 +174,7 @@ SAYS: dict[str, tuple[Callable[[dict], Any], Any]] = {
     "explain --symbol count": (explained, ("observed", ["count"])),
     "state": (status, "typed"),
     "inspect --symbol count": (symbol, "count"),
-    "find, by words": (called, ["std.text.parse_i64", "std.text.parse_u64"]),
+    "find, by words": (called, ["std.text.parse_i64", "std.text.parse_u64", "std.text.parse_fixed"]),
     "find, by types": (called, ["next_u64"]),
     REPLAY: (verdicts, "69 checks, 69 verdicts"),
     "mcp check, accepted": (verdict, "typed"),

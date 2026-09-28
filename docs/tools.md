@@ -23,7 +23,7 @@ Every tool here ships with the compiler and needs no Python package outside the 
 
 ## Output for people and for programs
 
-At a terminal, `cairn` prints for a person, as below, and `cairn run` hands the terminal to the program. Piped, every command prints the JSON record that scripts and agents read as one compact line, since an agent pays for every token it reads. `--format human|json` or the `CAIRN_FORMAT` variable chooses between them, a terminal that asks for the record gets it indented, and `NO_COLOR` turns colour off. The exit status and the record are the same either way.
+At a terminal, `cairn` prints for a person, as below. Piped, every command prints the JSON record that scripts and agents read as one compact line, since an agent pays for every token it reads. `--format human|json` or the `CAIRN_FORMAT` variable chooses between them, a terminal that asks for the record gets it indented, and `NO_COLOR` turns colour off. The exit status and the record are the same either way. `cairn run` is the exception: at a terminal or piped, the program gets the streams and `cairn` exits with its status, as [building and running](#building-and-running) says.
 
 ```text
 error[E-LEASED]: data is lent to left until wait(left).
@@ -39,6 +39,8 @@ Every refusal names the rule card that owns its code, and [`cairn rules`](#cairn
 
 A guard is a check the compiler writes wherever it cannot prove an operation safe, such as a bounds or an overflow check. A program stopped by a failed guard is reported as stopped by `SIGABRT`.
 
+A fault of the compiler itself, met while it checks a statement, is refused as `E-INTERNAL` at that statement's line, and the message names the fault's class. It says nothing about the program: the check did not finish, so nothing is accepted, and the refusal is a compiler bug to report with the program.
+
 ## Every refusal in one check
 
 `cairn check` reports every refusal it can judge on its own, so three mistakes in three functions cost one check. The record is the first refusal exactly as a check that stopped there would report it, with the others beside it:
@@ -50,7 +52,7 @@ A guard is a check the compiler writes wherever it cannot prove an operation saf
              {"code": "E-TYPE-MISMATCH", "message": "Expected bool, got u64.", "line": 11, "column": 10, ...}]}
 ```
 
-Each entry of `further` is a whole diagnostic at its own file, line and column, in source order. A record lists at most twenty, and `further_omitted` counts the rest. `not_judged` counts the functions that got no verdict because of a refusal, and none of them is accepted. `further_stopped` says that the check stopped after the first refusal and what stopped it: a limit's code, such as `E-EFFECT-LIMIT`, or the class of an internal fault, which is a compiler bug to report. Nothing after that point was judged.
+Each entry of `further` is a whole diagnostic at its own file, line and column, in source order. A record lists at most twenty, and `further_omitted` counts the rest. `not_judged` counts the functions that got no verdict because of a refusal, and none of them is accepted. `further_stopped` says that the check stopped after the first refusal and what stopped it: a limit's code, such as `E-EFFECT-LIMIT`, `E-INTERNAL` for a fault met while checking a statement, or the class of another internal fault; each fault is a compiler bug to report. Nothing after that point was judged.
 
 The check never reports a refusal that may follow from another. Every function has an effect row, the list of what it may do that a caller can observe (`alloc`, `io`, `trap`, `write:out`, ...), and a signature may cap it with a ceiling. Once a function's body is refused, its row is unknown. A function that reaches it is then not held to its ceiling or to the rule on operand order (`E-EFFECT-ORDER`), and is counted in `not_judged`. So is a function that reaches a reference with [implementations](abstractions.md#implementations), because the reference's row joins theirs only after the rules about implementations run.
 
@@ -155,9 +157,24 @@ Test blocks run only as host processes, so a freestanding project's test blocks 
 
 A program that checks should always build. When the C++ compiler or nvcc refuses the code CAIRN generated, that is a fault of the CAIRN compiler, never of the program, and the record of the failed build says so: `compiler_defect` is true, `refused_at` names the `.cairn` line the refused C++ was lowered from, and `message` says both and quotes the compiler's first error. Report it with the program. A refusal in a vendored source or at the link is no such fault, and neither is a standard header the compiler cannot find, which its installation lacks: their records have none of these fields.
 
+`cairn run` hands the program its standard input, output and error, piped or not, so what it prints can be compared with an expected output as it is. `cairn` exits with the program's status, and a program stopped by a signal exits as a shell reports it, 128 plus the signal's number: 134 for a failed guard. Anything `cairn` adds goes to standard error: the note that an `--emulate` run is a host run, and, when something went wrong, a refusal, a build that failed, or one line saying how the program ended and which limit it may have met.
+
+```sh
+printf '3 -1 4' | cairn run first.cairn > got.txt && diff got.txt expected.txt
+```
+
+The `histogram` task of the AI benchmark, given `6 4` and one value where it reads six, prints its own assert and then that line:
+
+```text
+assertion failed at src/main.cairn:47: input ended early
+error: solution was stopped by SIGABRT: a guard failed, or an allocation passed the 1024 MiB cap
+```
+
+A refusal exits 1, a build that failed or an environment that cannot run the program exits 2, and a run stopped after `--timeout` seconds exits 124, as `timeout(1)` does. A script that must tell those apart from the program's own status asks for the record with `--format json`, which holds the program's output as `stdout` and `stderr`, its status as `exit_code`, the build directory and the limits it ran under, and exits 0 only when the program did.
+
 ### cairn run --sanitize
 
-`cairn run . --sanitize address < input.txt` builds the program for the host at `-O1` with frame pointers, checked by AddressSanitizer with leak detection and by UndefinedBehaviorSanitizer, and runs it. `--sanitize thread` checks it with ThreadSanitizer instead. The first report ends the run, and the record names the sanitizer that ran. A sanitizer maps shadow memory many times the program's size, so the run has no memory cap. `cairn build --sanitize` builds the same executable without running it. A device program is checked on host threads with `--emulate`, never on a GPU.
+`cairn run . --sanitize address < input.txt` builds the program for the host at `-O1` with frame pointers, checked by AddressSanitizer with leak detection and by UndefinedBehaviorSanitizer, and runs it. `--sanitize thread` checks it with ThreadSanitizer instead. The first report ends the run on standard error, and the record `--format json` asks for names the sanitizer that ran. A sanitizer maps shadow memory many times the program's size, so the run has no memory cap. `cairn build --sanitize` builds the same executable without running it. A device program is checked on host threads with `--emulate`, never on a GPU.
 
 ### cairn build --incremental
 
@@ -718,13 +735,11 @@ cairn build examples/embedded   # the ELF image plus a receipt, in a fresh direc
 cairn run   examples/embedded   # the same image, under the target's emulator
 ```
 
-`cairn run` reports the UART output as `stdout` and the emulator's exit status as `exit_code`. `examples/embedded/trap/` reads one element past an array of four:
+`cairn run` passes the UART output on as the program's standard output and exits with the emulator's exit status; `--format json` records them as `stdout` and `exit_code` beside the emulator's command line. `examples/embedded/trap/` reads one element past an array of four:
 
-```json
-{"status": "program-exited", "exit_code": 134,
- "stdout": "trap demo: reading window[4] of 4\n",
- "emulator": ["/usr/bin/qemu-system-aarch64", "-M", "virt", "-cpu", "cortex-a72",
-              "-nographic", "-semihosting", "-kernel", ".../trapdemo.elf"]}
+```text
+trap demo: reading window[4] of 4
+error: trapdemo exited with status 134
 ```
 
 The language works as it does hosted, including guards, `stack` storage, records, sums, generics, traits, closures, `compact`, `reduce`, `derive wire`, `f32` and `f64`. The build refuses, by name and before a compiler runs, any function whose effect row needs a hosted runtime: `alloc`, `free`, `io`, `gpu_*`, `transfer:*`, `par:*` or `ffi:*`. `mmio_read`, `mmio_write` and `asm` stay available inside `unsafe`.

@@ -171,7 +171,7 @@ fn block_sums(n:usize, x:ro<u64>[n], g:usize, out:rw<u64>[g]) {
 
 ### Shape, barriers and warp operations
 
-Each side names up to three binders, fastest first. In `blocks bx, by in gx, gy threads tx, ty in 32, 8`, thread `(tx, ty)` is thread `tx + 32 * ty` of its block. The grid's extents are any `usize` values. The thread extents are literals or constants whose product is a whole number of warps, from 32 to 1024 threads (`E-COOP-SHAPE`).
+Each side names up to three binders, fastest first. In `blocks bx, by in gx, gy threads tx, ty in 32, 8`, thread `(tx, ty)` is thread `tx + 32 * ty` of its block. The grid's extents are any `usize` values, and block `(bx, by)` is block `bx + gx * by` of the launch: each block finds its names with a multiply-high and two shifts by a divider the launch makes once per extent, not with a 64-bit division. The thread extents are literals or constants whose product is a whole number of warps, from 32 to 1024 threads (`E-COOP-SHAPE`).
 
 A `shared` array is declared directly in the body, with a constant length. Each one starts on a 128-byte boundary, so a tensor core fragment may load from it ([numerics.md](numerics.md#tensor-core-fragments)). A block's shared arrays hold at most 48 KiB together (`E-COOP-SHARED`).
 
@@ -499,7 +499,7 @@ Queued work runs to completion at its `spawn`, in program order. That is one of 
 
 [`cairn validate --emulate`](tools.md#cairn-validate) tests a device implementation against its reference this way, and its evidence is `finite-tested-emulated`: finite testing of the host emulation, and never of the device. [`cairn tune`](tools.md#cairn-tune) chooses an implementation on that evidence only with `--accept-emulated`.
 
-Every record says the device work was emulated. The build receipt and the records of `cairn run`, `cairn test` and `cairn validate` carry `emulation`, with the target the program was judged against, and `cairn run` at a terminal prints the same note on standard error. An emulated result is evidence about the host, and never about a device. It does not time device code either: the lanes run on a few host threads, and each block's threads meet at operating system barriers, so a time the program prints measures those. [numerics.md](numerics.md#emulated-device-runs) says where an emulated result can differ from a device run.
+Every record says the device work was emulated. The build receipt and the records of `cairn run`, `cairn test` and `cairn validate` carry `emulation`, with the target the program was judged against, and `cairn run` prints the same note on standard error before the program starts. An emulated result is evidence about the host, and never about a device. It does not time device code either: the lanes run on a few host threads, and each block's threads meet at operating system barriers, so a time the program prints measures those. [numerics.md](numerics.md#emulated-device-runs) says where an emulated result can differ from a device run.
 
 ## What fast kernels use
 
@@ -580,7 +580,7 @@ A dtype is spelled as the benchmark or as CAIRN spells it, `bfloat16` or `bf16`,
 | a result for SOL-ExecBench, a destination for KernelBench, a returned value, a solution naming no definition | `E-HARNESS-FORMAT` |
 | a device target whose code does not load on the GPU the mapping names | `E-TARGET-MISMATCH` |
 
-The flags keep CAIRN's numerics. SOL-ExecBench compiles with `nvcc -O3 --use_fast_math` unless a solution says otherwise, so `compile_options` gives `nvcc -std=c++20 -O3 --fmad=false -arch=sm_100a --extended-lambda --expt-relaxed-constexpr -Xcompiler -ffp-contract=off,-fno-fast-math` for the device target, and `c++ -std=c++20 -O3 -ffp-contract=off -fno-fast-math` for the binding. GPU MODE and KernelBench pass the same flags to `load_inline`. Their Python files embed the export's sources one line per line and check each one's sha256 before the build.
+The flags keep CAIRN's numerics, and a loop the program may never leave. SOL-ExecBench compiles with `nvcc -O3 --use_fast_math` unless a solution says otherwise, so `compile_options` gives `nvcc -std=c++20 -O3 --fmad=false -arch=sm_100a --extended-lambda --expt-relaxed-constexpr -Xcompiler -ffp-contract=off,-fno-fast-math,-fno-finite-loops` for the device target, and `c++ -std=c++20 -O3 -ffp-contract=off -fno-fast-math -fno-finite-loops` for the binding. GPU MODE and KernelBench pass the same flags to `load_inline`. Their Python files embed the export's sources one line per line and check each one's sha256 before the build.
 
 Nothing here runs an evaluator, submits or opens a connection. The record lists the commands that would, for you to run: `sol-execbench PROBLEM --solution solution.json`, KernelBench's `scripts/run_and_check.py`, and `popcorn submit --mode test`, `benchmark`, `profile` or `leaderboard`. `popcorn submit --mode leaderboard` is a public ranked submission under your name on gpumode.com.
 

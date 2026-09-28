@@ -36,7 +36,7 @@ Start with `hello`, the smallest complete project, and `apps/kvstore`, the shape
 ## examples/hello
 
 ```sh
-cairn run  examples/hello     # "status": "program-exited", "exit_code": 0
+cairn run  examples/hello     # prints nothing and exits 0
 cairn test examples/hello     # "status": "passed-finite-tests", "cases": 81
 ```
 
@@ -45,7 +45,7 @@ cairn test examples/hello     # "status": "passed-finite-tests", "cases": 81
 ## examples/systems
 
 ```sh
-cairn run  examples/systems     # "status": "program-exited", "exit_code": 0
+cairn run  examples/systems     # exits 0
 cairn test examples/systems     # decimal_kind: 8 cases, sorted_even: 7 cases, both passed
 ```
 
