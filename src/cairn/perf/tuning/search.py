@@ -28,7 +28,7 @@
    Registers and shared memory then enter its price through occupancy.
 
 A budget bounds the whole search: `compiles` device compiles started, `seconds` of wall time, and `runs` timed runs
-(`perf/tuning/tune.py` times; device plans only under the owner's make target). The clock is read before every step. A
+(`perf/tuning/tune.py` times; device plans only under a device make target). The clock is read before every step. A
 compile or a timed run gets the time left as its limit and is stopped there with every process it started, and one
 is not started when less time is left than the shortest this search has seen. When compiles or runs follow, the
 candidates may take half of the time. What a spent budget left undone is counted in the answer, and a candidate
