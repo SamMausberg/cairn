@@ -26,6 +26,7 @@ COUNTER = (
 SUM = (
     "fn sum(n:usize, xs:ro<u64>[n]) -> u64 { let mut t:u64 = 0; for i in 0..n { t = add_wrap(t, xs[i]); } return t; }\n"
 )
+REPORT = "fn report(v:u8, seen:rw<u64>) { seen += u64(v); }\nfn sink(b:Buf[u8]) {}\n"
 TWO_TRAITS = (
     "trait A { fn go(self:ro<Self>) -> u64; }\ntrait B { fn go(self:ro<Self>) -> u64; }\nstruct S { v:u64; }\n"
     "impl A for S { fn go(self:ro<S>) -> u64 = 1; }\nimpl B for S { fn go(self:ro<S>) -> u64 = 2; }\n"
@@ -508,6 +509,40 @@ REJECTED = {
         "E-LEASED",
         FILL + PAIR + TWO_BUFFERS + "  let t = spawn fill(len(p.left), p.left, 0);\n"
         "  p.left = Buf[u64](2); wait(t); return 0; }",
+    ),
+    # A pending defer reads its arguments when its block ends, so what they name cannot move before then.
+    "a defer reading an element of an owner moved before it runs (use after free)": (
+        "E-LEASED",
+        REPORT + "fn main() -> i32 { let mut seen:u64 = 0; let b = Buf[u8](4); let k:usize = 2;\n"
+        "  if k < len(b) { defer report(b[k], seen); sink(b); } return i32(seen); }",
+    ),
+    "a defer reading a record whose Buf it measures, moved before it runs": (
+        "E-LEASED",
+        "struct Chart { rows:usize; price:Buf[f64][rows]; }\n"
+        "fn total(c:ro<Chart>, seen:rw<f64>) { for i in 0..c.rows { seen += c.price[i]; } }\nfn drop(c:Chart) {}\n"
+        "fn main() -> i32 { let mut seen:f64 = 0.0; { let a = Chart(4, Buf[f64](4)); defer total(a, seen); drop(a); }\n"
+        "  return 0; }",
+    ),
+    "a defer reading the owner its function returns (what it reads depends on copy elision)": (
+        "E-LEASED",
+        "fn count(n:usize, bytes:ro<u8>[n], seen:rw<u64>) { seen += u64(n); }\n"
+        "fn make(seen:rw<u64>, pick:bool) -> Buf[u8] { let a = Buf[u8](4); let b = Buf[u8](6);\n"
+        "  defer count(a, seen); if pick { return a; } return b; }",
+    ),
+    "a later defer moving what an earlier one reads, and so running first": (
+        "E-LEASED",
+        REPORT + "fn main() -> i32 { let mut seen:u64 = 0; let b = Buf[u8](4);\n"
+        "  { defer report(b[2], seen); defer sink(b); } return i32(seen); }",
+    ),
+    "a closure a defer passes, reading an owner moved before it runs": (
+        "E-LEASED",
+        "fn once(f:ro<fn(u64) -> u64>) -> u64 = f(0);\nfn sink(b:Buf[u64]) {}\n"
+        "fn main() -> i32 { let b = Buf[u64](4); { defer once(|x:u64| -> u64 { return b[1]; }); sink(b); } return 0; }",
+    ),
+    "a defer reading a record taken apart before it runs": (
+        "E-LEASED",
+        PAIR + "fn sum(p:ro<Pair>) -> u64 = p.left[0] + p.right[0];\n"
+        "fn main() -> i32 { let p = Pair(Buf[u64](1), Buf[u64](1)); { defer sum(p); let Pair(l, r) = p; } return 0; }",
     ),
 }
 

@@ -12,17 +12,18 @@ pub fn new[T:affine]() -> Vec[T]  // effects: alloc, free, trap, zero_init
 pub fn with_capacity[T:affine](capacity:usize) -> Vec[T]  // effects: alloc, free, trap, zero_init
 pub fn capacity[T:affine](v:ro<Vec[T]>) -> usize  // effects: read:v
 
-// Doubling keeps pushes amortized constant; elements move by swap, so owners are never copied.
-// effects: alloc, free, local_read, local_write, read:v, trap, write:v, zero_init
+// Doubling keeps pushes amortized constant; elements move by swap, so owners are never copied. Cost: one allocation,
+// and one pass over the elements held with no guard in it.
+// effects: alloc, ffi_precondition, free, local_read, local_write, read:v, trap, write:v, zero_init
 pub fn reserve[T:affine](v:rw<Vec[T]>, wanted:usize)
 
-// effects: alloc, free, local_read, local_write, read:v, trap, write:v, zero_init
+// effects: alloc, ffi_precondition, free, local_read, local_write, read:v, trap, write:v, zero_init
 pub fn push[T:affine](v:rw<Vec[T]>, item:T)
 
 pub fn pop[T:affine](v:rw<Vec[T]>) -> Option[T]  // effects: read:v, trap, write:v
 
 // Put `item` at `i` and move the tail up by one; an index past the end is a guard failure.
-// effects: alloc, diverge, free, local_read, local_write, read:v, trap, write:v, zero_init
+// effects: alloc, diverge, ffi_precondition, free, local_read, local_write, read:v, trap, write:v, zero_init
 pub fn insert[T:affine](v:rw<Vec[T]>, i:usize, item:T)
 
 // Take the element at `i` out and close the gap, keeping the order of the rest.
@@ -40,7 +41,7 @@ pub fn set[T:affine](v:rw<Vec[T]>, i:usize, item:T)  // effects: free, read:v, t
 pub fn clear[T:affine](v:rw<Vec[T]>)  // effects: free, read:v, trap, write:v
 
 // Append a view. Copying elements, so it instantiates only for copyable ones; an owner would have to be moved out of
-// the source view, which no borrow allows.
+// the source view, which no borrow allows. Cost: amortized one pass over `src`, one guard for the part it lands in.
 // effects: alloc, ffi_precondition, free, local_read, local_write, read:src, read:v, trap, write:v, zero_init
 pub fn extend_from[T:copy](v:rw<Vec[T]>, n:usize, src:ro<T>[n]@host)
 

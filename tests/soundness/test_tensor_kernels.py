@@ -6,7 +6,7 @@ over a swizzled tile. Both add a * b into c, as mma_unordered does. On the host 
 of the exact sum, measured here with Python's rationals, and equal the reference loop's bit for bit, since both add
 in increasing k; the shapes are generated, partial tiles in every direction included. The host run is a real one,
 each block's threads real threads, and runs again under the thread sanitizer. The device build is compiled for
-sm_120 and its SASS read, never run; the comparison on the device is `make gpu`'s.
+sm_120 and its SASS read, and for sm_90 and its PTX read, never run; the comparison on the device is `make gpu`'s.
 
 `transpose` is one logical operation through a shared tile stored three ways, row-major, padded and swizzled.
 """
@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from cairn.compiler.cairnc import compile_source
-from emitted import assembled, contract, library, ran_on_device, refused, run, sanitized, watched
+from emitted import assembled, contract, device_build, library, ran_on_device, refused, run, sanitized, watched
 from oracles.float_formats import f32
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -127,6 +127,16 @@ def test_each_kernel_compiles_for_sm_120_to_tensor_core_instructions(tmp_path, n
     compile_source((TENSOR / f"{name}.cairn").read_text() + DEVICE.replace("T", element).replace("NAME", name))
     sass, _ = assembled(tmp_path, cpp, timeout=900)
     assert re.search(rf"\b{re.escape(family)}\b", sass) and loads in sass
+
+
+@pytest.mark.parametrize(("name", "step"), [("tile64", "wmma.mma.sync"), ("tile32", "mma.sync.aligned.m16n8k16")])
+def test_each_kernel_keeps_its_fragment_steps_for_sm_90(tmp_path, name, step):
+    """CUDA 12.8 and 13.0 compile sm_90 with NVVM 7.0.1, which, while cr::trap() was noreturn there, deleted the
+    exit of tile64's first loop and everything after it, so on a GH200 the kernel trapped where no guard of the
+    source failed (tests/runtime/test_device_arithmetic.py has the loop alone). Compiled to PTX; nothing runs."""
+    cpp = compile_source((TENSOR / f"{name}.cairn").read_text())[0]
+    ptx = device_build(tmp_path, cpp, ptx=True, target="sm_90", timeout=900).read_text()
+    assert step in ptx
 
 
 @pytest.mark.parametrize("name", KERNELS)

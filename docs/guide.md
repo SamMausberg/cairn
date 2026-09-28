@@ -73,7 +73,7 @@ These are the refusals a first program meets most often, taken from the programs
 | `x as u64`, `i64::MIN`, `(a, b)` | `u64(x)`, `-9223372036854775808`, a `struct` | `E-PARSE` |
 | `add_wrap(x, y)` on `i64` | wrapping is unsigned only; test first, `y > 0 && x > MAX - y` | `E-WRAP-TYPE` |
 
-These are the library calls a program like this uses. `cairn doc --std --module std.text` prints the signatures of one module:
+These are the library calls a program like this uses. `cairn find parse integer` or `cairn find --takes 'ro<u8>[n]' --returns i64` names the call for a need the table leaves out, and `cairn doc --std --module std.text` prints the signatures of one module:
 
 | need | call |
 |---|---|
@@ -170,13 +170,13 @@ typed: 3 functions
 cairn run demo
 ```
 
-`run` builds a native executable in a fresh directory under `build/` and runs it with its data memory capped, at 1024 MiB unless `--memory-mib` says otherwise. At a terminal the program writes to the terminal, and `cairn` exits with the program's status:
+`run` builds a native executable in a fresh directory under `build/` and runs it with its data memory capped, at 1024 MiB unless `--memory-mib` says otherwise. The program writes to the terminal, or to the pipe an agent's shell reads, and `cairn` exits with the program's status:
 
 ```text
 average(10, 20) = 15
 ```
 
-Piped, the record carries what it printed:
+`cairn` itself writes only to standard error: a refusal, a failed build, or one line saying how the program ended when it did not exit 0, such as `error: demo was stopped by SIGABRT: a guard failed, or an allocation passed the 1024 MiB cap`. `--format json` prints the run's record instead, with what the program printed inside it:
 
 ```json
 {"status": "program-exited", "exit_code": 0, "stdout": "average(10, 20) = 15\n", "stderr": "",

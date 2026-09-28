@@ -1,8 +1,8 @@
 // Files and standard streams. A File is linear: the type system, not a convention, is what
 // closes a descriptor, and `defer close(f)` is the one idiom that survives an early `try`.
 // Errors are errno in an IoError, because CAIRN cannot express `int*` and the C library keeps
-// its error behind one. Cost: one syscall per call except `write` and `read_full`, which loop
-// until the kernel is done; nothing here buffers, so n bytes written is n bytes of syscall.
+// its error behind one. Cost: one syscall per call except `write`, `read_full` and the `_to_end` reads,
+// which loop until the kernel is done; nothing here buffers, so n bytes written is n bytes of syscall.
 module std.io;
 import std.core (Result);
 import std.sys;
@@ -117,18 +117,41 @@ pub fn rename(n:usize, from:ro<u8>[n], m:usize, to:ro<u8>[m]) -> Result[usize, I
   }
 }
 
-// Everything left to read, however it arrives: a pipe, a socket, /proc, a file whose size lies. Reads in
-// 4096-byte steps into the end of `into`, growing it as it goes; the count is what was added.
+// Everything left to read, however it arrives: a pipe, a socket, /proc, a file whose size lies. Each read
+// fills the room `into` has spare, and a full `into` doubles; the count is what was added.
+// Cost: after the first read, `f` is asked how much is left, so the rest of a regular file arrives in one
+// allocation; a pipe's `into` doubles as it fills. A read that fails first, such as a directory's
+// (EISDIR, 21), is returned before any size is asked, since ext4 gives a directory's end as 2^63 - 1.
 pub fn read_to_end(f:ro<File>, into:rw<Vec[u8]>) -> Result[usize, IoError] {
   let start = into.len;
+  let mut sized = false;
   while true {
-    vec.reserve(into, into.len + 4096);
+    if into.len == len(into.data) { vec.reserve(into, into.len + 4096); }
     let lo = into.len;
-    let got = try read(f, into.data[lo..lo + 4096]);
+    let got = try read(f, into.data[lo..len(into.data)]);
     if got == 0 { return Result.Ok(into.len - start); }
     into.len = lo + got;
+    if !sized {
+      sized = true;
+      let left = try remaining(f);
+      vec.reserve(into, into.len + left + 1); // the rest, and room for the read that finds the end
+    }
   }
   return Result.Ok(into.len - start);
+}
+
+// The bytes between where `f` stands and its end, or 0 when it has no end to ask for: a pipe, a
+// terminal, a /proc file. The position is put back, so nothing is read. Any seekable descriptor
+// answers, a directory too, so only a descriptor a read has worked on is asked.
+fn remaining(f:ro<File>) -> Result[usize, IoError] {
+  unsafe {
+    let here = sys.lseek(f.fd, 0, CUR);
+    if here < 0 { return Ok(0); }
+    let end = sys.lseek(f.fd, 0, END);
+    if end < 0 { return Ok(0); }
+    if sys.lseek(f.fd, here, SET) != here { return failed(); }
+    return Ok(usize(max(end, here) - here));
+  }
 }
 
 // The whole file, sized once and read in one pass; the Vec is exactly as large as the file.
@@ -170,6 +193,17 @@ pub fn print_i64(value:i64) {
   stack digits:u8[21] = zeroed;
   let used = text.write_i64(digits, value);
   put(1, digits[0..used]);
+}
+
+// All of standard input from where it stands, appended to `into` as read_to_end appends a file's; the
+// count is what was added, and standard input stays open.
+// Cost: after the first read, the rest of input redirected from a file arrives in one allocation, and a
+// pipe's `into` doubles as it fills.
+pub fn read_stdin_to_end(into:rw<Vec[u8]>) -> Result[usize, IoError] {
+  let stdin = File(0); // lent to read_to_end and taken apart again, never closed: the process owns it
+  let got = read_to_end(stdin, into);
+  let File(_) = stdin;
+  return got;
 }
 
 // One read from standard input: 0 at end of input, as `read` answers for a file.

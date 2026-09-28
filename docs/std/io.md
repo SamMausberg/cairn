@@ -2,7 +2,7 @@
 
 # std.io
 
-Files and standard streams. A File is linear: the type system, not a convention, is what closes a descriptor, and `defer close(f)` is the one idiom that survives an early `try`. Errors are errno in an IoError, because CAIRN cannot express `int*` and the C library keeps its error behind one. Cost: one syscall per call except `write` and `read_full`, which loop until the kernel is done; nothing here buffers, so n bytes written is n bytes of syscall.
+Files and standard streams. A File is linear: the type system, not a convention, is what closes a descriptor, and `defer close(f)` is the one idiom that survives an early `try`. Errors are errno in an IoError, because CAIRN cannot express `int*` and the C library keeps its error behind one. Cost: one syscall per call except `write`, `read_full` and the `_to_end` reads, which loop until the kernel is done; nothing here buffers, so n bytes written is n bytes of syscall.
 
 ```cairn
 pub struct IoError { code:i32; }
@@ -58,10 +58,13 @@ pub fn remove(n:usize, path:ro<u8>[n]@host) -> std.core.Result[usize, std.io.IoE
 // effects: ffi:__errno_location, ffi:rename, ffi_precondition, io, mmio, read:from, read:to, trap
 pub fn rename(n:usize, from:ro<u8>[n]@host, m:usize, to:ro<u8>[m]@host) -> std.core.Result[usize, std.io.IoError]
 
-// Everything left to read, however it arrives: a pipe, a socket, /proc, a file whose size lies. Reads in 4096-byte
-// steps into the end of `into`, growing it as it goes; the count is what was added.
-// effects: alloc, diverge, ffi:__errno_location, ffi:read, ffi_precondition, free, io, local_read, local_write, mmio,
-// read:f, read:into, trap, write:into, zero_init
+// Everything left to read, however it arrives: a pipe, a socket, /proc, a file whose size lies. Each read fills the
+// room `into` has spare, and a full `into` doubles; the count is what was added. Cost: after the first read, `f` is
+// asked how much is left, so the rest of a regular file arrives in one allocation; a pipe's `into` doubles as it fills.
+// A read that fails first, such as a directory's (EISDIR, 21), is returned before any size is asked, since ext4 gives a
+// directory's end as 2^63 - 1.
+// effects: alloc, diverge, ffi:__errno_location, ffi:lseek, ffi:read, ffi_precondition, free, io, local_read,
+// local_write, mmio, read:f, read:into, trap, write:into, zero_init
 pub fn read_to_end(f:ro<std.io.File>, into:rw<std.vec.Vec[u8]>) -> std.core.Result[usize, std.io.IoError]
 
 // The whole file, sized once and read in one pass; the Vec is exactly as large as the file.
@@ -79,6 +82,13 @@ pub fn print_u64(value:u64)
 
 // effects: diverge, ffi:write, ffi_precondition, io, local_read, local_write, stack_storage, trap, zero_init
 pub fn print_i64(value:i64)
+
+// All of standard input from where it stands, appended to `into` as read_to_end appends a file's; the count is what was
+// added, and standard input stays open. Cost: after the first read, the rest of input redirected from a file arrives in
+// one allocation, and a pipe's `into` doubles as it fills.
+// effects: alloc, diverge, ffi:__errno_location, ffi:lseek, ffi:read, ffi_precondition, free, io, local_read,
+// local_write, mmio, read:into, trap, write:into, zero_init
+pub fn read_stdin_to_end(into:rw<std.vec.Vec[u8]>) -> std.core.Result[usize, std.io.IoError]
 
 // One read from standard input: 0 at end of input, as `read` answers for a file.
 // effects: ffi:__errno_location, ffi:read, ffi_precondition, io, mmio, trap, write:into

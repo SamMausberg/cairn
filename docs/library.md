@@ -12,9 +12,9 @@ A guard is a check the compiled code makes before an operation, such as an index
 
 | Module | What it is for | Allocates |
 | --- | --- | --- |
-| `std.core` | `Option`, `Result`, and the traits `Ord`, `Eq` and `Hash` | no |
+| `std.core` | `Option`, `Result`, the traits `Ord`, `Eq` and `Hash`, and each integer type's limits | no |
 | `std.vec` | `Vec[T]`, a growable array that owns its elements | yes |
-| `std.text` | integers to and from bytes, comparison, search, hashing | only `push_u64`, `push_i64` |
+| `std.text` | integers to and from bytes, ASCII classes of a byte, comparison, search, hashing | only `push_u64`, `push_i64` |
 | `std.fmt` | integers, hex, padding and floats in exact fixed point, appended to a `Vec[u8]` | yes |
 | `std.io` | open files, standard streams, a monotonic clock | only `read_file`, `read_to_end` |
 | `std.fs` | files by path, with no NUL to write | only `read` |
@@ -78,6 +78,8 @@ fn main() -> i32 {
 
 `std.core` implements `Ord` and `Eq` for every integer type, `Eq` for `bool`, and `Hash` for the unsigned integers. For a type of your own, write an `impl` or generate one with [std.derived](#stdderived). Every trait member is `pure`, so an implementation of `less` that prints is refused with `E-EFFECT-CEILING`.
 
+`std.core` also names each integer type's least and greatest value, from `U8_MAX` to `USIZE_MAX` and from `I8_MIN` to `I64_MAX`, so `if total > U64_MAX - x { ... }` tests an add before it traps. Import them by name, as `import std.core (Option, U64_MAX);`, or import the module, `import std.core;`, and write `core.U64_MAX`.
+
 ## std.vec
 
 `Vec[T]` is a growable array that owns its elements. Its declaration is `struct Vec[T:affine] { data:Buf[T]; len:usize; lends data[0..len]; }`. Where a function expects a view, a `Vec` passes its first `len` elements, as [memory.md](memory.md#arrays-views-and-parts) explains, and a `for` loop walks them.
@@ -100,40 +102,34 @@ fn main() -> i32 {
 }
 ```
 
-When a `Vec` runs out of room, its capacity doubles and its elements move with `swap`, so an owner is never copied and `push` costs amortized O(1). `pop` and `remove` move an element out as an `Option[T]`. `get` takes only copyable elements, and `set` takes any. Both trap on an index at or past `len`.
+When a `Vec` runs out of room, its capacity doubles and its elements move with `swap`, so an owner is never copied and `push` costs amortized O(1). The move is one pass over two views of the same extent, so no index in it is guarded, and `extend_from` copies a view into one part. `pop` and `remove` move an element out as an `Option[T]`. `get` takes only copyable elements, and `set` takes any. Both trap on an index at or past `len`.
 
 ## std.text
 
-`std.text` turns numbers into bytes and back, and searches bytes the way a line protocol needs. A function cannot return a borrow, so a search returns an index, and you pass the part `s[lo..hi]` on yourself.
+`std.text` turns numbers into bytes and back, and walks and searches bytes the way a line protocol needs. A function cannot return a borrow, so a search returns an index, and a walk sets the bounds `lo..hi` of the next piece in a `Cursor`. You pass the part `s[lo..hi]` on yourself, and nothing is copied.
 
 ```cairn
-import std.core (Option, Result);
+import std.core (Result);
 import std.text as text;
-
-// The decimal field that starts at `from` and ends at the next comma or at the end of the line.
-fn field(n:usize, line:ro<u8>[n], from:usize) -> Result[u64, text.ParseError] {
-  match text.find_byte(n, line, 44, from) {
-    Some(at) => return text.parse_u64(at - from, line[from..at]);
-    None => return text.parse_u64(n - from, line[from..n]);
-  }
-}
 
 fn main() -> i32 {
   let line = "23,19,x9";
-  match field(line, 0) {
-    Ok(value) => { if value != 23 { return 1; } }
-    Err(_) => return 2;
-  }
-  match field(line, 6) {
-    Ok(_) => return 3;
-    Err(why) => {
-      match why {
-        Invalid(at) => { if at != 0 { return 4; } }   // offset of the byte at fault
-        Overflow(_) => return 5;
-        Empty => return 6;
+  let mut total:u64 = 0;
+  let mut f = text.cursor();
+  while text.next_field(line, ',', f) {                  // f.lo..f.hi: 23, then 19, then x9
+    match text.parse_u64(line[f.lo..f.hi]) {
+      Ok(value) => total += value;
+      Err(why) => {
+        match why {
+          Invalid(at) => { if f.lo + at != 6 { return 1; } }   // the byte at fault, counted in the part
+          Overflow(_) => return 2;
+          Empty => return 3;
+        }
       }
     }
   }
+  if total != 42 { return 4; }
+  match text.parse_fixed("12.5", 2) { Ok(cents) => { if cents != 1250 { return 5; } } Err(_) => return 6; }
   stack out:u8[4] = zeroed;
   let used = text.write_hex(out, 48879, 4);             // a call that writes gets its own statement
   if used != 4 || out[0] != 98 { return 7; }            // "beef"
@@ -141,7 +137,11 @@ fn main() -> i32 {
 }
 ```
 
-The `write_` functions write into storage you pass and return the number of bytes they used, or 0 when the value does not fit. The `push_` functions append to a `Vec[u8]`, so they allocate. A parser that fails reports the offset of the byte at fault. `hash_bytes` is FNV-1a.
+`next_line` gives each line without its `\n` or `\r\n`, `next_word` each run of bytes that are not white space, and `next_field` each piece between separators, empty ones included. `parse_fixed(s, places)` reads a decimal such as `12.50` as a whole number of hundredths when `places` is 2.
+
+The `write_` functions write into storage you pass and return the number of bytes they used, or 0 when the value does not fit. The `push_` functions append to a `Vec[u8]`, so they allocate. A parser that fails reports the offset of the byte at fault, and `parse_u64` takes digits alone, with no sign and no spaces. `hash_bytes` is FNV-1a.
+
+`is_digit`, `is_alpha`, `is_alnum`, `is_upper`, `is_lower` and `is_space` class one byte as C's `<ctype.h>` does in the "C" locale, so a byte above 127 is in no class, and `to_lower` and `to_upper` change the case of a letter and leave every other byte alone.
 
 ## std.fmt
 
@@ -228,7 +228,7 @@ fn main() -> i32 {
 
 `close` returns nothing, because a function that consumes a linear value cannot return a status. If you need one, report it through a borrow.
 
-A path in `std.io` ends in a NUL byte, because C reads a pointer and no length; [std.fs](#stdfs) takes paths without one. `read` is one system call and returns 0 at the end of the file. `read_full` and `write` loop until the kernel has done all of it. Nothing here buffers. For output, the [print builtins](language.md#print-and-format) usually serve.
+A path in `std.io` ends in a NUL byte, because C reads a pointer and no length; [std.fs](#stdfs) takes paths without one. `read` is one system call and returns 0 at the end of the file. `read_full` and `write` loop until the kernel has done all of it. After its first read, `read_to_end` asks the file how much is left, so the rest of a regular file arrives in one allocation and a pipe's `Vec` doubles as it fills; a directory fails that read with EISDIR (21) before any size is asked. `read_stdin_to_end(input)` reads standard input the same way and leaves it open. Nothing here buffers. For output, the [print builtins](language.md#print-and-format) usually serve.
 
 ## std.fs
 

@@ -146,12 +146,26 @@ def place(c: Checker, e: Expr, write: bool = False) -> Type:
         if carrier:  # len(c.price) == c.rows holds of every value, so neither half moves on its own.
             fail("E-EXTENT-FIELD", f"{e.val} takes part in the declared extent of {at.name}.{carrier}; "
                  "assign, take or swap the whole record.", e)  # fmt: skip
-        ty = c.expr(e, consume=False)
+        resolved(c, e.args[0])
+        ty = c.expr(e, consume=False)  # reads the field, and so looks at its base again
         c.reaching -= reached
         if reached and outer:  # A new value in this cell replaces what a lease of its elements holds.
             c.leased(c.where(e), "rw" if write else "ro", e, elements=write)
         return ty
     fail("E-LVALUE", "Assignment requires a mutable variable, field, or rw element.", e)
+
+
+def resolved(c: Checker, e: Expr):
+    """Each call in `e`, a place just checked, typed ahead as `Checker.peek` types an argument: a second look at the
+    place meets the call again, and a call is resolved once, since its resolution replaces what the parser wrote in
+    its `ref`. The index around it is looked at again, as it always was."""
+    stack = [e]
+    while stack:
+        x = stack.pop()
+        if x.tag == "call":
+            c.early[id(x)] = x
+        else:
+            stack += x.args
 
 
 def stable(c: Checker, name: str) -> bool:
@@ -220,6 +234,11 @@ def consume(c: Checker, e: Expr):
             fail("E-MOVED", f"{e.val} was already moved or scheduled for cleanup.", e)
         if c.env[e.val].ty.mode != "value":
             fail("E-MOVE-BORROW", f"{e.val} is borrowed; take() or swap() its contents instead.", e)
+        if e.val in c.holds:  # statements.s_defer: the pending call would read what the move leaves behind
+            line = c.holds[e.val]
+            fail("E-LEASED", f"{e.val} is read by the defer at line {line} when its block ends, so it cannot move "
+                 "before then: make that call before the move, or bind what it reads to a local first.", e,
+                 deferred_at=line)  # fmt: skip
         c.moved.add(e.val)
         e.ref = "move"
     elif e.tag == "index" or (e.tag == "field" and not isinstance(e.ref, tuple)):  # Enum.None is a value.

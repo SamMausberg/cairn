@@ -88,16 +88,16 @@ fn main() -> i32 {
 LOOP = """\
 1. Write the program. One file with `fn main() -> i32` runs as is; `cairn new NAME` makes a project (a data-only `cairn.toml`, `src/`, a test).
 2. Run `cairn check PATH --format json` until its `status` is `typed`. A refusal gives a `code`, a line and a column, the `card` that states its rule (`cairn rules CODE` prints it) and, when the compiler can state one, a `repair_hint`; `further` lists every other refusal the check could judge on its own, so fix them all before checking again. Change the code the rule is about. Never widen an effect ceiling, turn `ro` into `rw`, add `unsafe` or delete a check to get past a refusal.
-3. `cairn run PATH < input` builds and runs, with arguments after `--`; `--sanitize address` or `--sanitize thread` runs the build a sanitizer checks. `cairn test PATH` runs every `test` block in a process of its own.
+3. `cairn run PATH < input` builds and runs, with arguments after `--`: its output and exit status are the program's, and what `cairn` adds goes to standard error. `--sanitize address` (with undefined behaviour and leaks) or `--sanitize thread` runs the build a judge runs. `cairn test PATH` runs every `test` block in a process of its own.
 4. For speed, read costs instead of guessing (`cairn explain PATH`, `cairn predict PATH`), then leave the function as the reference and write an implementation beside it, `fn g(...) implements f when COND { }`, which `cairn validate` holds to the reference and `cairn tune` selects ([implementations](cards/implementations.md)); a design CAIRN cannot say is a foreign implementation ([foreign](cards/foreign.md)), never a slower or narrower workaround. `cairn mcp` serves the same to an agent without a shell.
 
-`cairn --help` lists every command, and a command that reports prints JSON when piped."""
+`cairn --help` lists every command, and piped, every command but `run` prints a JSON record."""
 
 AVOID = """\
 - Habits from Rust or C++: no `&`/`&mut`, lifetimes, `::` paths, `as` casts (write `u64(x)`), tuples (a `struct`), tail-expression returns, or `if` and `match` as values (`let mut x = b; if c { x = a; }`). `impl` is only `impl Trait for T`; `value.f(args)` calls a plain `fn f(v, args)` from the type's module. Text is `ro<u8>[n]` or `Vec[u8]`, never a `String`.
 - An integer literal is a `u64` unless something expects another type: `let mut i:usize = 0;` for an index. A signed minimum is a literal, `-9223372036854775808`.
 - A `Buf[T](n)` is `len(b)` long, which the checker does not tie to `n`: pass `f(b)` and the call supplies `len(b)`, or pass the part `b[0..n]`. A part `xs[lo..hi]` is written only as a call's argument. A `Vec`'s length is `v.len` and its elements `v.data[i]`.
-- Invented libraries: only what a file declares, the builtins the cards name and the `std.*` modules exist; `cairn doc --std --module std.text` prints one module's signatures.
+- Invented libraries: only what a file declares, the builtins the cards name and the `std.*` modules exist; `cairn find parse integer` or `cairn find --takes 'ro<u8>[n]' --returns i64` names the function to call, and `cairn doc --std --module std.text` prints one module.
 - Guessing a fix: each diagnostic code has one rule behind it, and its card says what that rule accepts."""
 
 

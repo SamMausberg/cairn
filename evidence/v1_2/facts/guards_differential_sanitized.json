@@ -1,0 +1,40 @@
+{
+ "seed": 20260922,
+ "sizes": [
+  0,
+  1,
+  2,
+  5
+ ],
+ "k": [
+  "0",
+  "1",
+  "3",
+  "7",
+  "18446744073709551614",
+  "18446744073709551615"
+ ],
+ "compilers": {
+  "clang++": {
+   "programs": 1864,
+   "refused_by_checker": 136,
+   "discharged": 4606,
+   "cases": 178944,
+   "mismatches": 0,
+   "counterexamples": []
+  },
+  "g++": {
+   "programs": 1864,
+   "refused_by_checker": 136,
+   "discharged": 4606,
+   "cases": 178944,
+   "mismatches": 0,
+   "counterexamples": []
+  }
+ },
+ "sanitized": [
+  "clang++",
+  "g++"
+ ],
+ "status": "agreed"
+}
