@@ -137,6 +137,25 @@ def test_a_refusal_states_the_fix_the_compiler_knows(case):
     assert taught(refused("E-TYPE-MISMATCH", source))["repair_hint"] == hint
 
 
+def test_a_hint_takes_the_place_of_the_data_it_states():
+    """The binding a literal's type came from, the builtin an import hid and the names a close one was taken from are
+    said once, by the hint. Without a close name the names stay, since the reader chooses among them."""
+    from emitted import refused
+
+    literal = taught(refused("E-TYPE-MISMATCH", STATED["an unannotated literal's u64: the annotation"][0]))
+    assert "literal_binding" not in literal and {"expected_type", "actual_type"} <= set(literal)
+    hidden = taught(refused("E-TYPE-MISMATCH", STATED["an import by name that hides a builtin: its name"][0]))
+    assert not {"hides_builtin", "callee"} & set(hidden) and "std.io.println" in hidden["repair_hint"]
+    close = taught(refused("E-UNBOUND", "fn f(total:u64) -> u64 = totl;\n"))
+    assert close["repair_hint"] == "Did you mean total?" and "available_names" not in close
+    far = taught(refused("E-UNBOUND", "fn f(total:u64) -> u64 = zzz;\n"))
+    assert far["repair_hint"] == HINTS["E-UNBOUND"] and "total" in far["available_names"]
+    compared = refused(
+        "E-TYPE-MISMATCH", "fn f(b:bool) -> bool = b;\nfn main() -> i32 { let x = 0; f(x); return 0; }\n"
+    )
+    assert taught(compared)["literal_binding"] == compared["literal_binding"]  # the hint does not state it
+
+
 def test_a_literal_binding_where_no_number_is_expected_gets_that_type_s_hint():
     from emitted import refused
 
