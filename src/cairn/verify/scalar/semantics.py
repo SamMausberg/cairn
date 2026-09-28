@@ -289,13 +289,30 @@ def equivalent(reference: str, candidate: str, symbol: str, *, assume: str = "tr
                             terms.append(f"(bvule {n} {top})")
                 return conj(*terms)
 
+            def fits(result) -> bool:
+                """Whether the solver's own witness lends every view and owner MAX_REPLAY elements or fewer, all that
+                `small` asks of the inputs. A returned owner's length is not an input, so a function that returns one
+                always asks again."""
+                if owned(rf.ret):
+                    return False
+                try:
+                    inputs(result)
+                except Unsupported:
+                    return False
+                return True
+
             def shown(stage, assertion, result):
-                """Inputs a caller can rerun: with storage in play, ask again within the replay budget, then in the
-                smallest numbers of WITNESS_BOUNDS the solver finds quickly."""
-                if small != "true":
+                """Inputs a caller can rerun, or why there are none: with storage in play, the solver's own witness
+                when it fits the replay budget, else one asked for within it; then the smallest numbers of
+                WITNESS_BOUNDS the solver finds quickly. A narrowing query that does not answer takes away no witness
+                that fits, and is never reported as having found none."""
+                if small != "true" and not fits(result):
                     result = run(stage + "-storage", conj(assertion, small))
+                    if result["status"] == "unsat":
+                        return f"No counterexample lends {MAX_REPLAY} elements or fewer."
                     if result["status"] != "sat":
-                        return None
+                        why = result["reason"]
+                        return f"Z3 did not decide whether a counterexample lends {MAX_REPLAY} elements or fewer: {why}"
                 if modest(1) != "true":
                     with Solver(min(timeout_ms, WITNESS_MS)) as quick:
                         for bound in WITNESS_BOUNDS:
@@ -307,7 +324,7 @@ def equivalent(reference: str, candidate: str, symbol: str, *, assume: str = "tr
             def witnessed(stage, assertion, result) -> dict:
                 """The counterexample field of a receipt, when inputs a caller can rerun were found."""
                 witness = shown(stage, assertion, result) if result["status"] == "sat" else None
-                return {"counterexample": witness} if witness is not None else {}
+                return {"counterexample": witness} if isinstance(witness, dict) else {}
 
             if domain.defined != "true":
                 trapping = conj(formed, neg(domain.defined))
@@ -374,8 +391,8 @@ def equivalent(reference: str, candidate: str, symbol: str, *, assume: str = "tr
             if r["status"] != "sat":
                 return finish("unknown", reason="Equivalence solver did not decide the obligation.")
             args = shown("equivalence", conj(admitted, mismatch), r)
-            if args is None:
-                return finish("unknown", reason=f"No counterexample lends {MAX_REPLAY} elements or fewer.")
+            if isinstance(args, str):
+                return finish("unknown", reason=args)
             expected = Concrete(refs).outcome(symbol, args)
             actual = Concrete(cands).outcome(symbol, args)
             if assume != "true":
