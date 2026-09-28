@@ -65,7 +65,7 @@ Each cut, and what it kept:
 |---|---|---|
 | piped records are one compact line (#141) | the indentation, 8% to 36% of each record | every field; a terminal that asks for JSON still gets it indented |
 | the check record (#146) | an accepted check's project receipt, three SHA-256 digests; the data a refusal's hint states in words | the verdict and counts, `formal_status`; every code, line, message, card and hint, `expected_type` and `actual_type`, the available names when no close one exists |
-| build, run and test (#147) | the build's hashes, compiler version and time, which `receipt.json` keeps; empty streams and zero statuses; a failed assert's stderr when it is its reason | the status, command, artifact and directory the eval judge reads; every failure's reason and output |
+| build, run and test (#147) | the build's hashes, compiler version and time, which `receipt.json` keeps; empty streams and zero statuses; a failed assert's stderr when it is its reason | the status, command and directory the eval judge reads, and the artifact; every failure's reason and output |
 | MCP (#148) | hint data the MCP check merged back; terms repeated on every further refusal; cards the edit host already sent | the refusal as the command line gives it, with its line of source; every card once |
 | `cairn explain` (#149) | 48 library functions the program imports, unless named; runtime loop paths into a deleted directory | the program's own functions, each library call under `costly_calls`, every loop verdict |
 
