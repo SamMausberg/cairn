@@ -57,6 +57,7 @@ template<class T, std::size_t S, std::size_t D> class Stages {
 public:
   CR_HD explicit Stages(unsigned char* memory) noexcept : base_(reinterpret_cast<T*>(memory)) {}
   // The next stage receives from[start .. start + count) and zeros past count; each thread copies its own elements.
+  CR_EITHER
   template<class Block> CR_HD void fill(Block& block, const T* from, std::size_t length, std::size_t start,
                                         std::size_t count) noexcept {
     if(count > S || start > length || count > length - start) trap();
@@ -67,6 +68,7 @@ public:
     ++filled_;
   }
   // The oldest stage in flight has landed, in every thread; at most PENDING later fills stay in flight.
+  CR_EITHER
   template<std::size_t PENDING, class Block> CR_HD const T* wait(Block& block) noexcept {
     block.template drain<PENDING>();
     block.sync();
@@ -175,7 +177,8 @@ template<class Context, class Fire> inline void queue_then(Context& ctx, Fire fi
 }
 }  // namespace cr::coop
 
-#if !defined(__CUDA_ARCH__)
+// The host lowering. nvcc's device pass parses host functions too, so a program with device work that also runs a
+// region on host threads needs these declared there as well, though only its host pass compiles them.
 #include <barrier>
 #include <memory>
 #include <pthread.h>
@@ -335,7 +338,6 @@ inline void run_then(std::size_t grid, F body, G finish) noexcept {
 }
 
 }  // namespace cr::coop
-#endif
 
 #if defined(__CUDACC__)
 #include <cuda_pipeline.h>

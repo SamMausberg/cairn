@@ -110,7 +110,7 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::run`, i
 
 | Header in `runtime/` | Owns |
 |---|---|
-| `cairn_runtime.hpp` | the guards (checked arithmetic, bounds, entry checks) and the scoped scalar buffer; every guard can be called on the host and on the device |
+| `cairn_runtime.hpp` | the guards (checked arithmetic, bounds, entry checks) and the scoped scalar buffer; every guard can be called on the host and on the device, and below sm_100 the device compiler is not told that a failed guard's trap ends the thread, since NVVM 7.0.1 deleted loop exits around one it was told of |
 | `cairn_owners.hpp` | the movable zeroed `Buf`, `Defer`, borrowed callables, checked parts |
 | `cairn_parallel.hpp` | the host lane pool with its pooled reduction and its scan in two passes, `Mutex` and `Atomic` with explicit orders; it includes `cairn_tasks.hpp` |
 | `cairn_tasks.hpp` | the crew of reusable task threads, linear tasks, task groups with a bounded ring of completions |
@@ -235,7 +235,7 @@ These scripts write under `results/`, which is not tracked, one subdirectory per
 | `checks` | formatting, lint and types; a stale API reference; the examples, certificates and scalar equivalence | ubuntu-24.04 | 1 min |
 | `tests`, four parts | the whole suite under the runner's Clang 18, GCC 13 and Python 3.12 | ubuntu-24.04 | 4 to 6 min |
 | `proofs` | the Lean build, its axiom audit, and the differential runs against the checker | ubuntu-24.04 | 2 min |
-| `device`, four | device code nvcc refuses: under CUDA 12.9 and 13.2, each with g++ and with clang++ as nvcc's host compiler, every test that compiles device code, and every device example built for sm_80, sm_90a, sm_100a and sm_120 | ubuntu-24.04 | 12 to 15 min |
+| `device`, four | C++ nvcc refuses: under CUDA 12.9 and 13.2, each with g++ and with clang++ as nvcc's host compiler, every test that compiles device code, every example, documented program and std module compiled for sm_120 as a device program's host code would be (`tests/projects/test_nvcc_accepts.py`), and every device example built for sm_80, sm_90a, sm_100a and sm_120 | ubuntu-24.04 | 12 to 15 min |
 | `compilers`, two | runtime headers and emitted C++ another compiler refuses or builds differently: the runtime, soundness, project and language tests under GCC 11 and Clang 13, the oldest supported, and under GCC 15 and Clang 23 | ubuntu-22.04, ubuntu-26.04 | 9 to 11 min |
 | `python`, three | the compiler, the agent layer, the tools and the verifiers under Python 3.11, 3.13 and 3.14 | ubuntu-24.04 | 6 to 8 min |
 | `arm` | an AArch64 host: the runtime, soundness and project tests, and the freestanding image under `qemu-system-aarch64`, which must run rather than skip | ubuntu-24.04-arm | 6 min |

@@ -316,7 +316,7 @@ class Concrete:
             elif s.tag == "match":
                 subject = self.expr(s.exprs[0], env, stack)
                 arm = next((a for a, v in zip(s.arms, s.ref, strict=True) if v == subject.get("variant")), None)
-                if arm is None:  # The emitted switch sends a tag no case names to `default: cr::trap()`.
+                if arm is None:  # The emitted switch's default arm traps on a tag no variant names.
                     raise ConcreteTrap("unmatched-tag")
                 if arm.binder:
                     env[arm.binder] = subject["value"]

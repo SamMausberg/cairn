@@ -310,6 +310,18 @@ fn main() -> i32 { let lease = acquire(7); if true { release(lease); } return 0;
 lease is consumed on some paths only.
 ```
 
+The deferred call reads its arguments when it runs, not where `defer` is written. It sees every write made before then: to a counter it is lent, to an element, or to an owner through `take`, `swap` or `=`. A local the call names cannot move until its block ends (`E-LEASED`), since the call would read what the move left behind. To keep a value as it was, bind it to a local and defer the call on that.
+
+```cairn rejects E-LEASED
+fn report(v:u8, seen:rw<u64>) { seen += u64(v); }
+fn sink(b:Buf[u8]) {}
+fn main() -> i32 { let mut seen:u64 = 0; let b = Buf[u8](4); { defer report(b[2], seen); sink(b); } return 0; }
+```
+
+```text
+b is read by the defer at line 3 when its block ends, so it cannot move before then: make that call before the move, or bind what it reads to a local first.
+```
+
 ## Effects
 
 Every function has an effect row: the set of things it may do when it runs, such as allocate, write through a borrow, start a thread or abort on a failed guard. The row is the function's own effects joined with its callees' rows, where each callee's reads and writes of its parameters are renamed to the caller's arguments: if `fill` writes its parameter `out`, the call `fill(frame)` writes `frame`. A row says what may happen. It says nothing about what the function computes. `cairn doc` prints the row beside each function it documents, and the build receipt lists every function's row under `functions.<name>.effects`.
@@ -470,7 +482,7 @@ fn reversed(n:usize, out:rw<u32>[n]@device, xs:ro<u32>[n]@device) {
 }
 ```
 
-The target is `ptx`, `x86_64` or `aarch64`. PTX runs only in device code, a device lane or a `kernel fn`, and names the GPU architecture it needs: `sm_75` runs on sm_75 and later, `sm_90a` only on sm_90a, and `sm_100f` on the sm_100 family from sm_100 on. A build for a [device target](tools.md#the-device-target) that does not meet the need is refused, and an nvcc run for another architecture stops at the statement. Host assembly runs only in host code. The checker accepts `x86_64` and `aarch64` assembly on a machine of either family, and a build on a host of the other family refuses it. PTX outside device code, host assembly in device code, and a build for a host family or a device target that the assembly does not match are each `E-ASM-TARGET`.
+The target is `ptx`, `x86_64` or `aarch64`. PTX runs only in device code, a device lane or a `kernel fn`, and names the GPU architecture it needs: `sm_75` runs on sm_75 and later, `sm_90a` only on sm_90a, and `sm_100f` on the sm_100 family from sm_100 on. A build for a [device target](devices.md#the-device-target) that does not meet the need is refused, and an nvcc run for another architecture stops at the statement. Host assembly runs only in host code. The checker accepts `x86_64` and `aarch64` assembly on a machine of either family, and a build on a host of the other family refuses it. PTX outside device code, host assembly in device code, and a build for a host family or a device target that the assembly does not match are each `E-ASM-TARGET`.
 
 Operands are numbered as written, outputs first. The template names every one of them, `%0`, `%1`, with `%%` for a literal percent sign and, on a host, one modifier letter, as in `%k0` (`E-ASM-OPERANDS`). The type chooses the register class. On x86-64 and AArch64 an integer takes a general register and a float a vector register. In PTX, `u16` and `i16` take `h`, integers of 32 bits `r`, integers of 64 bits and `usize` `l`, `f32` `f` and `f64` `d`. A `bool`, a storage float, a record, or a `u8` in PTX has no class (`E-ASM-CONSTRAINT`). `out name:T` binds a fresh immutable local after the statement, and `out name:T = e` starts it at `e`. `clobbers(rax, rdx)` names the host registers the instructions write besides their outputs (`E-ASM-CLOBBER`).
 
