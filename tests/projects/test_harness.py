@@ -281,7 +281,7 @@ def test_a_device_solution_compiles_for_its_target_and_binds_the_torch_stream(tm
     solution = json.loads((out / "solution.json").read_text())
     options = solution["spec"]["compile_options"]
     assert "-arch=sm_100a" in options["cuda_cflags"] and "--fmad=false" in options["cuda_cflags"]
-    assert options["cuda_cflags"][-2:] == ["-Xcompiler", "-ffp-contract=off,-fno-fast-math"]
+    assert options["cuda_cflags"][-2:] == ["-Xcompiler", "-ffp-contract=off,-fno-fast-math,-fno-finite-loops"]
     assert solution["spec"]["target_hardware"] == ["B200", "LOCAL"]
     glue = next(s["content"] for s in solution["sources"] if s["path"] == "main.cpp")
     assert "cq_axpy(static_cast<void*>(at::cuda::getCurrentCUDAStream().stream()), p_n" in glue
