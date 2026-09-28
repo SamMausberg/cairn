@@ -288,7 +288,7 @@ def test_the_command_records_beside_the_manifest_unless_told_not_to(tmp_path, ca
     kept = tmp_path / "kept"
     assert main(["tune", str(source), "--symbol", "spread", "--at", "n=1e6", "--history", str(kept),
                  "--budget-seconds", "60", "--format", "json"]) == 0  # fmt: skip
-    assert '"schema": "cairn.tune/2"' in capsys.readouterr().out
+    assert json.loads(capsys.readouterr().out)["schema"] == "cairn.tune/2"
     assert [r["kind"] for r in History(kept).records("spread")] == ["attempt"]
     assert main(["tune", str(source), "--symbol", "spread", "--at", "n=1e6", "--format", "json"]) == 0
     assert [r["kind"] for r in History(tmp_path / ".cairn" / "history").records("spread")] == ["attempt"]

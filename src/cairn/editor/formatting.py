@@ -10,7 +10,6 @@ token stream and its comments are exactly the ones it was given.
 from __future__ import annotations
 
 import difflib
-import json
 from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
@@ -18,6 +17,7 @@ from pathlib import Path
 from ..compiler.syntax.lexing import IDENT, RESERVED, TOKEN, lex
 from ..compiler.syntax.parser import PREC
 from ..compiler.syntax.tree import Diagnostic
+from . import terminal
 
 WIDTH = 100
 STEP = "  "
@@ -353,5 +353,5 @@ def format_paths(paths: list[Path], check: bool = False, diff: bool = False) -> 
     if diff:
         print("".join(chunks), end="")
     else:
-        print(json.dumps(report, indent=2))
+        print(terminal.record(report))
     return 1 if failed or (changed and (check or diff)) else 0
