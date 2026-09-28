@@ -3,7 +3,8 @@
 
 The generator writes functions of one shape, `gN(n, m, k, x:ro<u64>[n], y:ro<u64>[m]) -> u64`, out of statements
 that stress what guard elision reasons about: early returns, branches, `&&` and `||` conditions, immutable `let`s,
-owners replaced by assignment, narrowing conversions, parts with their extents left out or written as `hi - lo`, and
+owners replaced by assignment, narrowing conversions, parts with their extents left out or written as `hi - lo`,
+products by a constant, quotients `let q = a / C` and the multiples of `C` below them, sums taken apart again, and
 arithmetic next to the largest usize. Each batch is emitted twice, once as the compiler emits it and once with
 `keep_guards`, which writes every guard, and both are built with clang++ under AddressSanitizer and
 UndefinedBehaviorSanitizer (and, with `--gcc`, with g++). A driver runs every function on every input of a grid that
@@ -44,6 +45,30 @@ CONDITIONS = ["i < m", "i + 1 < n", "k < n", "i > 0 && i < m", "!(i >= m)", "i <
               "a < n", "a > 0 && a - 1 < n", "k < n && k + 1 < n", "n > 0"]  # fmt: skip
 LETS = ["n - k", "k + 1", "min(n, k)", "m / 2", "n - m", "k % n", "n", "m - 1", "k * 2"]
 NARROW = ["u32(k)", "u8(n)", "u16(k % 65536)", "u32(a)", "u8(i & 255)", "u8(i)", "u64(u32(n))"]
+DIVIDENDS = ["n", "m", "k", "a", "n + m", "k + 3", "n - 1"]
+DIVISORS = ["1", "2", "3", "4", "8", "256"]
+
+
+def scaled(rng: random.Random, view: str) -> str:
+    """A product by a constant, a quotient and the multiples of its divisor below it, or a sum taken apart again, each
+    in a block of its own so that a body may hold several; `k` next to the largest usize makes each one trap."""
+    c, src, choice = rng.choice(DIVISORS), rng.choice(DIVIDENDS), rng.random()
+    if choice < 0.45:  # j < q = src / c, so j * c + (c - 1) < src when nothing else is known
+        off = rng.choice(["0", "1", f"{c} - 1", c, "j", "a"])
+        use = rng.choice([f"{view}[j * {c} + {off}]", f"{view}[{off} + {c} * j]"])
+        return f"{{ let q = {src} / {c}; for j in 0..q {{ t = add_wrap(t, {use}); }} }}"
+    if choice < 0.6:
+        off = rng.choice(["0", f"{c} - 1", c])
+        return f"{{ let q = {src} / {c}; for j in 0..min(q, 6) {{ t = add_wrap(t, u64(j * {c} + {off})); }} }}"
+    if choice < 0.75:  # w = src * c traps near the largest usize; j < src makes j * c + (c - 1) at most w - 1
+        off = rng.choice(["0", f"{c} - 1", c])
+        return (f"{{ let w = {src} * {c}; for j in 0..min({src}, 6) {{ t = add_wrap(t, u64(j * {c} + {off})); }} "
+                f"t = add_wrap(t, u64(w)); }}")  # fmt: skip
+    if choice < 0.85:
+        return f"t = add_wrap(t, u64({rng.choice(['k', 'a', 'n', 'm'])} * {c}));"
+    left, right = rng.choice(["a", "k", "n", "1", "m"]), rng.choice(["k", "n", "m", "2"])
+    back = rng.choice([right, f"({right} + 1)", left])  # s >= right, from either side; s >= right + 1 is not known
+    return f"{{ let s = {left} + {right}; t = add_wrap(t, u64(s - {back})); }}"
 
 
 def statement(rng: random.Random, depth: int = 0) -> str:
@@ -63,13 +88,15 @@ def statement(rng: random.Random, depth: int = 0) -> str:
         call = rng.choice([f"total({base}[{lo}..{hi}])", f"total({hi} - {lo}, {base}[{lo}..{hi}])"])
         guard = rng.choice(["", f"if {hi} > len({base}) {{ return 5; }} ", f"if {lo} > {hi} {{ return 6; }} "])
         return f"{guard}t = add_wrap(t, {call});"
-    if choice < 0.65:
+    if choice < 0.6:
         return f"t = add_wrap(t, u64({rng.choice(NARROW)}));"
-    if choice < 0.75:
+    if choice < 0.72:
+        return scaled(rng, view)
+    if choice < 0.8:
         return f"if {rng.choice(CONDITIONS).replace('i', 'a')} {{ t = add_wrap(t, {view}[a]); }}"
-    if choice < 0.85:
+    if choice < 0.87:
         return f"if a < {rng.choice(['n', 'm'])} && {view}[a] > 3 {{ t = add_wrap(t, 1); }}"
-    if choice < 0.93:
+    if choice < 0.94:
         return (f"let mut d = Buf[u64]({rng.choice(['n', 'm', '1'])}); d = Buf[u64]({rng.choice(['n', 'm', '0'])}); "
                 f"t = add_wrap(t, d[{rng.choice(['a', 'k', '0'])}]);")  # fmt: skip
     if depth < 1:

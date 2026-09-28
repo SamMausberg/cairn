@@ -1,7 +1,7 @@
 """A guard is left out of the emitted C++ only where the checker established that it cannot fail.
 
 `compiler/check/facts.py` records what a loop, a lane, a `let`, a condition or an early exit says about usize values, and
-lowering drops an index, `+`, `-` or conversion guard whose condition follows. These tests hold both halves: the
+lowering drops an index, `+`, `-`, `x * C` or conversion guard whose condition follows. These tests hold both halves: the
 guard goes where its condition holds, and it stays on every counterexample. The last test checks the emitted code
 against an evaluator written here, over generated programs, under AddressSanitizer: a guard dropped wrongly shows
 up as a missing trap or a sanitizer report.
@@ -22,6 +22,7 @@ GUARDS = {
     "at": r"\bcr::at\(",
     "add": r"\bcr::add<",
     "sub": r"\bcr::sub<",
+    "mul": r"\bcr::mul<",
     "convert": r"\bcr::convert<",
     "shr": r"\bcr::shr<",
 }
@@ -66,10 +67,6 @@ ESTABLISHED = {
         "fn f(c:ro<Col>) -> u64 { let mut t:u64 = 0; for i in 0..c.rows { t = add_wrap(t, c.price[i]); } return t; }"
     ),
     "small_conversion": "fn f(n:usize, out:rw<u32>[n]) { for i in 0..min(n, 4096) { out[i] = u32(i); } }",
-    "scaled_row": (
-        "fn f(k:usize) -> u64 {\n  let rows = k * 256;\n  buffer p:u64[rows] = zeroed;\n"
-        "  for b in 0..k { let row = b * 256; for v in 0..256 { p[row + v] = u64(v); } }\n  return u64(k);\n}"
-    ),
     "constant_shift": "fn f(v:u64) -> u64 = mul_wrap(v ^ shr(v, 29), 3);",
     "static_array": "fn f() -> u64 { let a = Array[u64, 8](); let mut t:u64 = 0; each i in 8 { t = add_wrap(t, a[i]); } return t; }",
     "and_then": "fn f(n:usize, x:ro<u64>[n], k:usize) -> bool = k < n && x[k] > 3;",
@@ -79,6 +76,11 @@ ESTABLISHED = {
         "fn f(n:usize, out:rw<u64>[n], x:ro<u64>[n]) -> usize {\n"
         "  let used = compact out for i in n where i + 1 < n yield x[i + 1];\n  return used;\n}"
     ),
+    "quotient": (  # k < n / 256 gives k * 256 + 255 < n: no multiply, sum or index guard is left
+        "fn f(n:usize, x:ro<u64>[n]) -> u64 {\n  let steps = n / 256;\n  let mut t:u64 = 0;\n"
+        "  for k in 0..steps { for j in 0..256 { t = add_wrap(t, x[k * 256 + j]); } }\n  return t;\n}"
+    ),
+    "either_side": "fn f(i:usize, k:usize) -> usize { if i < 16 && k < 16 { let s = i + k; return s - k; } return 0; }",
 }
 
 
@@ -128,7 +130,30 @@ KEPT = {
     "wide_conversion": ("fn f(k:usize) -> u32 { return u32(k); }", {"convert": 1}),
     "uncomputed_product": (
         "fn f(k:usize, b:usize) -> usize { if b < k { let r = b * 4; return r + 4; } return 0; }",
-        {"add": 1},
+        {"add": 1, "mul": 1},
+    ),
+    "unbounded_product": ("fn f(k:usize) -> usize { return k * 4; }", {"mul": 1}),
+    "scaled_row": (  # rows = k * 256 keeps its guard, and b < k makes b * 256 + v at most rows - 1
+        "fn f(k:usize) -> u64 {\n  let rows = k * 256;\n  buffer p:u64[rows] = zeroed;\n"
+        "  for b in 0..k { let row = b * 256; for v in 0..256 { p[row + v] = u64(v); } }\n  return u64(k);\n}",
+        {"mul": 1},
+    ),
+    "divided_by_a_name": (
+        "fn f(n:usize, d:usize, out:rw<usize>[1]) { if d > 0 { let q = n / d; for k in 0..q { out[0] = k * 4; } } }",
+        {"mul": 1},
+    ),
+    "another_divisor": (
+        "fn f(n:usize, out:rw<usize>[1]) { let q = n / 3; for k in 0..q { out[0] = k * 4; } }",
+        {"mul": 1},
+    ),
+    "past_the_quotient": (
+        "fn f(n:usize, x:ro<u64>[n]) -> u64 { let q = n / 4; let mut t:u64 = 0; "
+        "for k in 0..q { t = add_wrap(t, x[k * 4 + 4]); } return t; }",
+        {"at": 1},
+    ),
+    "sum_one_more": (
+        "fn f(i:usize, k:usize) -> usize { if i < 16 && k < 16 { let s = i + k; return s - (k + 1); } return 0; }",
+        {"sub": 1},
     ),
     "counted_shift": ("fn f(v:u64, s:usize) -> u64 = shr(v, s);", {"shr": 1}),
     "unbounded_sum": ("fn f(k:usize) -> usize { return k + 1; }", {"add": 1}),
@@ -180,6 +205,45 @@ def test_a_kept_guard_still_traps_natively_and_a_dropped_one_computes_the_same(t
     )
     cpp = compile_source(source)[0]
     assert "cr::at(v_x, (v_k - v_n), v_n)" in cpp  # k >= n makes k - n safe, and says nothing of k - n < n.
+    exe = build(tmp_path, cpp, *sanitized(cxx), cxx=cxx)
+    assert subprocess.run([exe], capture_output=True).returncode == -signal.SIGABRT
+
+
+QUOTIENTS = """
+fn tiles(n:usize, x:ro<u64>[n]) -> u64 {
+  let steps = n / 4;
+  let mut t:u64 = 0;
+  for k in 0..steps { for j in 0..4 { t = add_wrap(t, x[k * 4 + j]); } }
+  return t;
+}
+fn past(n:usize, x:ro<u64>[n]) -> u64 {
+  let steps = n / 4;
+  let mut t:u64 = 0;
+  for k in 0..steps { t = add_wrap(t, x[k * 4 + 4]); }
+  return t;
+}
+fn scaled(k:usize) -> usize = k * 4;
+"""
+SCALED_MAIN = """
+fn main() -> i32 {
+  let n:usize = 10;
+  buffer x:u64[n] = zeroed;
+  for i in 0..n { x[i] = u64(i); }
+  if tiles(n, x) != 28 || past(9, x[0..9]) != 12 || scaled(3) != 12 { return 1; }
+  return i32(LAST);
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+@pytest.mark.parametrize("last", ["past", "scaled"])
+def test_a_quotient_and_a_product_keep_the_guards_that_can_fail_natively(tmp_path, cxx, last):
+    """`tiles` loses every guard and sums x[0..8]; `past` keeps the index guard that fails at k * 4 + 4 = 8 when n is 8,
+    and `scaled` the multiply guard that fails at 2^62 * 4. Each program ends in one of the two traps."""
+    assert guards(QUOTIENTS, "tiles") == {} and guards(QUOTIENTS, "past") == {"at": 1}
+    assert guards(QUOTIENTS, "scaled") == {"mul": 1}
+    ending = {"past": "past(8, x[0..8])", "scaled": "scaled(4611686018427387904)"}[last]
+    cpp = compile_source(QUOTIENTS + SCALED_MAIN.replace("LAST", ending))[0]
     exe = build(tmp_path, cpp, *sanitized(cxx), cxx=cxx)
     assert subprocess.run([exe], capture_output=True).returncode == -signal.SIGABRT
 

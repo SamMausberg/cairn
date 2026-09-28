@@ -104,7 +104,7 @@ sqrt takes f32 or f64, not u64.
 
 ### Guards the compiler leaves out
 
-The compiler leaves a guard out where the checker has shown that it cannot fail. Inside `for i in 0..n`, `parallel i in n` or a `reduce` over `n`, the index `x[i]` needs no bounds check when `x` is a view whose extent, the length written in its type, is `n`, and `i + 1` needs no overflow check. The same holds for `x[k]` after `if k >= n { return 0; }`, for `x[i - 1]` under `if i > 0`, for a bin `usize(v & 255)` into 256 counters, and for `x[k]` on the right of `k < n && x[k] > 3`.
+The compiler leaves a guard out where the checker has shown that it cannot fail. Inside `for i in 0..n`, `parallel i in n` or a `reduce` over `n`, the index `x[i]` needs no bounds check when `x` is a view whose extent, the length written in its type, is `n`, and `i + 1` needs no overflow check. The same holds for `x[k]` after `if k >= n { return 0; }`, for `x[i - 1]` under `if i > 0`, for a bin `usize(v & 255)` into 256 counters, and for `x[k]` on the right of `k < n && x[k] > 3`. After `let steps = n / 256`, `x[k * 256 + t]` inside `for k in 0..steps`, with `t` below 256 and `x` of extent `n`, needs no guard on the multiply, the sum or the index, since the quotient times its divisor is at most `n`.
 
 The checker takes these facts from the index a loop binds, the index a lane binds (a lane runs one index of a `parallel` region, [concurrency.md](concurrency.md#parallel-regions)), immutable `let` bindings, conditions, early exits and the `where` test of a `compact` ([concurrency.md](concurrency.md#reduce-and-compact)). Each fact is about `usize` values that cannot change, and a `let mut` local never supplies one. A part `x[lo..hi]` loses its guard once `lo <= hi <= len(x)` is established.
 
