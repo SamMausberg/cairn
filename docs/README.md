@@ -32,7 +32,7 @@ Each reference page gives every rule with a program the compiler accepts and one
 
 ## Trust and internals
 
-- [verification.md](verification.md): see what each Lean proof covers (the collector, ownership and leases, task groups, the lane pool, guard elision, layouts and the phase rule), what SMT source equivalence, `cairn diff` and `cairn validate` establish, and what each test covers and leaves out; then a table of every feature and what it has shown: compiled, run on a CPU or a GPU, sanitizer-tested, measured.
+- [verification.md](verification.md): see what you trust and what checks each part, what each Lean proof covers (the collector, ownership and leases, task groups, the lane pool, guard elision, layouts and the phase rule), what SMT source equivalence, `cairn diff` and `cairn validate` establish, and what each test covers and leaves out; then a table of every feature and what it has shown: compiled, run on a CPU or a GPU, sanitizer-tested, measured.
 - [internals.md](internals.md): learn the compiler's stages, which file owns which rule, the test layers, continuous integration, what an accepted program promises, and how a release is cut.
 
 ## Plans

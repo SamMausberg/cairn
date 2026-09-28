@@ -23,8 +23,12 @@ MACHINES = {"x86_64": "x86-64", "AMD64": "x86-64", "aarch64": "armv8-a", "arm64"
 ARCHS = {"baseline", *(arch for family in FAMILIES.values() for arch in family)}
 KINDS = {"library", "exe"}
 
-# Strict floating point and no unwinding are part of the language contract.
-STRICT = ["-std=c++20", "-O3", "-ffp-contract=off", "-fno-fast-math", "-fno-exceptions", "-fno-rtti"]
+# Strict floating point and no unwinding are part of the language contract. So is a loop that never ends: C++ lets a
+# compiler assume every loop without I/O, volatile or atomic accesses ends, and GCC and Clang both deleted a `while`
+# loop CAIRN runs forever, so -fno-finite-loops (GCC 10, Clang 12) takes that assumption away. nvcc's device pass has
+# no such option; a device `while` loop keeps itself (CR_PROGRESS in runtime/cairn_runtime.hpp).
+STRICT = ["-std=c++20", "-O3", "-ffp-contract=off", "-fno-fast-math", "-fno-finite-loops", "-fno-exceptions"]
+STRICT += ["-fno-rtti"]
 WARNINGS = ["-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-Wno-unused-variable"]
 WARNINGS += ["-Wno-unused-but-set-variable"]
 # nvcc's own front end makes every warning an error too, but for the two WARNINGS lets pass, since CAIRN accepts a
@@ -198,15 +202,15 @@ def nvcc_flags(device: DeviceTarget) -> list[str]:
 
 def extension_flags(device: DeviceTarget | None) -> dict[str, list[str]]:
     """What a PyTorch extension build (torch.utils.cpp_extension, as SOL-ExecBench, GPU MODE and KernelBench run it)
-    adds for a CAIRN program and its binding: the language standard and the numerical contract, on the host and, for
-    `device`, in nvcc with one -arch. torch puts -std=c++17 before these, which the later -std overrides, and adds no
-    architecture once a flag names one. Exceptions and RTTI stay on, as pybind11 and the binding's checks need them;
+    adds for a CAIRN program and its binding: the language standard, the numerical contract and loops that may not end,
+    on the host and, for `device`, in nvcc with one -arch. torch puts -std=c++17 before these, which the later -std
+    overrides, and adds no architecture once a flag names one. Exceptions and RTTI stay on, as pybind11 and the binding's checks need them;
     nothing in the runtime throws. Warnings are not errors here: torch's headers are not CAIRN's to hold to them."""
     host = [f for f in STRICT if f not in {"-fno-exceptions", "-fno-rtti"}]
     if device is None:
         return {"cflags": host, "cuda_cflags": [], "ld_flags": []}
-    numerics = [f for f in host if f.startswith(("-ffp-contract", "-fno-fast-math"))]
-    return {"cflags": host, "cuda_cflags": [*nvcc_flags(device), "-Xcompiler", ",".join(numerics)], "ld_flags": []}
+    kept = [f for f in host if f.startswith(("-ffp-contract", "-fno-fast-math", "-fno-finite-loops"))]
+    return {"cflags": host, "cuda_cflags": [*nvcc_flags(device), "-Xcompiler", ",".join(kept)], "ld_flags": []}
 
 
 def unit_commands(cxx: str, arch: str | None, kind: str) -> tuple[list[str], list[str]]:

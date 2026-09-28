@@ -10,6 +10,7 @@ from typing import Any
 from ...verify.elision import audit
 from ...version import VERSION
 from ..check.checking import Checker
+from ..check.effects import cyclic
 from ..check.expressions import COMPARISONS
 from ..cooperative import cooperative, pipelines
 from ..device import fragments, launches, layouts
@@ -61,7 +62,10 @@ def demangled(symbol: str, names: Collection[str]) -> str | None:
 
 
 def bare(condition: str) -> str:
-    """Drop one redundant outer pair of parentheses, only when the first really closes at the end."""
+    """Drop one redundant outer pair of parentheses, only when the first really closes at the end and does not open a
+    statement expression, `({ ... })`, which needs both."""
+    if condition.startswith("({"):
+        return condition
     depth = 0
     for i, c in enumerate(condition):
         depth += (c == "(") - (c == ")")
@@ -378,9 +382,15 @@ class Emitter:
             return self.invoke(e, e.ref)
         kind = e.ref[0]
         if kind == "dispatch":  # receiver.vt->member(receiver.self, the other arguments...)
-            receiver = self.expr(e.args[e.ref[3]]) + (".view()" if e.args[e.ref[3]].ty.name == "Dyn" else "")
-            rest = [self.expr(a) for i, a in enumerate(e.args) if i != e.ref[3]]
-            return f"{receiver}.vt->m{e.ref[2]}({', '.join([receiver + '.self', *rest])})"
+            at, bound = e.ref[3], ""
+            receiver = self.expr(e.args[at])
+            if e.args[at].tag != "name":  # Anything but a local runs once, and what it made lives until the call ends.
+                name = self.fresh("cr_self_")[0]
+                bound, receiver = f"auto&& {name} = {receiver}; ", name
+            receiver += ".view()" if e.args[at].ty.name == "Dyn" else ""
+            rest = [self.expr(a) for i, a in enumerate(e.args) if i != at]
+            call = f"{receiver}.vt->m{e.ref[2]}({', '.join([receiver + '.self', *rest])})"
+            return f"({{ {bound}{call}; }})" if bound else call
         if kind == "shared":  # receiver.op(values..., memory orders...)
             texts = [self.expr(a) for a in e.args]
             orders = {i for i, a in enumerate(e.args) if a.ty.name == "Order"}
@@ -509,6 +519,8 @@ class Emitter:
 
     def function(self, f: Function):
         self.f = f
+        if cyclic(self.c, f.name):  # a call that may never return stays in the device code (cairn_runtime.hpp)
+            self.put("CR_PROGRESS();")
         for n, t in f.params:
             if t.mode == "value" and isinstance(self.c.layouts.get(t), dict):
                 tag = f"static_cast<std::uint32_t>(v_{n})" if t.name in self.p.enums else f"v_{n}.tag"
@@ -670,12 +682,15 @@ class Emitter:
                 found |= self.controls(nested(s))
         return found
 
-    def loop(self, head: str, s: Stmt, index: int):
-        """A switch must not intercept break/continue, so loop control uses compiler-owned labels."""
+    def loop(self, head: str, s: Stmt, index: int, endless: bool = False):
+        """A switch must not intercept break/continue, so loop control uses compiler-owned labels. An `endless` loop,
+        one that may never end, opens with CR_PROGRESS, so the device code keeps it too (cairn_runtime.hpp)."""
         controls = self.controls(s.body)
 
         def body():
             self.loops.append(index)
+            if endless:
+                self.put("CR_PROGRESS();")
             if controls:
                 self.nest("{", lambda: self.block(s.body))
                 if "continue" in controls:
@@ -689,7 +704,7 @@ class Emitter:
             self.put(f"cr_break_{index}: ;")
 
     def s_while(self, s: Stmt, es: list[str]):
-        self.loop(f"while ({bare(es[0])}) {{", s, self.fresh("")[1])
+        self.loop(f"while ({bare(es[0])}) {{", s, self.fresh("")[1], endless=True)
 
     def s_if(self, s: Stmt, es: list[str]):
         self.nest(f"if ({bare(es[0])}) {{", lambda: self.block(s.body), None if s.other else "}")

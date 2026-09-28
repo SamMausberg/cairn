@@ -27,6 +27,7 @@ SUM = (
     "fn sum(n:usize, xs:ro<u64>[n]) -> u64 { let mut t:u64 = 0; for i in 0..n { t = add_wrap(t, xs[i]); } return t; }\n"
 )
 REPORT = "fn report(v:u8, seen:rw<u64>) { seen += u64(v); }\nfn sink(b:Buf[u8]) {}\n"
+TREE = "struct Tree { kids:Buf[Tree]; val:u64; }\n"
 TWO_TRAITS = (
     "trait A { fn go(self:ro<Self>) -> u64; }\ntrait B { fn go(self:ro<Self>) -> u64; }\nstruct S { v:u64; }\n"
     "impl A for S { fn go(self:ro<S>) -> u64 = 1; }\nimpl B for S { fn go(self:ro<S>) -> u64 = 2; }\n"
@@ -543,6 +544,35 @@ REJECTED = {
         "E-LEASED",
         PAIR + "fn sum(p:ro<Pair>) -> u64 = p.left[0] + p.right[0];\n"
         "fn main() -> i32 { let p = Pair(Buf[u64](1), Buf[u64](1)); { defer sum(p); let Pair(l, r) = p; } return 0; }",
+    ),
+    # A place exchanged with one inside it, or assigned from the value it lies in, would hold itself.
+    "a swap of a tree and its own child (an ownership cycle LeakSanitizer reports)": (
+        "E-ALIAS",
+        TREE + "fn main() -> i32 { let mut t = Tree(Buf[Tree](2), 1); t.kids[0] = Tree(Buf[Tree](1), 2);\n"
+        "  swap(t, t.kids[0]); return i32(t.val); }",
+    ),
+    "a swap of an element and its child, at an index that may be the same": (
+        "E-ALIAS",
+        TREE + "fn main() -> i32 { let mut b = Buf[Tree](2); b[0] = Tree(Buf[Tree](1), 2); let i:usize = 0;\n"
+        "  swap(b[i].kids[0], b[0]); return 0; }",
+    ),
+    "a tree assigned into its own child (an ownership cycle LeakSanitizer reports)": (
+        "E-ALIAS",
+        TREE + "fn main() -> i32 { let mut t = Tree(Buf[Tree](2), 1); t.kids[0] = t; return 0; }",
+    ),
+    "a child assigned from a call the tree moved into": (
+        "E-ALIAS",
+        TREE + "fn keep(t:Tree) -> Tree = t;\n"
+        "fn main() -> i32 { let mut t = Tree(Buf[Tree](2), 1); t.kids[0] = keep(t); return 0; }",
+    ),
+    "two tickets swapped, which leaves each lease with the other task (invalid C++)": (
+        "E-PINNED",
+        FILL + "fn nothing() {}\nfn main() -> i32 { let mut xs = Buf[u64](8); let mut a = spawn fill(len(xs), xs, 0);\n"
+        "  let mut b = spawn nothing(); swap(a, b); wait(a); xs[0] = 7; wait(b); return 0; }",
+    ),
+    "a mutex taken out of its place (invalid C++)": (
+        "E-PINNED",
+        "fn main() -> i32 { let mut m = Mutex[u64](1); let x = take(m); return 0; }",
     ),
 }
 
