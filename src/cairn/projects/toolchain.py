@@ -31,9 +31,14 @@ STRICT = ["-std=c++20", "-O3", "-ffp-contract=off", "-fno-fast-math", "-fno-fini
 STRICT += ["-fno-rtti"]
 WARNINGS = ["-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-Wno-unused-variable"]
 WARNINGS += ["-Wno-unused-but-set-variable"]
-# nvcc's own front end makes every warning an error too, but for the two WARNINGS lets pass, since CAIRN accepts a
-# local the program never reads: one declared and never read (177), and one set and never read (550).
-DEVICE_WARNINGS = ["-Werror", "all-warnings", "-diag-suppress", "177,550"]
+# CAIRN also accepts what a C++ compiler calls pointless and warns about: a local assigned to itself (clang's
+# -Wself-assign), a value compared with itself, and an unsigned value compared with a bound its type decides, as
+# `w < 0` is (g++'s -Wtype-limits). Each means in C++ what it means in CAIRN, so a program that checks builds. GCC
+# ignores -Wno-self-assign, which it does not know.
+WARNINGS += ["-Wno-self-assign", "-Wno-tautological-compare", "-Wno-type-limits"]
+# nvcc's own front end makes every warning an error too, but for what WARNINGS lets pass: a local declared and never
+# read (177), one set and never read (550), and an unsigned value compared with zero (186).
+DEVICE_WARNINGS = ["-Werror", "all-warnings", "-diag-suppress", "177,550,186"]
 # `--sanitize`: a host build checked while it runs, as the 1.1 evaluation judged programs: -O1 with frame pointers so a
 # report has its stack, every report fatal, and no -Werror, since such a build is run, never shipped.
 SANITIZERS = {"address": ["-fsanitize=address,undefined", "-fno-sanitize-recover=all"], "thread": ["-fsanitize=thread"]}
