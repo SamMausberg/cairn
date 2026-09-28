@@ -10,7 +10,7 @@ In C a function that takes an array takes a pointer and a length, and nothing st
 
 A view borrows the elements of an array. `ro<T>[n]` borrows `n` elements to read, and `rw<T>[n]` borrows them to read and write. `ro<T>` and `rw<T>` borrow one value, which the callee uses like the value itself.
 
-A borrow argument names a place: something that holds a value and can be assigned or lent, such as a local (`frame`), a field (`f.body`) or an element (`xs[i]`). An `ro<T>` parameter also accepts a temporary, such as `1 + 2`. An `rw` parameter and a view of an array need a place, or a string literal for an `ro<u8>[n]` (`E-CALL-VIEW`).
+A borrow argument names a place: something that holds a value and can be assigned or lent, such as a local (`frame`), a field (`f.body`) or an element (`xs[i]`). An `ro<T>` parameter also accepts a temporary, such as `1 + 2`. An `rw` parameter and a view of an array need a place, or a string literal for an `ro<u8>[n]` (`E-CALL-VIEW`). A view is not one value: passing `xs` where one is expected, as an `ro<T>`, `rw<T>` or `ro<dyn Trait>` parameter, a function value's parameter or `Dyn[Trait](...)`, is `E-TYPE-MISMATCH`, and an element, `xs[i]`, fits.
 
 The extent of a view is the length in its type, `n` in `ro<u8>[n]`. An extent is a literal, a constant or an earlier immutable `usize` parameter (`E-EXTENT`), and `len(view)` reads it.
 
