@@ -1,6 +1,6 @@
 # The first device session on a GH200
 
-The suite's device tests ran on a Hopper GPU for the first time on 28 September 2026, through two runs of `make gpu`'s test half. The first, at `dda8208`, failed three tests, and each failure was a defect: a miscompiled kernel, a test built for the wrong GPU, and a Compute Sanitizer result read wrongly. The second, at `449189b`, `main` after the five fixes this session made, passed every test it ran. Nothing was timed.
+The suite's device tests ran on a GH200 on 28 September 2026, through two runs of `make gpu`'s test half. It was the first device run on a Hopper GPU since the 0.8.0 to 0.8.2 records, and so the first there for every device feature added after 0.8.3. The first, at `dda8208`, failed three tests, and each failure was a defect: a miscompiled kernel, a test built for the wrong GPU, and a Compute Sanitizer result read wrongly. The second, at `449189b`, `main` after the five fixes this session made, passed every test it ran. Nothing was timed.
 
 ## The machine
 
