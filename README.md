@@ -43,7 +43,9 @@ Each of these is refused before the program runs, under a stable diagnostic code
 - touching data a running task still holds (`E-LEASED`), using a value after it moved (`E-MOVED`), passing one array as two mutable borrows (`E-ALIAS`)
 - a function doing something its signature does not allow, such as allocating memory or spawning a task inside `pure` code (`E-EFFECT-CEILING`)
 
-Integer overflow, division by zero and out-of-bounds indexing are checked at run time instead, by guards the compiler writes into the program and leaves out only where it can show they cannot fail. A failed guard aborts the program before the operation it guards. Inside a GPU kernel it traps the kernel and poisons the device context, so nothing queued after it runs and no copy can read what the kernel wrote. A CAIRN program then aborts at its next wait ([devices.md](docs/devices.md#one-wait-or-none)). That device path is tested under `--emulate`, and a guard failing on a GPU has not been run since 0.8.3.
+Integer overflow, division by zero and out-of-bounds indexing are checked at run time instead, by guards the compiler writes into the program and leaves out only where it can show they cannot fail. A failed guard aborts the program before the operation it guards.
+
+Inside a GPU kernel a failed guard traps the kernel and poisons the device context, so nothing queued after it runs and no copy can read what the kernel wrote. A CAIRN program then aborts at its next wait ([devices.md](docs/devices.md#one-wait-or-none)). That device path is tested under `--emulate`, and a guard failing on a GPU has not been run since 0.8.3.
 
 ## The same rules on the CPU
 
@@ -102,7 +104,7 @@ The compiler's answers are meant to be acted on without reading the manual. One 
 
 Every function has an inferred effect row, the list of what it may do, such as `alloc`, `spawn`, `io`, `write:out` or `trap`. `cairn doc` prints it, and a signature can cap it, so an edit that adds an allocation where none was allowed is refused.
 
-Two commands answer what the 1.1 evaluation's subjects spent requests looking for. `cairn find` names the functions to call, given words or the types of the values in hand, and `cairn run --sanitize address` or `--sanitize thread` builds and runs a program under that sanitizer in one command.
+Two commands answer what agents in the [1.1 evaluation](#agents) spent requests looking for. `cairn find` names the functions to call, given words or the types of the values in hand, and `cairn run --sanitize address` or `--sanitize thread` builds and runs a program under that sanitizer in one command.
 
 A slow function stays as the reference, and a faster version is written beside it as an implementation: `fn g(...) implements f when n % 4 == 0 { ... }`. `cairn validate` tests it against the reference on generated edge cases, and `cairn tune` chooses among validated implementations and plans, which change how a region runs without changing its result, within compile and run budgets. `cairn diff OLD NEW` gives each function of two versions a class: identical code; SMT-equivalent, where Z3 found no input that tells the two apart within the fragment it models; changed, with an input that shows the difference; or unknown, which is never counted as unchanged.
 
@@ -194,7 +196,7 @@ The compiler is not proved correct. The Lean proofs in `proofs/` cover models wr
 
 The suite builds accepted programs under Clang and GCC and runs them under the address, leak, undefined-behaviour and thread sanitizers. Adversarial reviews have found accepted programs that should have been refused, and each one found is kept as a test in `tests/soundness/`. [verification.md](docs/verification.md#what-you-trust) says what you trust and what checks each part, and what each proof, model and test leaves out.
 
-SMT equivalence covers a fragment of the language. An owner inside a record or an array, concurrency, device memory, the foreign boundary, storage floats and loops it cannot bound are `unknown`, and `unknown` is never reported as success. `cairn validate` is finite testing on generated inputs, against a reference compiled by the same compiler.
+SMT equivalence covers a fragment of the language that leaves out, among other things, concurrency, device memory, the foreign boundary and storage floats. What falls outside it is `unknown`, which is never reported as success. `cairn validate` is finite testing on generated inputs, against a reference compiled by the same compiler.
 
 ### Devices
 
@@ -206,7 +208,7 @@ The three tests that trap on purpose were left out. The fourth needs Compute San
 
 In the preregistered CPU suite, on one x86-64 machine with 16 threads, host `parallel` regions ran level with OpenMP and oneTBB at equal guards and worker counts. A float dot product, which CAIRN folds in the written order on one thread, ran at 0.4 to 0.5 times the speed of theirs ([evidence/v1_0/bench](evidence/v1_0/bench/README.md)).
 
-Device kernels were timed on the RTX 5070 Ti alone, against CUDA written by hand for the same computations. Through the `cq_` entry, saxpy ran level with it, and a reduction with 16-byte loads and a transpose within 3 percent. A layer norm, a cooperative stencil and a reduction with scalar loads took 11 to 26 percent longer, for the checked index arithmetic in their loops ([evidence/v1_1/device_perf](evidence/v1_1/device_perf/README.md)). Nothing is claimed against tuned C++ or CUDA.
+Device kernels were timed on the RTX 5070 Ti alone, against CUDA written by hand for the same computations. Through the `cq_` entry, saxpy ran level with the hand-written kernel, and a reduction with 16-byte loads and a transpose within 3 percent. A layer norm, a cooperative stencil and a reduction with scalar loads took 11 to 26 percent longer, for the checked index arithmetic in their loops ([evidence/v1_1/device_perf](evidence/v1_1/device_perf/README.md)). Nothing is claimed against tuned C++ or CUDA.
 
 On the same x86-64 machine, `cairn predict` ranked host timings its calibration never saw with a Kendall tau of 0.87 to 0.92, at a median error of 28 to 44 percent ([evidence/v1_0/perf_model](evidence/v1_0/perf_model/README.md)). No device prediction has been checked against a measurement.
 
