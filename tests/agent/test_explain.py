@@ -2,6 +2,7 @@
 
 import json
 import shutil
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -147,6 +148,17 @@ def test_a_loop_of_the_runtime_names_the_packaged_header_wherever_the_command_ru
     loops = [loop["at"] for loop in explain(spread, "p.cairn")["functions"]["spread"]["loops"]]
     assert any(at.startswith("cairn/runtime/cairn_parallel.hpp:") for at in loops), loops
     assert all(at.startswith(("p.cairn:", "cairn/runtime/")) for at in loops), loops
+
+
+@clang
+def test_a_loop_of_the_program_keeps_its_name_beside_a_file_of_that_name(tmp_path, monkeypatch):
+    """`p.cairn` is the name the program's lines were given, not a path clang shortened, so a file of that name in a
+    directory above the one clang compiled in is not where the loop is."""
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))  # where the scratch directory is made
+    (tmp_path / "p.cairn").write_text("// another program's file\n")
+    fill = "fn fill(n:usize, out:rw<u64>[n]) {\n  for i in 0..n { out[i] = u64(i) * 3; }\n}\nfn main() -> i32 = 0;\n"
+    loops = [loop["at"] for loop in explain(fill, "p.cairn")["functions"]["fill"]["loops"]]
+    assert loops and all(at.startswith(("p.cairn:", "cairn/runtime/")) for at in loops), loops
 
 
 def test_inspect_attaches_the_explanation_on_request(tmp_path, capsys):

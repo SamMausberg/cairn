@@ -335,7 +335,11 @@ def vectorize(cpp: str, names, cxx: str, arch, timeout: int, functions: dict, sh
         if done.returncode:
             return {"status": "compile-failed", "stderr": done.stderr[:4000]}
         entries = remarks(record.read_text(encoding="utf-8"), names)
-        for r in entries:  # A runtime header was copied beside the program: name the packaged one instead.
+        # A runtime header was copied beside the program: name the packaged one instead. A name the program's lines
+        # were given, such as `program.cairn`, is not a path clang shortened, and a file of that name above the
+        # scratch directory is some other file.
+        named = {line.group(2) for text in cpp.split("\n") if (line := LINE.match(text))}
+        for r in (r for r in entries if r["file"] not in named):
             found = compiled(directory, r["file"])
             r["file"] = str(PACKAGE / "runtime" / found.name if found.parent == directory else found)
     for name, entry in functions.items():
