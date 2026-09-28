@@ -11,12 +11,14 @@ from test_predict import MACHINE
 from cairn.agent.history import History
 from cairn.cli import main
 from cairn.compiler.cairnc import compile_program
+from cairn.perf.model import predict
 from cairn.perf.profile import packaged
 from cairn.perf.regions import identified
 from cairn.perf.tuning.plan_source import written
 from cairn.perf.tuning.resources import Inspector
 from cairn.perf.tuning.search import Budget, Candidate, shaped, space
 from cairn.perf.tuning.tune import tune
+from cairn.perf.work import count
 from cairn.projects.target import parse
 from cairn.verify.validation.validation import REGRESSIONS, Policy
 from emitted import code_of
@@ -100,6 +102,20 @@ def test_registers_and_shared_memory_bound_how_many_blocks_stay_resident():
     assert card.occupancy(24, 128) == card.occupancy(24, 128, 0) == 1.0  # twelve blocks of 128 fill 1536 threads
     assert card.occupancy(24, 128, 40_000) == 2 * 128 / 1536  # two tiles of 40 kB fit the SM's 100 kB
     assert card.occupancy(128, 256) == 2 * 256 / 1536  # 65536 registers hold two blocks of 256 at 128 each
+
+
+def test_a_block_that_asks_more_than_a_block_may_have_is_named_as_unable_to_launch():
+    p, checker, _ = compile_program(BLUR + "plan blur { block 1024; }\n")
+    cost = count(p, checker, {"blur"})["blur"]
+    (region,) = cost.regions
+    region.registers = 72  # 32 warps of 72 * 32 registers each are more than a block's 65536
+    found = predict(cost, MACHINE, {"n": 1e7})
+    part = next(x for x in found["parts"] if x["what"].startswith("device region"))
+    assert part["resident"]["blocks_per_sm"] == 0 and part["resident"]["limited_by"] == ["registers"]
+    assert part["bound"] == found["bound"] == "cannot launch (registers)"  # never a bound its time was priced by
+    assert any("the kernel cannot launch" in why for why in found["why"]) and found["confidence"] == "low"
+    region.registers = 32
+    assert predict(cost, MACHINE, {"n": 1e7})["ns"] < found["ns"]  # a search ranks it behind a block that launches
 
 
 @NVCC
