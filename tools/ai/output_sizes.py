@@ -99,6 +99,8 @@ COMMANDS = [
     ("explain --symbol count", "other", "accepted", ["explain", ".", "--symbol", "count"], ""),
     ("state", "other", "accepted", ["state", "."], ""),
     ("inspect --symbol count", "other", "accepted", ["inspect", ".", "--symbol", "count"], ""),
+    ("find, by words", "other", "accepted", ["find", "parse", "integer"], ""),
+    ("find, by types", "other", "accepted", ["find", "--takes", "rw<Input>", "--returns", "u64"], ""),
 ]
 REPLAY = "check, the 69 programs of the 1.1 replay"
 
@@ -134,6 +136,11 @@ def verdicts(r: dict) -> str:
     return f"{len(r['records'])} checks, {sum(c['status'] in ('typed', 'rejected') for c in r['records'])} verdicts"
 
 
+def called(r: dict) -> list[str]:
+    """The functions a `find` answer names, each as its hit line begins."""
+    return [hit.split("(")[0].split("[")[0] for hit in r["hits"]]
+
+
 status, symbol = itemgetter("status"), itemgetter("symbol")
 THREE = "E-FIELD E-UNBOUND E-TYPE-MISMATCH"  # the three mistakes, in the order a check reports them
 OWN = ["count", "main", "next_token", "next_u64", "read_input"]  # the functions the reference declares
@@ -159,6 +166,8 @@ SAYS: dict[str, tuple[Callable[[dict], Any], Any]] = {
     "explain --symbol count": (explained, ("observed", ["count"])),
     "state": (status, "typed"),
     "inspect --symbol count": (symbol, "count"),
+    "find, by words": (called, ["std.text.parse_i64", "std.text.parse_u64"]),
+    "find, by types": (called, ["next_u64"]),
     REPLAY: (verdicts, "69 checks, 69 verdicts"),
     "mcp check, accepted": (verdict, "typed"),
     "mcp check, three refusals": (verdict, THREE),
@@ -171,6 +180,7 @@ SAYS: dict[str, tuple[Callable[[dict], Any], Any]] = {
     "mcp implementation_submit": (status, "validated"),
     "mcp state": (status, "typed"),
     "mcp state, again": (lambda r: r["protocol"], "cairn.state-delta/1"),
+    "mcp find, by types": (called, ["std.text.parse_i64"]),
 }
 
 
@@ -253,8 +263,8 @@ class Client:
 
 def mcp(cairn: Path, sources: dict[str, str]) -> dict[str, str]:
     """Each tool's definition, and a typical result of each tool: a check accepted and refused, an edit session with a
-    refused and an admitted body, a plan session, an implementation session, and the state asked for twice. Each
-    request is the one its packet says to send."""
+    refused and an admitted body, a plan session, an implementation session, the state asked for twice, and a function
+    found by the types it takes. Each request is the one its packet says to send."""
     out: dict[str, str] = {}
     with tempfile.TemporaryDirectory(prefix="cairn-outputs-") as tmp:
         project(Path(tmp) / "histogram", sources["accepted"])
@@ -281,6 +291,7 @@ def mcp(cairn: Path, sources: dict[str, str]) -> dict[str, str]:
             out["mcp implementation_submit"], _ = client.tool("implementation_submit", request=submitted)
             out["mcp state"], _ = client.tool("state", path="histogram")
             out["mcp state, again"], _ = client.tool("state", path="histogram")
+            out["mcp find, by types"], _ = client.tool("find", path="histogram", takes=["ro<u8>[n]"], returns="i64")
         finally:
             client.close()
     return out

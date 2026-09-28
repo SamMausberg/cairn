@@ -4,4 +4,5 @@ Each directory is one record of the work after `v1.1.0`, taken as it landed. Its
 
 | Record | What it holds |
 |---|---|
+| `discovery/` | What `cairn find` answers for each library fact the 1.1 subjects searched the documentation for, beside what they read for it, in tokens; no model ran. |
 | `terse/` | What each `cairn` command and MCP tool prints for an agent to read, in bytes and tokens, and the budgets that hold it; no model ran. |

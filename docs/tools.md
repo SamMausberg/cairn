@@ -12,7 +12,7 @@ Every tool here ships with the compiler and needs no Python package outside the 
 | `cairn build`, `cairn run` | builds a native artifact in a fresh directory, with a record; builds and runs it under process limits | [building and running](#building-and-running), [--sanitize](#cairn-run---sanitize), [--incremental](#cairn-build---incremental), [--header](#cairn-build---header), [targets](#the-device-target) |
 | `cairn test` | runs test blocks, each in its own process, and task contracts | [cairn test](#cairn-test) |
 | `cairn fmt`, `cairn lsp`, `cairn mcp`, `cairn completions` | the formatter; the language server for editors; the Model Context Protocol server for agents; shell completions | [fmt](#cairn-fmt), [lsp](#cairn-lsp), [mcp](#cairn-mcp), [completions](#a-watched-check-and-shell-completions) |
-| `cairn rules` | the rule card of a diagnostic code, a card by name, or the cards a program selects | [rules](#cairn-rules) |
+| `cairn rules`, `cairn find` | the rule card of a diagnostic code, a card by name, or the cards a program selects; the functions to call, by the types of the values you have or by words | [rules](#cairn-rules), [find](agents.md#finding-a-function) |
 | `cairn emit`, `cairn expand`, `cairn doc`, `cairn graph` | prints the C++ the program lowers to; prints the source every `derive` generated; the API reference; the module graph | [--ctypes](#cairn-build---header), [expand and doc](#cairn-doc-and-cairn-expand), [graph](#large-projects-and-bazel) |
 | `cairn shot` | runs a program headless and returns every frame `std.draw` captured | [examples.md](examples.md#examplesappspanel), [agents.md](agents.md#requests-beyond-an-edit) |
 | `cairn inspect`, `cairn state`, `cairn migrate` | an agent's packet for one symbol; every signature and effect row under a digest, or with `--symbol` one function's investigation; an interface change through every caller | [agents.md](agents.md#packets), [state](agents.md#the-programs-state), [--symbol](agents.md#resuming-an-investigation), [migrate](agents.md#interface-migrations) |
@@ -332,7 +332,7 @@ GitHub has no CAIRN grammar, so `.gitattributes` has it highlight `.cairn` files
 
 ## cairn mcp
 
-`cairn mcp` serves the compiler's hosts to an agent that speaks the Model Context Protocol, whether or not it has a shell, as one JSON-RPC 2.0 message per line on standard input and output. A host holds a program, shows an agent part of it and decides whether each change the agent sends is kept ([agents.md](agents.md)). The Claude Code plugin starts the server. Another client runs `bin/cairn` of a checkout with the argument `mcp`. The server has eight tools, each a thin call into a host that this page or [agents.md](agents.md) describes:
+`cairn mcp` serves the compiler's hosts to an agent that speaks the Model Context Protocol, whether or not it has a shell, as one JSON-RPC 2.0 message per line on standard input and output. A host holds a program, shows an agent part of it and decides whether each change the agent sends is kept ([agents.md](agents.md)). The Claude Code plugin starts the server. Another client runs `bin/cairn` of a checkout with the argument `mcp`. The server has nine tools, each a thin call into a host that this page or [agents.md](agents.md) describes:
 
 | Tool | What it calls |
 |---|---|
@@ -341,6 +341,7 @@ GitHub has no CAIRN grammar, so `.gitattributes` has it highlight `.cairn` files
 | `plan_open`, `plan_reply` | a [plan session](agents.md#plan-edits) and its `cairn.plan/1` replies |
 | `implementation_open`, `implementation_submit` | an [implementation session](agents.md#implementation-sessions) and its submissions |
 | `state` | `cairn state`: every signature and row under a digest, then only what changed since the last one this server sent of that path unless `whole` is true, what changed since any digest it sent (`since`), or with `symbol` one function's investigation |
+| `find` | [`cairn find`](agents.md#finding-a-function): the functions to call, by `takes`, `returns` and `effects` or by `words`, over `path` or `source` when one is given |
 
 A tool takes `path` or `source`. `path` is a `.cairn` file, a project directory or a manifest, as the command line takes it, relative to the directory the server started in and inside it. `source` is the text of a program, and a session opened on `source` writes nothing.
 
