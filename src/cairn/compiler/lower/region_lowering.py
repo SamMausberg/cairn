@@ -1,7 +1,8 @@
 """The lowering of lane regions and collectors: the lambda every lane runs, which host threads and device lanes
 share; `parallel`, `reduce`, `scan` and `compact` on the host lane pool (runtime/cairn_parallel.hpp), in order, or
-on the calling thread's execution context (runtime/cairn_exec.hpp); and a chain of regions a plan fuses, run as one
-region. Their rules are in concurrency.py and fusion.py; the Emitter binds these functions as its methods.
+on the calling thread's execution context (runtime/cairn_exec.hpp); a float `reduce + parallel`, the exact sum rounded
+once (runtime/cairn_sum.hpp); and a chain of regions a plan fuses, run as one region. Their rules are in
+concurrency.py and fusion.py; the Emitter binds these functions as its methods.
 
 A device `reduce`, `scan` or `compact` runs on CUB, which only such a program includes (runtime/cairn_cub.hpp): CUB's
 headers are about half of an nvcc build."""
@@ -13,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..plans import chunks, fusion, staging
 from ..primitives.builtins import WRAPPING
-from ..syntax.tree import UNSIGNED, Stmt
+from ..syntax.tree import FLOAT, UNSIGNED, Stmt
 from . import execution
 
 if TYPE_CHECKING:
@@ -82,8 +83,13 @@ def s_reduce(g: Emitter, s: Stmt, es: list[str], before=None):
         fold, parts = g.combiner(s, carried, combine), [es[0], start]
         if into and s.ref == "device":  # on the device, where the next work reads it: nothing crosses, nothing waits
             return g.put(collected(g, "reduce_into", [f"&{into}", *parts, fold, value], [carried]) + ";")
-        folded = (collected(g, "reduce_on", [*parts, fold, value], [carried]) if s.ref == "device"
-                  else f"cr::par::reduce<{carried}>({es[0]}, {start}, {fold}, {value})")  # fmt: skip
+        if s.ref == "device":
+            folded = collected(g, "reduce_on", [*parts, fold, value], [carried])
+        elif s.ty.name in FLOAT:  # the exact sum, rounded once (concurrency.py admits only + here)
+            g.need("cairn_sum.hpp")
+            folded = f"cr::par::sum<{ty}>({es[0]}, {value})"
+        else:
+            folded = f"cr::par::reduce<{carried}>({es[0]}, {start}, {fold}, {value})"
         g.put(f"const {ty} {total} = {folded}{'' if carried == ty else '.checked()'};")
     else:
         count = g.fresh("n")[0]  # Without `parallel`, a host reduction is an in-order fold; its extent is read once.

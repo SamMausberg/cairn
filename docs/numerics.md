@@ -1,6 +1,6 @@
 # Numerics
 
-This page says where a CAIRN program rounds a float beyond plain `f32` and `f64` arithmetic, and what each rounding promises. It covers the storage floats and `quantize`, the tensor core multiply and its fragments, atomic float addition, `derive grad`, and where a device program run on the host can differ from a run on the device. After reading it you can store numbers in 16 or 8 bits, use the tensor cores, and say exactly how far a result may be from the exact one. Plain `f32` and `f64` arithmetic is in [language.md](language.md#values-and-arithmetic).
+This page says where a CAIRN program rounds a float beyond plain `f32` and `f64` arithmetic, and what each rounding promises. It covers the storage floats and `quantize`, the tensor core multiply and its fragments, the exact parallel sum, atomic float addition, `derive grad`, and where a device program run on the host can differ from a run on the device. After reading it you can store numbers in 16 or 8 bits, use the tensor cores, and say exactly how far a result may be from the exact one. Plain `f32` and `f64` arithmetic is in [language.md](language.md#values-and-arithmetic).
 
 Every rounding a program performs is named in its source and listed under `numerics` in its build receipt, the record a build writes beside what it built.
 
@@ -77,13 +77,65 @@ fn widened(n:usize, c:rw<f32>[n], a:ro<f32>[n], b:ro<f32>[n]) { mma_unordered(1,
 
 The host suite checks the reference loop bit for bit against Python, and the bound against the exact rational sum. It runs the device tiling thread by thread on the host under the sanitizers. Only `make gpu` checks that the tensor cores meet the contract, and it passed there on one RTX 5070 Ti in the 1.1.0 session ([evidence/v1_1/gpu](../evidence/v1_1/gpu/README.md)).
 
+## Parallel float sums
+
+`reduce + parallel` over `f32` or `f64` gives the exact sum of its terms, rounded once to nearest with ties to even. The exact sum does not depend on the order the terms are added in, so the bits are the same for every lane count, every way the pool cuts the indices into blocks, and every plan or fused chain. `reduce + for` still adds its terms left to right, each partial sum rounded, as the program writes it.
+
+```cairn
+fn dot(n:usize, x:ro<f64>[n], y:ro<f64>[n]) -> f64 {
+  let s = reduce + parallel i in n yield x[i] * y[i];   // each product rounded as written, their sum exactly, then once
+  return s;
+}
+
+fn main() -> i32 {
+  let n:usize = 3;
+  buffer x:f64[n] = zeroed;
+  buffer y:f64[n] = zeroed;
+  x[0] = 10000000000000000.0;
+  x[1] = 1.0;
+  x[2] = -10000000000000000.0;
+  for i in 0..n { y[i] = 1.0; }
+  let ordered = reduce + for i in n yield x[i] * y[i];  // 1e16 + 1 rounds back to 1e16, so this is 0.0
+  if dot(n, x, y) != 1.0 || ordered != 0.0 { return 1; }
+  return 0;
+}
+```
+
+The terms are the values the yields produce, each rounded as its own expression says, so a product in a yield is rounded before it is summed. The result is within half an ulp of the exact sum of those terms, whatever `n` is. The fold in written order is only within about `(n - 1) * 2^-53` times the sum of the terms' magnitudes in `f64` (`2^-24` in `f32`), a bound far larger than the result when the terms cancel.
+
+The special values follow IEEE addition wherever it has one answer:
+
+| Terms | Sum |
+|---|---|
+| any NaN, or both `+inf` and `-inf` | NaN, the quiet NaN with no payload (`0x7ff8000000000000`, `0x7fc00000`) |
+| `+inf` or `-inf`, and only finite terms besides | that infinity, whatever the finite terms add up to |
+| finite, exact sum at or past the largest finite value plus half its ulp | the infinity of its sign, as rounding to nearest gives |
+| none | `+0.0` |
+| every term `-0.0` | `-0.0` |
+| finite, exact sum zero otherwise | `+0.0` |
+
+Each block of terms the pool runs keeps eight expansions, pairs of doubles, and adds each term with two of Knuth's error-free TwoSum steps. What the second step leaves over, which is almost always nothing, goes to a fixed-point accumulator: an integer count of the format's least subnormal, in 34 64-bit limbs for `f64` and 6 for `f32`, wide enough for any sum of 2^64 terms. A chunk of terms holding an infinity, a NaN, or a value that overflows an expansion is added term by term into the accumulator instead. The blocks add their accumulators as integers, which is exact in any order, and the total is rounded once. An `f32` term widens to a double exactly, and the `f32` result is rounded from the exact total, never from a double, so it is never rounded twice. The runtime is `runtime/cairn_sum.hpp`.
+
+The sum costs about twelve double additions a term, which vectorize and wait on nothing but their own expansion, where the fold in written order costs one addition that waits on the last. It evaluates each term once, allocates nothing, and adds no effect beyond the `par:host` of any pooled reduction. It relies on the strict floating point every CAIRN build has (`-ffp-contract=off -fno-fast-math`): a fused multiply-add inside TwoSum would lose the error it exists to keep. The receipt lists it under `numerics` as `{"op": "sum", "from": "f64", "to": "f64", "rounding": "nearest-even", "sum": "exact"}`, so an implementation cannot trade a reference's `reduce + for` for it (`E-IMPL-NUMERICS`), and `cairn verify` answers `unknown` for a float reduction of either kind.
+
+A float product on the pool is refused (`E-REDUCE-ORDER`): a product rounded in blocks is another number, and no exact product is offered. A float `scan` runs only in the written order (`E-SCAN-ORDER`). On the device a float reduction still combines in an unspecified order ([below](#emulated-device-runs)).
+
+```cairn rejects E-REDUCE-ORDER
+fn product(n:usize, x:ro<f64>[n]) -> f64 {
+  let p = reduce * parallel i in n yield x[i];
+  return p;
+}
+```
+
+The suite holds the sum bit for bit to an exact rational model in Python on the rounding boundaries (ties to even, sums an ulp around a power of two, the largest finite value), the special values, subnormals, cancellation, overflow, and random terms of narrow and wide range, at every lane count from 1 to 16. It does so under clang++ and g++ with the project's flags and with the address and undefined-behaviour sanitizers, and under clang++'s thread sanitizer. That is finite testing: it covers the cases it ran, and nothing about the sum is proved.
+
 ## Atomic float addition
 
 `atomic_add_unordered(x[i], v)` adds an `f32` or `f64` into one element from any number of lanes or threads at once ([concurrency.md](concurrency.md#atomics-and-mutexes)). The adds happen one at a time, each rounded to nearest, in the order the threads arrive. The hardware and the host's scheduler pick that order, so two runs may differ in the last places. The name says so, as `mma_unordered`'s does.
 
 The contract, and nothing stronger: after `k` adds the element is its old value plus every added value, each partial sum rounded once, in some order. On the device an `f32` add also flushes a subnormal operand or result to zero, as PTX's `atom.add.f32` does. An `f64` add does not. So an `f32` element ends within `k * 2^-23 * (|old| + sum |v|) + k * 2^-125` of the exact sum while `k` is below `2^22`, and an `f64` one within `k * 2^-52 * (|old| + sum |v|)` while `k` is below `2^51`.
 
-The receipt lists the contract under `numerics`, and `cairn verify` answers `unknown` for a function that holds an atomic float add. A sum that must come out the same on every run folds in an order the program fixes instead: `reduce +` on the host, and `reduce + warp` within a warp.
+The receipt lists the contract under `numerics`, and `cairn verify` answers `unknown` for a function that holds an atomic float add. A sum that must come out the same on every run folds in an order the program fixes instead, `reduce + for` on the host and `reduce + warp` within a warp, or is exact: `reduce + parallel` on the host ([above](#parallel-float-sums)).
 
 ## Gradients
 

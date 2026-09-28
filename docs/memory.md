@@ -195,6 +195,8 @@ fn main() -> i32 {
 
 A `buffer` lives on the heap until its block ends, and its extent is the `n` it names. A `stack` array lives in the function's frame, and one function's `stack` declarations hold at most 65536 bytes together (`E-STACK-LIMIT`). `Buf[T](n)` makes an owner that can be moved, returned and stored. `Array[T, N]()` is a fixed array held inline, as a value.
 
+A `Buf` whose element type holds no owner, such as a scalar or a record, sum or fixed array made of scalars, and asks for no alignment above 16 bytes, takes its zeros from the C library's `calloc`, which hands a large block out of pages the kernel has already zeroed, so the part of it a program never writes is never resident. Any other `Buf`, such as one of records that hold a `Buf` or ask for `align(64)`, is zeroed element by element.
+
 ### Moves
 
 Owners are affine: each is used as a value at most once. Using one as a value (binding it, passing it by value, returning it, storing it in a field) moves it, and its name is dead afterwards (`E-MOVED`). An assignment whose right side moves the local it assigns, as `b = grow(b)` does, gives that local its new value, and it is live again. An owner is released at scope exit, and `free` enters the effect row where that happens: at the end of the block that still holds it, at a `return`, or at a place a new value is assigned over. A function that hands an owner on carries neither `free` nor `alloc`.
