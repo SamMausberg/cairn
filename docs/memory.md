@@ -371,7 +371,7 @@ Every function has an effect row: the set of things it may do when it runs, such
 | `mmio`, `asm` | the machine is reached |
 | `asm:ptx`, `asm:x86_64`, `asm:aarch64` | typed assembly for that target runs |
 | `fence`, `barrier` | typed assembly declares that it orders memory, or waits for its block |
-| `trap`, `diverge` | a guard may abort, the call graph has a cycle |
+| `trap`, `diverge` | a guard may abort; a `while` loop or a cycle of calls may never end |
 | `ffi_precondition` | the caller must supply live, initialized storage for a borrow |
 
 A signature may declare a ceiling: the most its row may hold. `pure` and `effects(read:x, trap)` are ceilings, and a function whose row goes past its ceiling is `E-EFFECT-CEILING`. `pure` still allows `trap`, `diverge`, `local_read`, `local_write`, `stack_storage`, `zero_init`, `ffi_precondition` and reads of what the function was lent.
