@@ -42,7 +42,7 @@ def report(value: dict, brief: bool = False) -> None:
     if brief and terminal.human(FORMAT):
         terminal.summary(value)
         return
-    print(json.dumps(value, allow_nan=False) if LINES else json.dumps(value, indent=2, allow_nan=False))
+    print(terminal.record(value, LINES))
 
 
 def show(record: dict, human: Callable[[dict], str], end: str = "\n") -> None:
