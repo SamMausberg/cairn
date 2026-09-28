@@ -311,7 +311,8 @@ def judged(subject: Subject, compiler: Path) -> dict:
 
 
 def check(compiler: Path, source: str) -> dict:
-    """What `compiler`'s `cairn check` says of one program: typed, or the refusal's code, message and hint."""
+    """What `compiler`'s `cairn check` says of one program: typed, or the refusal's code, message and hint, and the code
+    and line of each further refusal the same check reported."""
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "main.cairn").write_text(source)
         done = subprocess.run([sys.executable, str(compiler / "bin" / "cairn"), "check", str(Path(tmp) / "main.cairn"),
@@ -321,7 +322,8 @@ def check(compiler: Path, source: str) -> dict:
     except json.JSONDecodeError:
         return {"status": "no record", "stderr": done.stderr[-500:]}
     keep = ("status",) if said.get("status") == "typed" else ("status", "code", "message", "repair_hint", "line")
-    return {k: said.get(k) for k in keep}
+    further = [[d["code"], d["line"]] for d in said.get("further", [])]
+    return {k: said.get(k) for k in keep} | ({"further": further} if further else {})
 
 
 def summary(records: list[dict]) -> dict:

@@ -239,6 +239,85 @@ def test_the_record_lists_twenty_further_refusals_and_counts_the_rest():
     assert [d["line"] for d in record["further"]] == list(range(2, 22)) and record["further_omitted"] == 4
 
 
+# Four mistakes in one main, as the 1.1 subjects and the cold probe met them, three of them inside a loop, a match and
+# an if: a u64 range, a u32 where a u64 is declared, a u64 index and a call on a Vec's length.
+MAIN_FOUR = """import std.core (Option);
+import std.vec (Vec);
+fn main() -> i32 {
+  let n:u64 = 3;
+  for i in 0..n { println(i); }
+  let x:u32 = 7;
+  let mut more = true;
+  while more {
+    let wide:u64 = x;
+    match Option.Some(u64(x)) {
+      Option.Some(w) => {
+        let b = Buf[u64](4);
+        let k:u64 = w;
+        if k > 0 { println(b[k]); }
+      }
+      Option.None => { more = false; }
+    }
+    let mut v = vec.new[u64]();
+    vec.push(v, 1);
+    println(v.len());
+    more = false;
+  }
+  return 0;
+}
+"""
+
+
+def test_independent_mistakes_in_one_body_are_reported_by_one_check(tmp_path, capsys):
+    """A refused statement is taken back and the rest of its block is checked, so a function's independent mistakes
+    come back together, the first exactly as a check that stops meets it."""
+    record = every(MAIN_FOUR)
+    assert {k: v for k, v in record.items() if k != "further"} == alone(MAIN_FOUR)
+    assert [where(d) for d in [record, *record["further"]]] == [
+        ("E-TYPE-MISMATCH", 5, 15),
+        ("E-TYPE-MISMATCH", 9, 20),
+        ("E-TYPE-MISMATCH", 14, 30),
+        ("E-LEN", 20, 13),
+    ]
+    source = tmp_path / "four.cairn"
+    source.write_text(MAIN_FOUR)
+    assert main(["check", str(source), "--format", "json"]) == 1
+    assert len(json.loads(capsys.readouterr().out)["further"]) == 3
+    assert main(["run", str(source), "--format", "json", "--out", str(tmp_path)]) == 1  # refused as a check is
+    assert len(json.loads(capsys.readouterr().out)["further"]) == 3
+
+
+def test_a_mistake_that_may_follow_from_a_refused_statement_is_not_reported():
+    """What a refused statement bound, read or wrote is unknown after it: a use of a name it failed to bind, a group
+    it failed to move and a value it failed to return are not refused again, and no leak is judged for them."""
+    source = """fn f(x:u64) -> u64 {
+  let y:u32 = x;
+  let z = y + 1;
+  let g = Group[u64](2);
+  let h = g;
+  wait(h);
+  let t:bool = x;
+  return z;
+}
+"""
+    record = every(source)
+    assert [where(d) for d in [record, *record["further"]]] == [
+        ("E-TYPE-MISMATCH", 2, 15),
+        ("E-PINNED", 5, 11),
+        ("E-TYPE-MISMATCH", 7, 16),
+    ]
+
+
+def test_a_mistake_inside_a_lane_refuses_the_region_and_the_block_goes_on():
+    source = """fn f(n:usize, out:rw<u64>[n], k:u64) {
+  parallel i in n { out[i] = k + true; }
+  let m:bool = k;
+}
+"""
+    record = every(source)
+    assert [where(d) for d in [record, *record["further"]]] == [("E-TYPE-MISMATCH", 2, 34), ("E-TYPE-MISMATCH", 3, 16)]
+
+
 def test_an_accepted_program_is_checked_the_same_way_either_way():
     source = load_project(ROOT / "examples/apps/analytics").source
     assert compile_program(source, every=True)[2] == compile_program(source)[2]
