@@ -92,21 +92,22 @@ def pieces(data: bytes) -> list[str]:
 
 
 def fixed(text: str, places: int) -> str:
-    """What FIXED prints for one field: the first fault from the left, else the value Python's Decimal scales it to."""
-    point = text.find(".") if "." in text else len(text)
+    """What FIXED prints for one field: the first fault from the left, byte by byte, else the value Python's Decimal
+    scales it to."""
     if not text:
         return "empty"
-    if point in (0, len(text) - 1):
-        return f"invalid {point}"
+    point = text.find(".") if "." in text else len(text)
     digits = 0
     for i, c in enumerate(text):
-        if i != point and c not in "0123456789":
+        if i == point:
+            if i in (0, len(text) - 1):  # a point needs a digit on each side
+                return f"invalid {i}"
+            continue
+        if i > point + places or c not in "0123456789":  # past the places allowed, or not a digit
             return f"invalid {i}"
-        digits = digits if i == point else digits * 10 + int(c)
+        digits = digits * 10 + int(c)
         if digits >= 1 << 64:
             return f"overflow {i}"
-    if len(text) - point - 1 > places:
-        return f"invalid {point + 1 + places}"
     value = Decimal(text).scaleb(places)
     assert value == value.to_integral_value()
     return f"overflow {len(text) - 1}" if value >= 1 << 64 else f"ok {int(value)}"
@@ -135,7 +136,8 @@ def test_lines_words_and_fields_are_the_bounds_python_splits_at(tmp_path, cxx):
 
 FIELDS = ["0", "7", "12", "12.5", "12.50", "12.505", "0.01", ".5", "5.", ".", "1.2.3", "1,5", "+3", " 3", "-3",
           "18446744073709551615", "18446744073709551616", "184467440737095516.15", "184467440737095516.16",
-          "1844674407370955162", "99999999999999999999.9", "0.000", "3.14159"]  # fmt: skip
+          "1844674407370955162", "99999999999999999999.9", "0.000", "3.14159", "1.23x", "x.", "1x.", "1.2.",
+          "1.00000000000000000000"]  # fmt: skip
 
 
 @pytest.mark.parametrize("cxx", BOTH)
