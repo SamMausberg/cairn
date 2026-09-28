@@ -7,7 +7,7 @@ import pytest
 from cairn.agent.hosts.edits import EditSession
 from cairn.agent.projection import canonical_source
 from cairn.compiler.cairnc import Diagnostic, compile_source
-from emitted import SANITIZED, WARNINGS, library, refused, run
+from emitted import SANITIZED, WARNINGS, library, refused, round_trips, run
 
 SOURCE = """
 fn fill(n:usize,x:rw<u64>[n]) { for i in 0..n { x[i]=u64(i); } }
@@ -236,6 +236,63 @@ def test_the_release_runs_at_the_drop(cxx, tmp_path):
     exit: holding any one loop's buffers would pass 768 MiB while the program is still running."""
     options = {"ASAN_OPTIONS": "detect_leaks=1:hard_rss_limit_mb=768"}
     assert run(tmp_path, compile_source(RELEASE)[0], *SANITIZED, *WARNINGS, cxx=cxx, env=options).returncode == 0
+
+
+DEFERRED = """
+fn report(tag:u64, v:u8, seen:rw<u64>) { seen += u64(v); println("defer ", tag, " read ", v, ", seen ", seen); }
+fn sink(b:Buf[u8]) {}
+
+fn main() -> i32 {
+  let mut seen:u64 = 0;
+  let mut b = Buf[u8](4);
+  let k:usize = 2;
+  {
+    defer report(1, b[k], seen);
+    b[k] = 5;
+    seen += 10;
+  }
+  {
+    defer report(2, b[k], seen);
+    let mut c = Buf[u8](8);
+    c[k] = 7;
+    swap(b, c);
+    sink(c);
+  }
+  {
+    defer report(3, b[k], seen);
+    b = Buf[u8](3);
+    b[k] = 9;
+  }
+  {
+    let d = Buf[u8](4);
+    defer sink(d);
+    defer report(4, d[k], seen);
+  }
+  let e = take(b);
+  println("after ", e[k], " ", len(b));
+  if seen != 31 { return 1; }
+  return 0;
+}
+"""
+
+
+@pytest.mark.parametrize("cxx", ["clang++", "g++"])
+def test_a_defer_reads_what_its_arguments_hold_when_its_block_ends(cxx, tmp_path):
+    """A write, a swap and a new owner land before the call runs, and it reads them there; a local the call does not
+    name moves freely, and a defer that moves an owner runs after the one declared below it that reads it. The move
+    each would otherwise refuse is in tests/soundness/test_soundness.py."""
+    round_trips(DEFERRED)
+    done = run(
+        tmp_path, compile_source(DEFERRED)[0], *SANITIZED, *WARNINGS, cxx=cxx, env={"ASAN_OPTIONS": "detect_leaks=1"}
+    )
+    assert done.returncode == 0, done.stderr[-3000:]
+    assert done.stdout.splitlines() == [
+        "defer 1 read 5, seen 15",
+        "defer 2 read 7, seen 22",
+        "defer 3 read 9, seen 31",
+        "defer 4 read 0, seen 31",
+        "after 9 0",
+    ]
 
 
 def test_semantics_models_scratch_storage_and_a_moved_owner():

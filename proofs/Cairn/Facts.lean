@@ -6,15 +6,16 @@ A fact is an edge `x - y ≤ k` between two atoms.  An atom is zero, an immutabl
 name, a field reached from an immutable local, a length), or such a value times a positive
 constant.  `distance` is the Bellman-Ford search `facts.py` runs over the facts in scope,
 `bounds` is what an expression is known not to exceed and known to reach, and `index`, `addOk`,
-`subOk`, `atMostConst` and `partOk` are the five decisions lowering acts on.  Each is transliterated from
-the Python, including the order in which bounds are kept and the four `WIDEST` of them, so that
-`tools/checks/differential_facts.py` can require the two to decide generated inputs alike.
+`mulOk`, `subOk`, `atMostConst` and `partOk` are the six decisions lowering acts on.  `divFacts` is
+what `let q = a / C` adds to the facts.  Each is transliterated from the Python, including the order in
+which bounds are kept and the four `WIDEST` of them, so that `tools/checks/differential_facts.py` can
+require the two to decide generated inputs alike.
 
 The theorems say that under every valuation that makes the facts in scope true, a discharged
-index is below its extent, a discharged `+` stays at most the largest usize, a discharged `-`
-does not go below zero, a value discharged below a constant is at most it, and a discharged part
-lies inside its view.  That the facts
-in scope are true where they are visible is the checker's bookkeeping: a binder's bounds, a
+index is below its extent, a discharged `+` or `x * C` stays at most the largest usize, a discharged
+`-` does not go below zero, a value discharged below a constant is at most it, and a discharged part
+lies inside its view; and that the facts `divFacts` adds are true of the quotient.  That the other
+facts in scope are true where they are visible is the checker's bookkeeping: a binder's bounds, a
 `let`, a condition and an early exit, over values that cannot change.  It is tested in
 `tests/soundness/test_established.py`, not proved here.  So is lowering's use of the decisions.
 -/
@@ -199,7 +200,8 @@ def trim (e : E) (high low : List Term) : List Term × List Term :=
 /-- What an expression is known not to exceed, and known to reach: `facts.py:bounds`. -/
 def bounds (facts : List Fact) : E → List Term × List Term
   | .add x y => trim (.add x y) (plus facts (bounds facts x).1 (bounds facts y).1)
-      ((bounds facts x).2.flatMap fun p => (consts (bounds facts y).2).map fun q => (p.1, p.2 + q.2))
+      (((bounds facts x).2.flatMap fun p => (consts (bounds facts y).2).map fun q => (p.1, p.2 + q.2))
+        ++ (consts (bounds facts x).2).flatMap fun p => (bounds facts y).2.map fun q => (q.1, p.2 + q.2))
   | .sub x y => trim (.sub x y)
       ((bounds facts x).1.flatMap fun p => (consts (bounds facts y).2).map fun q => (p.1, p.2 - q.2))
       ((bounds facts x).2.flatMap fun p => (consts (bounds facts y).1).map fun q => (p.1, p.2 - q.2))
@@ -209,7 +211,7 @@ def bounds (facts : List Fact) : E → List Term × List Term
   | .min x y => trim (.min x y) ((bounds facts x).1 ++ (bounds facts y).1) []
   | e => trim e [] []
 
-/-! ## The five decisions -/
+/-! ## The six decisions, and what a quotient adds -/
 
 /-- An index below its view's extent. -/
 def index (facts : List Fact) (i : E) (extent : Term) : Bool :=
@@ -218,6 +220,22 @@ def index (facts : List Fact) (i : E) (extent : Term) : Bool :=
 /-- A `+` that cannot pass `MAX`. -/
 def addOk (facts : List Fact) (x y : E) : Bool :=
   (plus facts (bounds facts x).1 (bounds facts y).1).any fun t => atMost facts t (.zero, MAX) 0
+
+/-- An atom times a positive constant whose product the facts cap at `MAX`: `facts.py:product`.  A product
+atom has no bound of its own, so the cap comes from a value the program computed from it. -/
+def mulOk (facts : List Fact) (x y : E) : Bool :=
+  match exact (.mul x y) with
+  | some t => t.1.isProd && atMost facts t (.zero, MAX) 0
+  | none => false
+
+/-- What `let q = a / d` adds, `q` being the atom `n` and `d` a positive constant `C`: `q*C` is at most
+`MAX` and at most every upper bound of `a`: `facts.py:quotient`. -/
+def divFacts (facts : List Fact) (n : Nat) (a d : E) : List Fact :=
+  match exact d with
+  | some (.zero, k) =>
+      if 0 < k then (Atom.prod n k.toNat, Atom.zero, MAX) :: (bounds facts a).1.map fun t => (Atom.prod n k.toNat, t.1, t.2)
+      else []
+  | _ => []
 
 /-- A `-` whose right side is no larger than its left. -/
 def subOk (facts : List Fact) (x y : E) : Bool :=
@@ -460,6 +478,23 @@ theorem exact_sound : ∀ {e : E} {t : Term} {v : Nat}, exact e = some t → eva
   | .band _ _, _, _, h, _ => by simp [exact] at h
   | .min _ _, _, _, h, _ => by simp [exact] at h
 
+/-- A product `exact` names is worth the product of what its two sides evaluate to, whether or not that
+product would pass `MAX`: what `mulOk` decides before lowering computes it. -/
+theorem exact_mul {x y : E} {t : Term} {a b : Nat} (h : exact (.mul x y) = some t)
+    (ha : eval ρ σ x = some a) (hb : eval ρ σ y = some b) : ((a * b : Nat) : Int) = t.1.val ρ + t.2 := by
+  simp only [exact] at h
+  split at h <;> try contradiction
+  · next n k hx hy =>
+      obtain ⟨hk, rfl⟩ := some_of_ite (a := (Atom.prod n k.toNat, (0 : Int))) h
+      have h1 := exact_sound hx ha; have h2 := exact_sound hy hb
+      simp only [Atom.val, Int.add_zero, Int.zero_add] at h1 h2 ⊢
+      rw [Int.toNat_of_nonneg (by omega), ← h2, ← h1]; push_cast; exact Int.mul_comm _ _
+  · next k n hx hy =>
+      obtain ⟨hk, rfl⟩ := some_of_ite (a := (Atom.prod n k.toNat, (0 : Int))) h
+      have h1 := exact_sound hx ha; have h2 := exact_sound hy hb
+      simp only [Atom.val, Int.add_zero, Int.zero_add] at h1 h2 ⊢
+      rw [Int.toNat_of_nonneg (by omega), ← h1, ← h2]; push_cast; rfl
+
 /-- Every upper bound is at least the value and every lower bound at most it. -/
 def Sound (ρ : Nat → Nat) (v : Nat) (b : List Term × List Term) : Prop :=
   (∀ t ∈ b.1, Above ρ v t) ∧ ∀ t ∈ b.2, Below ρ v t
@@ -501,11 +536,17 @@ theorem bounds_sound (hf : Holds ρ facts) (hρ : Fine ρ) :
       simp only [bounds]
       refine trim_sound hv (fun t ht => ?_) (fun t ht => ?_)
       · have := plus_sound hf hρ sx.1 sy.1 t ht; unfold Above at this ⊢; push_cast; exact this
-      · simp only [List.mem_flatMap, List.mem_map] at ht
-        obtain ⟨p, hp, q, hq, rfl⟩ := ht
-        obtain ⟨hq, hq0⟩ := consts_val hq
-        have h1 := sx.2 p hp; have h2 := sy.2 q hq
-        unfold Below at h1 h2 ⊢; push_cast; rw [hq0] at h2; omega
+      · rcases List.mem_append.mp ht with ht | ht
+        · simp only [List.mem_flatMap, List.mem_map] at ht
+          obtain ⟨p, hp, q, hq, rfl⟩ := ht
+          obtain ⟨hq, hq0⟩ := consts_val hq
+          have h1 := sx.2 p hp; have h2 := sy.2 q hq
+          unfold Below at h1 h2 ⊢; push_cast; rw [hq0] at h2; omega
+        · simp only [List.mem_flatMap, List.mem_map] at ht
+          obtain ⟨p, hp, q, hq, rfl⟩ := ht
+          obtain ⟨hp, hp0⟩ := consts_val hp
+          have h1 := sx.2 p hp; have h2 := sy.2 q hq
+          unfold Below at h1 h2 ⊢; push_cast; rw [hp0] at h1; omega
   | .sub x y, v, hv => by
       obtain ⟨a, b, ha, hb, hab⟩ := eval_bin (f := fun a b => if b ≤ a then some (a - b) else none) hv
       obtain ⟨hle, rfl⟩ := some_of_ite hab
@@ -576,7 +617,7 @@ theorem bounds_sound (hf : Holds ρ facts) (hρ : Fine ρ) :
 
 end Bounds
 
-/-! ## The five decisions are sound -/
+/-! ## The six decisions are sound, and a quotient's facts true -/
 
 section Decisions
 
@@ -597,6 +638,48 @@ theorem add_sound (hf : Holds ρ facts) (hρ : Fine ρ) {x y : E} {a b : Nat} (h
   have := plus_sound hf hρ (bounds_sound hf hρ ha).1 (bounds_sound hf hρ hb).1 t ht
   have := atMost_sound hf hρ hm
   unfold Above at *; simp only [Atom.val] at *; push_cast; omega
+
+/-- **A discharged `x * C` cannot pass the largest usize**, so its overflow guard never fires. -/
+theorem mul_sound (hf : Holds ρ facts) (hρ : Fine ρ) {x y : E} {a b : Nat} (h : mulOk facts x y = true)
+    (ha : eval ρ σ x = some a) (hb : eval ρ σ y = some b) : ((a * b : Nat) : Int) ≤ MAX := by
+  unfold mulOk at h
+  split at h
+  · next t ht =>
+      simp only [Bool.and_eq_true] at h
+      have h1 := exact_mul ht ha hb
+      have h2 := atMost_sound hf hρ h.2
+      dsimp only at h2
+      have h0 : Atom.zero.val ρ = 0 := rfl
+      omega
+  · exact absurd h nofun
+
+/-- **`let q = a / d` makes the facts it adds true.**  With `q` the atom `n`, worth the quotient of a usize
+`a` by `d`, `q * C` is at most `a` because the quotient rounds down, so it is at most `MAX` and at most every
+upper bound of `a`. -/
+theorem divFacts_hold (hf : Holds ρ facts) (hρ : Fine ρ) {n : Nat} {a d : E} {va vd : Nat}
+    (ha : eval ρ σ a = some va) (hd : eval ρ σ d = some vd) (hmax : (va : Int) ≤ MAX) (hq : ρ n = va / vd) :
+    Holds ρ (divFacts facts n a d) := by
+  unfold divFacts
+  split
+  · next k hk =>
+      split
+      · next hpos =>
+          have hvd := exact_sound hk hd
+          simp only [Atom.val, Int.zero_add] at hvd
+          have hk' : k.toNat = vd := by omega
+          have hle : ((k.toNat * ρ n : Nat) : Int) ≤ va := by
+            rw [hq, hk']; exact Int.ofNat_le.mpr (Nat.mul_div_le va vd)
+          intro f hf'
+          rcases List.mem_cons.mp hf' with rfl | hf'
+          · show (k.toNat : Int) * ρ n - 0 ≤ MAX
+            push_cast at hle; omega
+          · obtain ⟨t, ht, rfl⟩ := List.mem_map.mp hf'
+            have := (bounds_sound hf hρ ha).1 t ht
+            unfold Above at this
+            show (k.toNat : Int) * ρ n - t.1.val ρ ≤ t.2
+            push_cast at hle; omega
+      · intro f hf'; exact absurd hf' List.not_mem_nil
+  · intro f hf'; exact absurd hf' List.not_mem_nil
 
 /-- **A discharged `-` does not go below zero**, so its guard never fires. -/
 theorem sub_sound (hf : Holds ρ facts) (hρ : Fine ρ) {x y : E} {a b : Nat} (h : subOk facts x y = true)

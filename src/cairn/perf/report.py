@@ -11,7 +11,7 @@ from ..compiler.syntax.tree import Diagnostic
 from ..projects.target import DeviceTarget, resolve
 from . import cooperative_model, model
 from .counts import Cost, Work
-from .profile import Device, Profile, card, cards, carrying, default
+from .profile import Device, Profile, card, cards, carrying, default, pricing
 from .work import count
 
 LADDER = (1e3, 1e5, 1e7)  # the sizes a one-extent function is priced at when none are given
@@ -71,12 +71,12 @@ def on_device(c: Cost) -> bool:
 
 
 def targeted(found: dict[str, Cost], profile: Profile, device: DeviceTarget | None) -> dict[str, Any]:
-    """The device target a prediction with device work is for, held to the device card that prices that work: the
-    profile's own, or the packaged one the model falls back to. The answer names the card, and the target when
-    there is one."""
+    """The device target a prediction with device work is for, held to the device card that prices that work
+    (`pricing`: the profile's own, or the packaged one the model falls back to). The answer names the card, and the
+    target when there is one."""
     if not any(on_device(c) for c in found.values()):
         return {}
-    chosen = profile if profile.device else card()
+    chosen = pricing(profile)
     table = chosen.source["device"]
     named = {"card": chosen.source.get("card"), "name": table["name"],
              "compute_capability": table.get("compute_capability"),

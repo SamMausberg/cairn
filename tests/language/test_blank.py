@@ -2,7 +2,8 @@
 refusing a linear one, and as a loop's binder it only counts. Nothing reads it, so it repeats in nested arms and
 loops, and its arm declares no C++ name. The accepted programs run natively under both compilers, an owner dropped
 by `_` is released exactly once under AddressSanitizer's leak check, and every refusal names its code. A device
-program that leaves `_` and every other kind of local unread builds for sm_120, which nvcc refused, and runs emulated.
+program that leaves `_` and every other kind of local unread builds for sm_120 and sm_90, which nvcc refused, and runs
+emulated.
 """
 
 import pytest
@@ -152,9 +153,12 @@ def test_a_blank_binder_declares_no_name_and_reads_no_payload():
     assert " v__ = " not in cpp.replace("std::size_t v__ = cr_begin_", "")  # only `for _` loops count with it
 
 
-def test_locals_the_program_never_reads_build_for_the_device(tmp_path):
-    """Compiled for sm_120 by the project's own device command line; nothing runs on a device."""
-    device_build(tmp_path, compile_source(UNREAD)[0], entry="main")
+@pytest.mark.parametrize("target", ["sm_120", "sm_90"])
+def test_locals_the_program_never_reads_build_for_the_device(tmp_path, target):
+    """Compiled by the project's own device command line; nothing runs on a device. Below sm_100 the device pass does
+    not see a trap end the thread, so `pick` and `either`, which end in a `match`, build there only because every
+    path through the emitted switch is an arm."""
+    device_build(tmp_path, compile_source(UNREAD)[0], entry="main", target=target)
 
 
 @pytest.mark.parametrize("cxx", ["clang++", "g++"])

@@ -475,6 +475,7 @@ inline std::memory_order raw(Order o) noexcept {
     case Order::seq_cst: return std::memory_order_seq_cst;
   }
   trap();
+  return std::memory_order_seq_cst;  // never reached; a device pass below sm_100 sees trap() return (cairn_runtime.hpp)
 }
 template<class T> class Atomic final {
   std::atomic<T> a_;
