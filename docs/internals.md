@@ -110,7 +110,7 @@ A lane body is one lambda whose entry point, `cr::par::run` or `cr::gpu::run`, i
 
 | Header in `runtime/` | Owns |
 |---|---|
-| `cairn_runtime.hpp` | the guards (checked arithmetic, bounds, entry checks) and the scoped scalar buffer; every guard can be called on the host and on the device |
+| `cairn_runtime.hpp` | the guards (checked arithmetic, bounds, entry checks) and the scoped scalar buffer; every guard can be called on the host and on the device, and below sm_100 the device compiler is not told that a failed guard's trap ends the thread, since NVVM 7.0.1 deleted loop exits around one it was told of |
 | `cairn_owners.hpp` | the movable zeroed `Buf`, `Defer`, borrowed callables, checked parts |
 | `cairn_parallel.hpp` | the host lane pool with its pooled reduction and its scan in two passes, `Mutex` and `Atomic` with explicit orders; it includes `cairn_tasks.hpp` |
 | `cairn_tasks.hpp` | the crew of reusable task threads, linear tasks, task groups with a bounded ring of completions |

@@ -115,7 +115,7 @@ def test_a_payload_sum_in_a_view_is_read_through_its_tag():
 
 
 def test_a_tag_no_variant_names_traps_where_the_emitted_switch_does():
-    """No entry guard reads a tag in storage, so `default: cr::trap()` is what separates these two."""
+    """No entry guard reads a tag in storage, so the trap in the switch's default arm separates these two."""
     total = OP + "fn f(o:ro<Op>[1]) -> u64 { if o[0]==Op.Read { return 0; } return 1; }"
     matched = OP + "fn f(o:ro<Op>[1]) -> u64 { match o[0] { Op.Read => { return 0; } Op.Write => { return 1; } } }"
     r = refute(total, matched)

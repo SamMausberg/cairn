@@ -17,7 +17,7 @@ inputs are exactly what the emitted entry guards admit: an enum or sum passed by
 value carries a declared tag, because the guard reads that one tag and nothing
 else. A tag anywhere else, nested in a record, an array or a payload, reached
 through a borrow, or behind a view, is any u32, and a `match` over one outside
-the declared variants aborts, as the emitted `default: cr::trap()` does. A `try`
+the declared variants aborts, as the emitted switch's default arm does. A `try`
 over one is not replayed, so a difference found there is reported unknown.
 
 Storage behind a view is one SMT array per component of its element, read and

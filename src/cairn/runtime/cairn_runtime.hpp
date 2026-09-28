@@ -30,12 +30,26 @@ extern "C" [[noreturn]] void cr_exit(int status) noexcept;
 #define CR_EITHER
 #endif
 namespace cr {
-// A failed guard aborts the process. In a device lane __trap() ends the kernel and poisons the
+// A failed guard aborts the process. In a device lane PTX's trap ends the kernel and poisons the
 // context, so the next cr::gpu wait reports the failure and aborts the host process. assert()
 // (deleted by NDEBUG) and __builtin_trap() (silently ignored by nvcc) were measured to break
-// that promise; see the mechanism note at the top of cairn_gpu.hpp.
-[[noreturn]] CR_HD inline void trap() noexcept {
-#if defined(__CUDA_ARCH__)
+// that promise; see the mechanism note at the top of cairn_kernels.hpp.
+//
+// Below sm_100, CUDA 12.8 and 13.0 compile device code with NVVM 7.0.1, which was measured to delete
+// the normal exit of a counted loop whose checked arithmetic can leave through a call that does not
+// return: the loop ran on past its bound until a guard trapped where every guard of the source held
+// (tests/runtime/test_device_arithmetic.py). There the compiler is not told that trap() ends the
+// thread. It sees an instruction that may write any memory and then returns, so nothing after a
+// failed guard can move ahead of the trap, and the trap still ends the thread when it runs.
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 1000
+#define CR_TRAP_ENDS
+#else
+#define CR_TRAP_ENDS [[noreturn]]
+#endif
+CR_TRAP_ENDS CR_HD inline void trap() noexcept {
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 1000
+  asm volatile("trap;" ::: "memory");
+#elif defined(__CUDA_ARCH__)
   __trap();
   __builtin_unreachable();
 #elif defined(CAIRN_FREESTANDING)

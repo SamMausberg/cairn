@@ -186,19 +186,20 @@ def contract(tmp_path: Path, cpp: str, cxx: str, *extra: str, cuda=False, timeou
     return subprocess.run([*under, executable], capture_output=True, text=True, timeout=timeout, env=env)
 
 
-def device_build(tmp_path: Path, cpp: str, entry: str | None = None, ptx=False, timeout=600, cxx=NVCC_HOST) -> Path:
-    """`cpp` compiled by the project's own device command line for sm_120, a named architecture, so nothing asks the
+def device_build(tmp_path: Path, cpp: str, entry: str | None = None, ptx=False, timeout=600, cxx=NVCC_HOST,
+                 target="sm_120") -> Path:  # fmt: skip
+    """`cpp` compiled by the project's own device command line for `target`, sm_120 unless named, so nothing asks the
     device and nothing runs, with `cxx` as nvcc's host compiler; the object, or with `ptx` the PTX. Skips the test
     when nvcc or `cxx` is absent."""
     if not shutil.which("nvcc") or not shutil.which(cxx):
         pytest.skip(f"needs nvcc and {cxx}")
     source, artifact = emit(tmp_path, cpp, entry)
-    target = artifact + (".ptx" if ptx else ".o")
-    line = [part for part in command(cxx, source, target, cuda=True, device=parse("sm_120")) if part != "-shared"]
+    out = artifact + (".ptx" if ptx else ".o")
+    line = [part for part in command(cxx, source, out, cuda=True, device=parse(target)) if part != "-shared"]
     line.insert(line.index("-o"), "-ptx" if ptx else "-c")
     done = subprocess.run(line, capture_output=True, text=True, timeout=timeout)
     assert done.returncode == 0, done.stderr[-3000:]
-    return Path(target)
+    return Path(out)
 
 
 def ran_emulated(tmp_path: Path, cpp: str, cxx: str, timeout=240):
